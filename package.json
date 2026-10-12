@@ -1,0 +1,27 @@
+{
+  "name": "gpt-handoff",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "A small local conversation-to-composer utility. Nothing sent for you.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test tests/*.test.js",
+    "test:e2e": "playwright test",
+    "build": "node scripts/build.js",
+    "build:extension": "node scripts/build-extension.js",
+    "test:extension": "npm run build:extension && playwright test --config playwright.extension.config.js",
+    "check": "npm test && npm run test:e2e && npm run test:extension && npm run build",
+    "build:macos": "bash scripts/build-macos.sh",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "prettier": "3.6.2"
+  },
+  "license": "UNLICENSED"
+}

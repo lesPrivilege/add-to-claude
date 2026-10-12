@@ -1,0 +1,11 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+.DS_Store
+*.log
+.env*
+artifacts/*.zip
+artifacts/*.tar.gz
+artifacts/*.bundle
+artifacts/releases/

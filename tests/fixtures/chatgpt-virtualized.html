@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Synthetic virtualized conversation - ChatGPT</title>
+    <style>
+      body {
+        margin: 0;
+        font: 16px system-ui;
+      }
+      main {
+        height: 300px;
+        overflow-y: auto;
+        position: relative;
+        overflow-anchor: none;
+      }
+      #space {
+        position: relative;
+      }
+      #window {
+        position: absolute;
+        left: 0;
+        right: 0;
+      }
+      article {
+        height: 100px;
+        box-sizing: border-box;
+        padding: 8px;
+        border-bottom: 1px solid #ddd;
+      }
+      p {
+        margin: 0;
+      }
+      [data-testid='history-loading'] {
+        position: fixed;
+        right: 0;
+        top: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="conversation">
+      <div id="space"><div id="window"></div></div>
+    </main>
+    <script>
+      // Original synthetic material. Only five turns are mounted; no private service or account is used.
+      const main = document.querySelector('main'),
+        space = document.querySelector('#space'),
+        windowNode = document.querySelector('#window');
+      let items = Array.from({ length: 18 }, (_, index) => ({
+        id: `turn-${index}`,
+        index,
+        text:
+          index === 7 || index === 8
+            ? 'A deliberately repeated sentence.'
+            : `Synthetic turn ${index}.`,
+      }));
+      let config = { indices: true, total: null, lazyHead: false, lazyTail: false, delay: 180 },
+        headLoaded = true,
+        tailLoaded = true,
+        timer;
+      function shown() {
+        return items.filter(
+          (item) => (headLoaded || item.index >= 5) && (tailLoaded || item.index < 13),
+        );
+      }
+      function render() {
+        const visible = shown();
+        space.style.height = `${visible.length * 100}px`;
+        let first = Math.max(0, Math.floor(main.scrollTop / 100) - 1);
+        first = Math.min(first, Math.max(0, visible.length - 5));
+        windowNode.style.top = `${first * 100}px`;
+        windowNode.replaceChildren();
+        for (const item of visible.slice(first, first + 5)) {
+          const article = document.createElement('article');
+          if (config.indices) article.dataset.testid = `conversation-turn-${item.index}`;
+          else article.dataset.testid = 'conversation-turn-unindexed';
+          const message = document.createElement('div');
+          message.dataset.messageAuthorRole = item.index % 2 ? 'assistant' : 'user';
+          message.dataset.messageId = item.id;
+          const text = document.createElement('div');
+          text.className = item.index % 2 ? 'markdown' : 'whitespace-pre-wrap';
+          const paragraph = document.createElement('p');
+          paragraph.textContent = item.text;
+          text.append(paragraph);
+          message.append(text);
+          article.append(message);
+          windowNode.append(article);
+        }
+        if (config.total !== null) main.setAttribute('aria-setsize', String(config.total));
+        else main.removeAttribute('aria-setsize');
+      }
+      function load(which) {
+        if (timer) return;
+        const spinner = document.createElement('div');
+        spinner.dataset.testid = 'history-loading';
+        spinner.textContent = 'Loading rendered turns';
+        main.append(spinner);
+        timer = setTimeout(() => {
+          if (which === 'head') {
+            headLoaded = true;
+            main.scrollTop += 500;
+          } else tailLoaded = true;
+          spinner.remove();
+          timer = null;
+          render();
+        }, config.delay);
+      }
+      main.addEventListener('scroll', () => {
+        render();
+        if (config.lazyHead && !headLoaded && main.scrollTop <= 1) load('head');
+        if (
+          config.lazyTail &&
+          !tailLoaded &&
+          main.scrollTop + main.clientHeight >= main.scrollHeight - 1
+        )
+          load('tail');
+      });
+      window.fixture = {
+        configure(next = {}) {
+          clearTimeout(timer);
+          timer = null;
+          main.querySelectorAll('[data-testid=history-loading]').forEach((node) => node.remove());
+          config = {
+            indices: true,
+            total: null,
+            lazyHead: false,
+            lazyTail: false,
+            delay: 180,
+            ...next,
+          };
+          headLoaded = !config.lazyHead;
+          tailLoaded = !config.lazyTail;
+          render();
+          main.scrollTop = config.start ?? 600;
+          render();
+        },
+        mutate(index, text) {
+          items.find((item) => item.index === index).text = text;
+          render();
+        },
+        omit(index) {
+          items = items.filter((item) => item.index !== index);
+          render();
+        },
+        replaceIds() {
+          items = items.map((item) => ({ ...item, id: `other-${item.id}` }));
+          render();
+        },
+        enlarge() {
+          items = items.map((item) => ({ ...item, text: 'x'.repeat(6000) }));
+          render();
+        },
+        render,
+      };
+      window.fixture.configure();
+    </script>
+  </body>
+</html>

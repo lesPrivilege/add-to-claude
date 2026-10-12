@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "gpt-handoff",
+  "version": "0.3.0",
+  "description": "Bring the selected ChatGPT conversation to your local composer, without sending it.",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "scripting"],
+  "optional_permissions": ["downloads"],
+  "optional_host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "gpt-handoff",
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'; base-uri 'none'"
+  }
+}
