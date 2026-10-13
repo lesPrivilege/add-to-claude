@@ -91,11 +91,21 @@ export function validateConversation(data) {
   };
   const url = optionalUrl(inputSource.url, 'Source URL');
   if (url) source.url = url;
+  if (inputSource.excludedMessages !== undefined) {
+    if (
+      !Number.isSafeInteger(inputSource.excludedMessages) ||
+      inputSource.excludedMessages < 0 ||
+      inputSource.excludedMessages > LIMITS.maxNodes
+    )
+      throw new TypeError('Excluded internal-message count is outside the supported bound.');
+    source.excludedMessages = inputSource.excludedMessages;
+  }
   if (source.type === 'chatgpt-response' || inputSource.response !== undefined) {
     const response = record(inputSource.response, 'Original response evidence');
     if (source.type !== 'chatgpt-response' || !source.url)
       throw new TypeError('Original response evidence requires a browser response source.');
     const page = new URL(source.url);
+    const responseMethod = response.method ?? 'GET';
     const pageId = /^\/(?:g\/[A-Za-z0-9_-]{1,200}\/)?c\/([A-Za-z0-9_-]{1,200})\/?$/u.exec(
       page.pathname,
     )?.[1];
@@ -104,7 +114,14 @@ export function validateConversation(data) {
       !['chatgpt.com', 'chat.openai.com'].includes(page.hostname) ||
       page.port ||
       pageId !== source.id ||
-      response.url !== `${page.origin}/backend-api/conversation/${source.id}`
+      !['GET', 'POST'].includes(responseMethod) ||
+      (responseMethod === 'GET' &&
+        response.url !== `${page.origin}/backend-api/conversation/${source.id}`) ||
+      (responseMethod === 'POST' &&
+        ![
+          `${page.origin}/backend-api/conversation`,
+          `${page.origin}/backend-api/f/conversation`,
+        ].includes(response.url))
     )
       throw new TypeError('Original response evidence must match the selected conversation.');
     if (
@@ -122,6 +139,26 @@ export function validateConversation(data) {
       capturedAt: response.capturedAt,
       observedNodes: response.observedNodes,
     };
+    if (responseMethod === 'POST') {
+      if (
+        !['observed-response', 'new-conversation', 'partial-history'].includes(response.coverage) ||
+        typeof response.streamCompleted !== 'boolean'
+      )
+        throw new TypeError('Observed stream evidence requires explicit coverage and completion.');
+      const requestMessageIds = array(
+        response.requestMessageIds,
+        'Observed request message IDs',
+        LIMITS.maxNodes,
+      ).map((value) => id(value, 'Observed request message ID'));
+      if (new Set(requestMessageIds).size !== requestMessageIds.length)
+        throw new TypeError('Observed request message IDs must be unique.');
+      Object.assign(source.response, {
+        method: 'POST',
+        coverage: response.coverage,
+        streamCompleted: response.streamCompleted,
+        requestMessageIds,
+      });
+    }
   }
   let bytes = 0;
   const count = (value) => {
@@ -445,6 +482,12 @@ export function validateConversation(data) {
     },
   );
   let status = verificationInput.status;
+  if (
+    status === 'verified' &&
+    source.response?.method === 'POST' &&
+    (!source.response.streamCompleted || source.response.coverage === 'partial-history')
+  )
+    status = 'partial';
   if (
     status === 'verified' &&
     (issues.length ||

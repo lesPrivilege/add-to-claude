@@ -19,7 +19,8 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
     private var response: [String: Any]?
     private var prepared: [String: Any]?
     private var sourceVersion = 0
-    private var preparing = false
+    private var preparingVersion: Int?
+    private var inserting = false
     private var selectedTarget = false
     private var coreReady = false
     private var responsePageIdentity: String?
@@ -27,7 +28,7 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
     private var previewPanel: NSPanel?
     private var popups: [NSWindow] = []
     var refreshTargets: (() -> Void)?
-    var addText: ((String, @escaping (String, Bool) -> Void) -> Void)?
+    var addText: ((String, @escaping () -> Bool, @escaping (String, Bool) -> Void) -> Void)?
 
     init(coreURL: URL, observerScript: String) {
         let configuration = WKWebViewConfiguration()
@@ -64,7 +65,7 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         for button in [back, target, add, preview] { button.controlSize = .small; button.bezelStyle = .rounded }
-        add.target = self; add.action = #selector(prepareAndAdd)
+        add.target = self; add.action = #selector(addPrepared)
         preview.target = self; preview.action = #selector(showPreview)
         preview.isEnabled = false
         let bar = NSStackView(views: [back, chat, spacer, target, preview, add])
@@ -123,16 +124,27 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
     }
 
     func showStatus(_ text: String) { status.stringValue = text }
-    private func updateAdd() { add.isEnabled = selectedTarget && response != nil && coreReady && !preparing }
+    private var preparedIsVerified: Bool {
+        let model = prepared?["model"] as? [String: Any]
+        let verification = model?["verification"] as? [String: Any]
+        return verification?["status"] as? String == "verified"
+    }
+    private func updateAdd() {
+        add.isEnabled = selectedTarget && preparedIsVerified && coreReady && preparingVersion == nil && !inserting
+        preview.isEnabled = prepared != nil
+    }
     func connectCore(_ url: URL) { if !coreReady && !core.isLoading { core.load(URLRequest(url: url)) } }
     func windowDidBecomeKey(_ notification: Notification) { refreshTargets?() }
     @objc private func goBack() { if source.canGoBack { source.goBack() } }
 
-    private func invalidateSource(_ message: String) {
+    private func invalidateSource(_ message: String, keepingResponse: Bool = false) {
         sourceVersion += 1
+        preparingVersion = nil
         prepared = nil
-        response = nil
-        responsePageIdentity = nil
+        if !keepingResponse {
+            response = nil
+            responsePageIdentity = nil
+        }
         preview.isEnabled = false
         if let scroll = previewPanel?.contentView?.subviews.first as? NSScrollView,
            let editor = scroll.documentView as? NSTextView { editor.string = "" }
@@ -170,47 +182,55 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
         }
         response = packet
         responsePageIdentity = source.url?.absoluteString
-        status.stringValue = "Original conversation available. Nothing is sent by Handoff."
+        prepareSource()
     }
 
-    @objc private func prepareAndAdd() {
-        guard !preparing, let response else { return }
+    private func prepareSource() {
+        guard coreReady, let response, preparingVersion != sourceVersion else { return }
         guard packetMatchesCurrentPage(response), responsePageIdentity == source.url?.absoluteString else {
-            invalidateSource("The source changed. Choose Add again when it is ready.")
+            invalidateSource("Waiting for the current conversation's original data.")
             return
         }
-        preparing = true
         let version = sourceVersion
+        preparingVersion = version
         updateAdd()
         status.stringValue = "Preparing the selected conversation…"
-        let evidence: [String: Any] = ["pageUrl": response["pageUrl"] ?? "", "responseUrl": response["responseUrl"] ?? "", "capturedAt": response["capturedAt"] ?? ""]
+        let evidence: [String: Any] = ["pageUrl": response["pageUrl"] ?? "", "responseUrl": response["responseUrl"] ?? "", "capturedAt": response["capturedAt"] ?? "", "method": response["method"] ?? "GET"]
         core.callAsyncJavaScript("return window.handoffCore.compile(body, evidence)", arguments: ["body": response["body"] ?? "", "evidence": evidence], in: nil, in: .page) { [weak self] result in
-            guard let self else { return }
-            self.preparing = false
-            self.updateAdd()
-            guard version == self.sourceVersion else { self.status.stringValue = "The source changed. Choose Add again when it is ready."; return }
+            guard let self, version == self.sourceVersion else { return }
+            self.preparingVersion = nil
+            defer { self.updateAdd() }
             guard case .success(let value) = result, let compiled = value as? [String: Any],
-                  let text = compiled["markdown"] as? String,
-                  let model = compiled["model"] as? [String: Any] else {
+                  compiled["markdown"] is String, compiled["model"] is [String: Any] else {
                 self.status.stringValue = "This conversation's original data could not be prepared. The chat is unchanged."
                 return
             }
             self.prepared = compiled
-            self.preview.isEnabled = true
-            let verification = model["verification"] as? [String: Any]
-            guard verification?["status"] as? String == "verified" else {
-                self.status.stringValue = "Some content or files need attention. Open Preview to review the gaps."
-                return
-            }
-            self.preparing = true
+            self.status.stringValue = self.preparedIsVerified
+                ? "Context ready. Choose a composer, then Add. Nothing is sent by Handoff."
+                : "Some content or files need attention. Open Preview to review the gaps."
+        }
+    }
+
+    @objc private func addPrepared() {
+        guard !inserting, selectedTarget, preparedIsVerified,
+              let text = prepared?["markdown"] as? String, let addText else { return }
+        let version = sourceVersion
+        let isCurrent: () -> Bool = { [weak self] in
+            guard let self, version == self.sourceVersion, let response = self.response else { return false }
+            return self.preparedIsVerified && self.packetMatchesCurrentPage(response)
+                && self.responsePageIdentity == self.source.url?.absoluteString
+        }
+        guard isCurrent() else { invalidateSource("The source changed. Wait for the current conversation."); return }
+        inserting = true
+        updateAdd()
+        status.stringValue = "Adding to the selected composer…"
+        addText(text, isCurrent) { [weak self] message, success in
+            guard let self else { return }
+            self.inserting = false
+            if version == self.sourceVersion { self.status.stringValue = message }
+            if success { self.setTarget(name: nil) }
             self.updateAdd()
-            self.addText?(text) { [weak self] message, success in
-                guard let self else { return }
-                self.preparing = false
-                self.status.stringValue = message
-                if success { self.setTarget(name: nil) }
-                self.updateAdd()
-            }
         }
     }
 
@@ -252,7 +272,7 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        if webView === core { coreReady = true; updateAdd() }
+        if webView === core { coreReady = true; prepareSource(); updateAdd() }
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -261,6 +281,7 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         if webView === source { invalidateSource("ChatGPT stopped responding. Reopen Handoff to reconnect.") }
+        if webView === core { coreReady = false; invalidateSource("Preparation stopped. Reopen Handoff to retry; the chat is retained.", keepingResponse: true) }
     }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {

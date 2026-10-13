@@ -26,9 +26,9 @@ Use `/usr/local/bin/node` or another installed path if appropriate. The script b
 ## Use
 
 1. Open Handoff and sign in to ChatGPT in its own window. The local compiler starts separately; a port or Node failure is shown in the outer frame and does not block the chat with an app modal.
-2. Open the conversation normally. The observer reads only the currently displayed conversation's own response and introduces no fetch or refresh. The present implementation handles the original conversation GET response; new-message streaming remains unfinished and invalidates the old snapshot rather than silently reusing it.
+2. Open the conversation normally. The observer reads only the currently displayed conversation's own response and introduces no fetch or refresh. The observer handles selected GET responses and normal classic/v1 SSE replies, including ongoing and new conversations. WebSocket/handoff delivery remains explicitly partial; actual logged-in compatibility is unverified.
 3. Focus the intended target composer once, then return to Handoff. Enable composer access when wanted, using the system's Accessibility grant. Choose the exact app/window in **Choose Agent**. Selection does not activate that target. Unsupported fields stay unavailable.
-4. **Add to Agent** compiles the observed source and, when its checks pass, focuses the bound target, appends and compares exact text. The button is the explicit action; this primary path has no additional modal confirmation. Preview is a separate, nonmodal view. Partial sources/files, long-context transport and actual-client support still need the remaining implementation and acceptance work. Send remains the user's action.
+4. The source prepares automatically. **Preview** is available before target selection; **Add to Agent** becomes available only for verified current data and a selected target. Add focuses the bound target, rechecks source identity, appends and compares exact text. The button is the explicit action; this primary path has no additional modal confirmation. Preview is a separate, nonmodal view. Partial sources/files, long-context transport and actual-client support still need the remaining implementation and acceptance work. Send remains the user's action.
 
 Discovery reads app names and window titles when the workspace or utility menu opens after Accessibility access has been granted. It does not read target editor contents until Add. Discovery is asynchronous, bounded to 80 apps and 30 windows per app. Every accessibility attribute read applies a 150 ms messaging timeout. Window titles and target selections remain in memory.
 
@@ -44,7 +44,15 @@ Handoff keeps one selected response in memory and does not write a conversation 
 
 Quit from the menu to terminate only the server process this launcher started. An independently started server is left running. Remove the `.app` bundle. Revoke this app under System Settings → Privacy & Security → Accessibility if access was granted. No login item, daemon, account, runtime, credential, transcript archive, or registration file is installed. Clipboard text remains on the system clipboard until the user or another app replaces it; the launcher does not silently clear unrelated clipboard contents.
 
-## Native acceptance checks — not yet executed
+## Repeatable native source fixture
+
+```sh
+bash scripts/test-native-source.sh
+```
+
+This compiles a separate nonvisible WebKit runner using a nonpersistent data store, synthetic fetch responses and the same injected observer bundle. Seven scenarios passed on the current Mac. It exercises the real JavaScript engine and native message channel, not login, network protocol compatibility, Accessibility or Workspace control-state behavior.
+
+## Remaining native acceptance checks
 
 Use only synthetic text. The included test composer gives the owner a local AppKit target; it does not contact an agent or submit anything:
 
@@ -54,11 +62,11 @@ open 'dist/gpt-handoff test composer.app'
 ```
 
 - Build and launch both apps on the intended macOS version and CPU architecture. Verify menu accessibility with VoiceOver, keyboard-only operation, light/dark appearance, enlarged text, and Reduce Motion. The menu contains no custom animation.
-- Open Chrome and the desk; verify missing Chrome, missing Node, slow startup, occupied port, wrong health marker, and mismatched native instance. Quit and verify the child exits. An external server must survive launcher quit.
-- With Accessibility denied, verify discovery/append are unavailable and ordinary Chrome/desk opening works. Grant explicitly; revoke while an editor is selected and verify append fails closed. No Automation or screen-recording grant should be requested.
-- Focus Composer A, select it, and append synthetic Markdown, Unicode, links, and a long payload. Verify exact text and preservation of the initial draft. A clipboard over 2 MiB must be rejected. Attachments must remain a separate manual step.
+- Open the embedded chat; verify missing Node, slow startup, occupied port, wrong health marker, and mismatched native instance. Quit and verify the child exits. An external server must survive launcher quit.
+- With Accessibility denied, verify discovery/append are unavailable and ordinary embedded chat opening works. Grant explicitly; revoke while an editor is selected and verify append fails closed. No Automation or screen-recording grant should be requested.
+- Focus Composer A, select it, and append synthetic Markdown, Unicode, links, and a long payload. Verify exact text and preservation of the initial draft. A resulting draft over 2 MiB must be rejected. Attachments must remain a separate manual step.
 - Select Composer A with Composer B also open; confirm the title and inspect that only A changes. Change title, close the selected window, restart the target app, or replace the editor after selection; verify the selection is rejected. Selecting a read-only editor or a known terminal host must fail.
-- Cancel confirmation and verify no change. Change the clipboard while confirmation is open and verify rejection. Switch focus during the post-confirmation delay and verify rejection. Test a host that rejects `AXValue` or changes the value during write; the app must report unverified insertion and require inspection rather than retrying automatically.
+- Switch the source or target focus during the Add delay and verify no insertion. Change the target draft before Add and verify that the latest draft is preserved. Test a host that rejects `AXValue` or changes the value during write; the app must report unverified insertion and require inspection rather than retrying automatically.
 - Test a same-title conversation switch that reuses its editor, and preexisting target attachment chips/rich spans. AX string equality alone cannot verify conversation identity or rich state preservation.
 - Exercise every real client to be claimed supported; record app/macOS versions and exact checks in `docs/support-matrix.md`. The common path has no native client certification yet.
 

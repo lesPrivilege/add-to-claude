@@ -1,5 +1,22 @@
 # Independent review
 
+## Streaming reconstruction review — 2026-10-13
+
+A separate read-only reviewer inspected the current stream/source boundary, native automatic preparation and delayed insertion gate, then reviewed four refreshed synthetic web screenshots. No remaining concrete defect was reported after two repair rounds. The reviewer did not independently rerun all suites, inspect native rendering or exercise Accessibility. This is scoped review, not release acceptance.
+
+| Finding                                                                 | Repair and evidence                                                                                                                                                                                          |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Zero-weight hidden assistant could establish stream completion          | Shared internal-message exclusion now used by stream reducer and importer. Failing regression passed after repair.                                                                                           |
+| A later successful reply erased earlier stream uncertainty              | Unresolved visible-message anchors retained across selected-branch history; complete continuation can repair its own anchor and regeneration can select a clean branch. Failure/recovery regressions passed. |
+| Root message envelopes bypassed explicit operation/path validation      | Explicit operations and paths now go through the patch validator; remove/unknown/null cases reject.                                                                                                          |
+| Invalid GET UTF-8 leaked the observer's unread clone branch             | Every non-EOF exit cancels the owned reader before untracking it; website response remains readable.                                                                                                         |
+| An internal trailing node allowed visible history to bypass uncertainty | Anchor every affected visible assistant, not only the final internal node. The added regression failed before and passed after repair.                                                                       |
+| Compiler-process termination discarded source needed for recovery       | Invalidate prepared state while preserving the still-current raw source, then recompile locally on reconnect. Reviewed/typechecked; forced native-process recovery not runtime-tested.                       |
+
+The reviewer confirmed native Preview is independent of target selection, stale compilation callbacks cannot overwrite a new source, and delayed insertion rechecks source validity. Shared-module packaging is covered by the served-native-core browser regression. Reviewed images: `artifacts/01-transfer-desk.png`, `02-compact-review.png`, `03-confirmed-transfer.png`, `07-browser-source-handoff.png`; no functional clipping or misleading file-delivery claim found. These depict the web fixture desk, not the native embedded window.
+
+The earlier review below is retained as historical evidence; its Linux/macOS availability statements describe that checkpoint.
+
 Reviewed on 2026-10-12 by a separate reviewer, including the 0.1.0 portable baseline, 0.2.0 browser-source follow-up, and 0.3.0 collection/download follow-up. This review inspected the import/model boundary, HTTP bridge, browser desk and controlled composer, extension source and capture adapter, native AppKit source, packaging script, unit tests, browser tests, and rendered screenshots. Only synthetic data was used. This is a source and VM review, not a macOS certification or a formal penetration test.
 
 ## Current decision: 0.3.0

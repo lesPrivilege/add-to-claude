@@ -1,5 +1,6 @@
 /** Isolated ChatGPT export adapter. Reads the caller's selected data; never fetches history. */
 import { LIMITS, safeUrl, validateConversation } from './model.js';
+import { isInternalMessage } from './message-visibility.js';
 
 const encoder = new TextEncoder();
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
@@ -323,7 +324,11 @@ function walk(conversation, leafId, index) {
 }
 
 function isTurn(node) {
-  return isRecord(node.message) && ['user', 'assistant'].includes(node.message.author?.role);
+  return (
+    isRecord(node.message) &&
+    !isInternalMessage(node.message) &&
+    ['user', 'assistant'].includes(node.message.author?.role)
+  );
 }
 
 /** Return only selection metadata. No turn text, attachment data, or whole-export archive escapes this function. */
@@ -378,6 +383,7 @@ export function importConversation(raw, id, leafId) {
   issues.push(...graph.issues);
   const lastVisibleTurnId = path.findLast(({ node }) => isTurn(node))?.id;
   const turns = [];
+  let excludedMessages = 0;
   const attachments = [];
   const attachmentKeys = new Set();
   let textBytes = 0;
@@ -443,6 +449,10 @@ export function importConversation(raw, id, leafId) {
       continue;
     }
     const message = node.message;
+    if (isInternalMessage(message)) {
+      excludedMessages++;
+      continue;
+    }
     const role = message.author?.role;
     const included = ['user', 'assistant'].includes(role);
     if (!included && !['system', 'tool'].includes(role))
@@ -569,6 +579,12 @@ export function importConversation(raw, id, leafId) {
         'unfinished-turn',
         'The last assistant turn is marked unfinished. Wait for the response to finish, then export again.',
         `${base}.message.end_turn`,
+      );
+    if (['interrupted', 'max_tokens'].includes(metadata.finish_details?.type))
+      issue(
+        'unfinished-turn',
+        'The source reports that this answer was interrupted or reached its length limit. Review it before handing off.',
+        `${base}.message.metadata.finish_details`,
       );
     // Generated download links often appear only in Markdown. Keep the exact link in text,
     // but record that its bytes were not in this export. Never resolve a sandbox path locally.
@@ -713,6 +729,7 @@ export function importConversation(raw, id, leafId) {
       title: titleOf(conversation),
       url: `https://chatgpt.com/c/${encodeURIComponent(id)}`,
       locator: `conversations[${index}]`,
+      ...(excludedMessages ? { excludedMessages } : {}),
     },
     turns,
     branches: {

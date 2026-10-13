@@ -1,5 +1,7 @@
 # Support and evidence
 
+Current reconstruction evidence (2026-10-13): native signed-out embedding was visually inspected; the passive GET/classic/v1 SSE adapter now passes Chromium fixtures and seven actual WebKit synthetic scenarios. The automatic native preparation/Preview/Add path compiles and has source review, but no real-client insertion certification. WebSocket/handoff streams, native files/long context and logged-in source acceptance remain open. Unit 101/101, ordinary browser 58/58, extension 23/23; extension permissions are pregranted in lifecycle fixtures. The historical matrix below must not be read as current native compatibility evidence.
+
 ## Reconstruction status
 
 The [product contract](product-contract.md) now requires embedded ChatGPT with small outer-frame Add controls and no forced refresh in normal handoff. The native window has compiled and displayed the real signed-out ChatGPT homepage on this Mac. Login, ongoing-message capture, target insertion and automatic native file handling are not accepted yet. The optional Chrome original-response adapter has separate synthetic installed-extension evidence, including 128 ordered original turns; it is not proof of the embedded path or a real client. See [Mac acceptance](mac-acceptance.md) for current counts and precise limits. No external client is certified and this work is not release ready.

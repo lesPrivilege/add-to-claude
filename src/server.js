@@ -20,6 +20,7 @@ const STATIC = new Map([
   ['/src/chatgpt-response.js', ['src/chatgpt-response.js', 'text/javascript; charset=utf-8']],
   ['/targets.json', ['web/targets.json', 'application/json; charset=utf-8']],
   ['/src/model.js', ['src/model.js', 'text/javascript; charset=utf-8']],
+  ['/src/message-visibility.js', ['src/message-visibility.js', 'text/javascript; charset=utf-8']],
   ['/src/import.js', ['src/import.js', 'text/javascript; charset=utf-8']],
 ]);
 const SECURITY_HEADERS = {

@@ -196,9 +196,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             let controller = WorkspaceController(coreURL: deskURL.appendingPathComponent("native-core.html"), observerScript: observer)
             controller.refreshTargets = { [weak self] in self?.discoverWindows() }
-            controller.addText = { [weak self] text, completion in
+            controller.addText = { [weak self] text, isSourceCurrent, completion in
                 guard let self else { completion("Handoff is no longer available.", false); return }
-                self.appendPreparedText(text, completion: completion)
+                self.appendPreparedText(text, isSourceCurrent: isSourceCurrent, completion: completion)
             }
             controller.setTargets(targetMenu())
             workspace = controller
@@ -467,12 +467,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// The outer-frame Add action is the user's confirmation. It never opens a modal alert.
-    private func appendPreparedText(_ text: String, completion: @escaping (String, Bool) -> Void) {
+    private func appendPreparedText(_ text: String, isSourceCurrent: @escaping () -> Bool, completion: @escaping (String, Bool) -> Void) {
         guard !busy, let selected = composer else { completion("Choose the intended composer first.", false); return }
         guard !text.isEmpty, text.utf8.count <= maximumTextBytes else {
             completion("This context exceeds the native text limit. A file handoff is required.", false)
             return
         }
+        guard isSourceCurrent() else { completion("The source changed. Nothing was added.", false); return }
         guard AXIsProcessTrusted(), focus(selected.choice) else {
             composer = nil
             workspace?.setTarget(name: nil)
@@ -485,6 +486,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self else { completion("Handoff closed before insertion.", false); return }
             defer { self.busy = false }
+            guard isSourceCurrent() else { completion("The source changed. Nothing was added.", false); return }
             guard self.operation == id,
                   let current = self.focusedComposer(selected.choice), CFEqual(current, selected.editor),
                   let old = axString(current, kAXValueAttribute),

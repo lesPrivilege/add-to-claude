@@ -1,6 +1,6 @@
 # Validation record
 
-Current reconstruction evidence is in [Mac acceptance](mac-acceptance.md): 71/71 latest unit checks, 5/5 embedded observer browser fixtures, 23/23 external-extension checks before the final draft-race repair, and actual signed-out WebKit rendering. These are scoped checkpoints, not final R1–R8 acceptance. The record below preserves the earlier Linux delivery evidence.
+Current reconstruction evidence (2026-10-13) is in [Mac acceptance](mac-acceptance.md): **101/101 unit checks, 58/58 ordinary browser checks, 23/23 extension checks**, seven native WebKit synthetic scenarios, Swift typecheck and unsigned native build. Source-level independent review covers the new stream boundary and automatic preparation. These are scoped checkpoints, not final R1–R8 acceptance. Live login, native composer insertion, file transport and distribution checks remain open. The record below preserves earlier Linux delivery evidence.
 
 2026-10-12 · Linux cloud VM · synthetic data only.
 

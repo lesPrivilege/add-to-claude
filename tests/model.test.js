@@ -68,6 +68,45 @@ test('current-node path preserves parent order and original Markdown', () => {
   assert.equal(model.branches.selection, 'current-node');
 });
 
+test('internal, hidden and non-user-facing messages never enter the handoff projection', () => {
+  for (const extra of [
+    { metadata: { is_visually_hidden_from_conversation: true } },
+    { recipient: 'python' },
+    { weight: 0 },
+    { channel: 'analysis' },
+  ]) {
+    const input = fixture();
+    input[0].mapping.internal = node(
+      'internal',
+      'u1',
+      'assistant',
+      'INTERNAL MATERIAL MUST NOT BE PROJECTED',
+      extra,
+    );
+    input[0].mapping.a1.parent = 'internal';
+    const model = importConversation(input, 'conversation-1');
+    assert.deepEqual(
+      model.turns.map((turn) => turn.id),
+      ['u1', 'a1', 'u2', 'a2'],
+    );
+    assert.equal(listConversations(input)[0].turnCount, 5);
+    assert.equal(model.source.excludedMessages, 1);
+    assert.equal(JSON.stringify(model).includes('INTERNAL MATERIAL'), false);
+    assert.equal(projectMarkdown(model).includes('INTERNAL MATERIAL'), false);
+  }
+});
+
+test('interrupted and length-limited replies are partial even when other completion fields are true', () => {
+  for (const finish of ['interrupted', 'max_tokens']) {
+    const input = fixture();
+    input[0].mapping.a2.message.end_turn = true;
+    input[0].mapping.a2.message.metadata = { is_complete: true, finish_details: { type: finish } };
+    const model = importConversation(input, 'conversation-1');
+    assert.equal(model.verification.status, 'partial');
+    assert.ok(model.verification.issues.some((issue) => issue.code === 'unfinished-turn'));
+  }
+});
+
 test('an explicit alternative branch does not mix variants', () => {
   const model = importConversation(fixture(), 'conversation-1', 'alternate');
   assert.deepEqual(

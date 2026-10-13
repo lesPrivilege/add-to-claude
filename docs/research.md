@@ -65,3 +65,15 @@ The project's [published light menu-bar image](https://raw.githubusercontent.com
 ## Provenance and limits
 
 All links above were checked on 2026-10-12. Vendor pages can redirect or change without a package release. Apple reference pages were partially available as documentation abstracts; the notarization article was also read through Apple's documentation JSON. No third-party code, model service, executable, account, or private conversation was used. The Magpie image was inspected as a reference in temporary storage; it is not redistributed in this repository. The UI should use original SVG/components and text labels, not copied vendor artwork.
+
+## Passive embedded stream protocol evidence — 2026-10-13
+
+These public sources were read for adapter design; no third-party implementation was executed and no credential/auth/resume machinery was adopted. They support format candidates, not compatibility with the owner's current account. The in-repository observer, reducer and merger were independently implemented and tested with synthetic data in Chrome and native WebKit.
+
+- [codex-chatgpt-web browser worker](https://github.com/miuuyy/codex-chatgpt-web/blob/0b6087c5307c7a58adda9c420358f3f70d2035f5/src/adapters/chatgpt-web/browser-worker.ts#L844): selected main-frame POST `/backend-api/f/conversation`, HTTP 200 SSE response observation. Its error-only SSE fixtures do not prove complete message reconstruction.
+- [chatgpt-use channel](https://github.com/leeguooooo/chatgpt-use/blob/ecb204d4f4a4aef127851240af17dcf1a321afbc/src/channel.rs#L868): GET mapping/current_node/parent traversal; lines 3041–3068 also show interrupted/max_tokens as completion contradictions.
+- [chatgpt-export rendering filter](https://github.com/thekester/chatgpt-export/blob/dcee7e68538e43b5181f8a053d328df3802c4ec3/src/render.js#L104): hidden/recipient filtering. Its active authenticated transport is not adopted.
+- `xtekky/gpt4free`, `g4f/Provider/needs_auth/OpenaiChat.py`, inspected blob `a23eda6b050028352b4a09ceeb76b0ce6265ec79`, lines 1230–1437: retained delta paths, string appends, patch lists, message envelopes and citation metadata. No auth/proof/credential code copied.
+- [How ChatGPT streams its answer](https://www.amitxtech.com/blog/how-chatgpt-streams-its-answer): public example of `delta_encoding: v1`, explicit `{p,o,v}`, implicit `{v}`, final patches and `[DONE]`. It is an observation, not a published stable API.
+
+Public reports also describe SSE `stream_handoff` followed by WebSocket/resume delivery. This implementation does not follow resume tokens/endpoints or reconstruct that transport. Handoffs remain partial and cannot become complete merely because a later exchange succeeds. An independently observed authoritative GET, or an explicitly supported same-message continuation, must supply the missing evidence. Live signed-in capture remains deferred at the owner's request.

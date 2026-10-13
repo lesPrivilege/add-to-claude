@@ -15,6 +15,7 @@ for (const name of [
   'page-scroll.js',
   'model.js',
   'import.js',
+  'message-visibility.js',
   'chatgpt-response.js',
   'original.js',
 ]) {

@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { installEmbeddedSourceObserver } from '../web/embedded-source.js';
+import { createEmbeddedSourceScript } from '../web/embedded-source.js';
+import { importBrowserResponse } from '../src/chatgpt-response.js';
 
 const page = 'https://chatgpt.com/c/a';
 const endpoint = (id) => `https://chatgpt.com/backend-api/conversation/${id}`;
 const tick = () => new Promise((resolve) => setImmediate(resolve));
-function harness() {
+function harness(initialURL = page) {
   const messages = [],
     requests = [];
   const location = {
-    href: page,
+    href: initialURL,
     get origin() {
       return new URL(this.href).origin;
     },
@@ -23,8 +24,8 @@ function harness() {
         },
       },
     },
-    fetch(url) {
-      return new Promise((resolve) => requests.push({ url, resolve }));
+    fetch(url, init) {
+      return new Promise((resolve) => requests.push({ url, init, resolve }));
     },
   };
   const history = {
@@ -41,16 +42,36 @@ function harness() {
     location,
     URL,
     TextDecoder,
+    TextEncoder,
+    structuredClone,
     addEventListener() {},
   });
-  vm.runInContext(`(${installEmbeddedSourceObserver.toString()})({})`, context);
+  vm.runInContext(createEmbeddedSourceScript(), context);
   return {
     messages,
+    requests,
     navigate: (url) => history.pushState({}, '', url),
     request: (id) => window.fetch(endpoint(id)).then((response) => response.text()),
-    reply(index, body) {
-      const response = new Response(body, { status: 200 });
-      Object.defineProperty(response, 'url', { value: requests[index].url });
+    post: (request) =>
+      window
+        .fetch('https://chatgpt.com/backend-api/f/conversation', {
+          method: 'POST',
+          body: JSON.stringify(request),
+        })
+        .then((response) => response.text()),
+    reply(index, body, contentType = 'application/json') {
+      const response = new Response(body, {
+        status: 200,
+        headers: { 'content-type': contentType },
+      });
+      // A constructed Response has no fetched URL; model the browser's clone-preserved metadata.
+      const identify = (value) => {
+        Object.defineProperty(value, 'url', { value: requests[index].url });
+        const clone = value.clone.bind(value);
+        value.clone = () => identify(clone());
+        return value;
+      };
+      identify(response);
       requests[index].resolve(response);
     },
   };
@@ -83,6 +104,160 @@ test('a late older GET cannot replace the newer selected-conversation snapshot',
   );
 });
 
+const originalMessage = (id, role, text) => ({
+  id,
+  author: { role },
+  status: 'finished_successfully',
+  end_turn: true,
+  content: { content_type: 'text', parts: [text] },
+});
+const streamWire = (id, answerId = 'a1') =>
+  `event: delta_encoding\ndata: "v1"\n\nevent: delta\ndata: ${JSON.stringify({ p: '', o: 'add', v: { conversation_id: id, message: originalMessage(answerId, 'assistant', 'Original **answer** 中文 ✓\n') } })}\n\ndata: [DONE]\n\n`;
+const sourceRecord = () => ({
+  conversation_id: 'a',
+  title: 'Synthetic original',
+  current_node: 'a0',
+  mapping: {
+    root: { id: 'root', parent: null, children: ['u0'], message: null },
+    u0: {
+      id: 'u0',
+      parent: 'root',
+      children: ['a0'],
+      message: originalMessage('u0', 'user', 'Earlier question.'),
+    },
+    a0: {
+      id: 'a0',
+      parent: 'u0',
+      children: [],
+      message: originalMessage('a0', 'assistant', 'Earlier answer.'),
+    },
+  },
+});
+
+test('the passive observer appends a normal stream to observed history without a refresh', async () => {
+  const h = harness();
+  const loading = h.request('a');
+  h.reply(0, JSON.stringify(sourceRecord()));
+  await loading;
+  await tick();
+  const request = {
+    action: 'next',
+    conversation_id: 'a',
+    parent_message_id: 'a0',
+    messages: [originalMessage('u1', 'user', 'New exact question.')],
+    ignored_token: 'DO_NOT_RETAIN',
+  };
+  const sending = h.post(request);
+  const wire = streamWire('a');
+  h.reply(1, wire, 'text/event-stream');
+  assert.equal(await sending, wire);
+  await tick();
+  const packet = h.messages.filter((item) => item.kind === 'response').at(-1);
+  assert.equal(packet.method, 'POST');
+  const model = importBrowserResponse(packet.body, packet);
+  assert.deepEqual(
+    model.turns.map((turn) => turn.id),
+    ['u0', 'a0', 'u1', 'a1'],
+  );
+  assert.equal(model.turns[3].markdown, 'Original **answer** 中文 ✓\n');
+  assert.equal(model.verification.status, 'verified');
+  assert.equal(h.requests.length, 2);
+  assert.equal(packet.body.includes('DO_NOT_RETAIN'), false);
+});
+
+test('new-chat URL assignment can occur before or after stream completion', async () => {
+  for (const when of ['before', 'after']) {
+    const h = harness('https://chatgpt.com/');
+    const sending = h.post({
+      action: 'next',
+      parent_message_id: 'root',
+      messages: [originalMessage('u1', 'user', 'New chat.')],
+    });
+    if (when === 'before') h.navigate('/c/new-chat');
+    h.reply(0, streamWire('new-chat'), 'text/event-stream');
+    await sending;
+    await tick();
+    if (when === 'after') h.navigate('/c/new-chat');
+    await tick();
+    const packet = h.messages.filter((item) => item.kind === 'response').at(-1);
+    assert.ok(packet, when);
+    const model = importBrowserResponse(packet.body, packet);
+    assert.equal(model.source.id, 'new-chat');
+    assert.equal(model.verification.status, 'verified');
+    assert.equal(h.requests.length, 1);
+  }
+});
+
+test('a website GET during generation supplies history without cancelling the live answer', async () => {
+  const h = harness('https://chatgpt.com/');
+  const sending = h.post({
+    action: 'next',
+    parent_message_id: 'root',
+    messages: [originalMessage('u1', 'user', 'New chat.')],
+  });
+  h.navigate('/c/a');
+  let stream;
+  h.reply(
+    0,
+    new ReadableStream({
+      start(controller) {
+        stream = controller;
+      },
+    }),
+    'text/event-stream',
+  );
+  await tick();
+  const loading = h.request('a');
+  const hydrated = {
+    conversation_id: 'a',
+    title: 'Hydrated chat',
+    current_node: 'u1',
+    mapping: {
+      root: { parent: null, children: ['u1'], message: null },
+      u1: {
+        id: 'u1',
+        parent: 'root',
+        children: [],
+        message: originalMessage('u1', 'user', 'New chat.'),
+      },
+    },
+  };
+  h.reply(1, JSON.stringify(hydrated));
+  await loading;
+  await tick();
+  assert.equal(
+    h.messages.some((item) => item.kind === 'response'),
+    false,
+  );
+  stream.enqueue(new TextEncoder().encode(streamWire('a')));
+  stream.close();
+  await sending;
+  await tick();
+  const packet = h.messages.filter((item) => item.kind === 'response').at(-1);
+  assert.equal(packet.method, 'POST');
+  assert.equal(importBrowserResponse(packet.body, packet).verification.status, 'verified');
+});
+
+test('a failed stream releases its job so a later normal GET can recover the source', async () => {
+  const h = harness();
+  const sending = h.post({
+    action: 'next',
+    conversation_id: 'a',
+    parent_message_id: 'a0',
+    messages: [originalMessage('u1', 'user', 'Question.')],
+  });
+  h.reply(0, 'data: {"error":"synthetic failure"}\n\n', 'text/event-stream');
+  await sending;
+  await tick();
+  assert.equal(h.messages.at(-1).kind, 'unavailable');
+  const loading = h.request('a');
+  h.reply(1, JSON.stringify(sourceRecord()));
+  await loading;
+  await tick();
+  assert.equal(h.messages.at(-1).kind, 'response');
+  assert.equal(h.messages.at(-1).method, 'GET');
+});
+
 test('a failed old stream cannot invalidate the new conversation snapshot', async () => {
   const h = harness();
   let oldStream;
@@ -110,4 +285,30 @@ test('a failed old stream cannot invalidate the new conversation snapshot', asyn
     h.messages.some((packet) => packet.kind === 'unavailable' && packet.pageUrl === page),
     false,
   );
+});
+
+test('GET decoding failure cancels only the observer branch before releasing it', async () => {
+  const h = harness();
+  let observerCancelled = 0;
+  const loading = h.request('a');
+  const response = new Response('website body remains readable');
+  Object.defineProperty(response, 'url', { value: endpoint('a') });
+  response.clone = () => ({
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(Uint8Array.of(0xff));
+      },
+      cancel() {
+        observerCancelled++;
+      },
+    }),
+  });
+  h.requests[0].resolve(response);
+  assert.equal(await loading, 'website body remains readable');
+  await tick();
+  assert.equal(h.messages.at(-1).kind, 'unavailable');
+  assert.equal(observerCancelled, 1);
+  h.navigate('/c/b');
+  await tick();
+  assert.equal(observerCancelled, 1);
 });

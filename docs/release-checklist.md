@@ -2,7 +2,7 @@
 
 Runnable development handoff. Not a release-verified macOS build.
 
-The reconstruction must satisfy **R1–R8 in [product-contract.md](product-contract.md)**, including the user's later embedded-chat/no-refresh UX requirements. Its native window renders, original-response parsing is implemented, and focused checks pass, but streaming/new-chat source updates, automatic files/long context, real-client insertion and the remaining real-machine matrix are open. Earlier counts below do not substitute for a final-state verification run. The independent foundation review found four transition defects; fixes and remaining runtime limits are recorded in [independent-review.md](independent-review.md).
+The reconstruction must satisfy **R1–R8 in [product-contract.md](product-contract.md)**, including the user's later embedded-chat/no-refresh UX requirements. Its native window renders, original-response parsing is implemented, and focused checks pass, but synthetic GET/SSE/new-chat updates now pass, while live protocol compatibility, WebSocket/handoff streams, automatic files/long context, real-client insertion and the remaining real-machine matrix are open. Earlier counts below do not substitute for a final-state verification run. The independent foundation review found four transition defects; fixes and remaining runtime limits are recorded in [independent-review.md](independent-review.md).
 
 ## Completed in the cloud VM
 
@@ -24,7 +24,7 @@ The reconstruction must satisfy **R1–R8 in [product-contract.md](product-contr
 
 - [ ] Confirm a permitted source path under the account's applicable service agreement. Consumer terms restrict programmatic extraction; a user gesture and fixture tests are not an exemption. Export/paste is the documented bounded alternative.
 - [ ] Exercise the production extension's toolbar invocation, temporary `activeTab` access, optional grant/denial/revocation, source navigation, desk closed/unavailable and actual ChatGPT markup/virtualized scrolling with an authorized synthetic conversation. Exercise optional download permission, real download completion, popup closure, and service-worker suspension. The VM blocks all extension loading through managed Chromium policy. Actual DOM/desk browser tests and API harness checks do not validate extension installation, toolbar grants, or runtime messaging.
-- [ ] Build on macOS 13+ with installed Node 24/Xcode; fix any SDK/compiler differences.
+- [x] Build on the current macOS arm64 machine with installed Node 25/Xcode; explicit macOS 13 deployment target and unsigned build verified. Other OS/architecture combinations remain untested.
 - [ ] Run the native acceptance matrix, including permission denial/revocation, focus races, editor replacement, same-title conversation changes, long text and multiple windows.
 - [ ] Validate each real client's writable composer before claiming support. No agent runtime/account was installed here.
 - [ ] Verify native keyboard/VoiceOver, appearance, contrast and Reduce Motion on the intended Mac.

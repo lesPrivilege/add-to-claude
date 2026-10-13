@@ -44,9 +44,17 @@ export function isSelectedResponse(value, pageUrl) {
   }
 }
 
-export function importBrowserResponse(body, { pageUrl, responseUrl, capturedAt }) {
+export function importBrowserResponse(body, { pageUrl, responseUrl, capturedAt, method = 'GET' }) {
   const selected = originalSource(pageUrl);
-  if (!isSelectedResponse(responseUrl, pageUrl))
+  const origin = new URL(pageUrl).origin;
+  if (
+    (method === 'GET' && !isSelectedResponse(responseUrl, pageUrl)) ||
+    (method === 'POST' &&
+      ![`${origin}/backend-api/conversation`, `${origin}/backend-api/f/conversation`].includes(
+        responseUrl,
+      )) ||
+    !['GET', 'POST'].includes(method)
+  )
     throw new TypeError('The response does not belong to the selected conversation.');
   if (typeof body !== 'string' || encoder.encode(body).byteLength > LIMITS.maxImportBytes)
     throw new RangeError('The conversation response exceeds the 64 MiB limit.');
@@ -55,6 +63,19 @@ export function importBrowserResponse(body, { pageUrl, responseUrl, capturedAt }
     raw = JSON.parse(body);
   } catch {
     throw new TypeError('The selected page did not return a supported conversation JSON response.');
+  }
+  let stream;
+  if (method === 'POST') {
+    stream = raw;
+    if (
+      !stream ||
+      !['observed-response', 'new-conversation', 'partial-history'].includes(stream.coverage) ||
+      typeof stream.streamCompleted !== 'boolean' ||
+      !Array.isArray(stream.requestMessageIds) ||
+      stream.requestMessageIds.length > LIMITS.maxNodes
+    )
+      throw new TypeError('The observed stream has no valid coverage evidence.');
+    raw = stream.conversation;
   }
   if (
     !raw ||
@@ -67,13 +88,26 @@ export function importBrowserResponse(body, { pageUrl, responseUrl, capturedAt }
   if (typeof raw.current_node !== 'string' || !raw.current_node)
     throw new TypeError('The response does not identify the currently selected branch.');
   const model = importConversation(raw, selected.id);
-  const relocate = (value) => value.replace(/^conversations\[0\]/u, 'response');
+  const location = stream ? 'observed-stream.conversation' : 'response';
+  const relocate = (value) => value.replace(/^conversations\[0\]/u, location);
   model.source = {
     ...model.source,
     type: 'chatgpt-response',
     url: selected.pageUrl,
-    locator: 'response',
-    response: { url: responseUrl, capturedAt, observedNodes: Object.keys(raw.mapping).length },
+    locator: location,
+    response: {
+      url: responseUrl,
+      capturedAt,
+      observedNodes: Object.keys(raw.mapping).length,
+      ...(stream
+        ? {
+            method,
+            coverage: stream.coverage,
+            streamCompleted: stream.streamCompleted,
+            requestMessageIds: stream.requestMessageIds,
+          }
+        : {}),
+    },
   };
   for (const turn of model.turns) {
     turn.sourceLocator = relocate(turn.sourceLocator);
@@ -91,6 +125,23 @@ export function importBrowserResponse(body, { pageUrl, responseUrl, capturedAt }
       message:
         'The page reports more conversation data. This response is not the complete selected branch.',
       sourceLocator: 'response',
+    });
+  }
+  if (stream?.coverage === 'partial-history') {
+    model.verification.status = 'partial';
+    model.verification.issues.push({
+      code: 'history-unobserved',
+      message: 'Only this exchange was observed. Earlier conversation history was not available.',
+      sourceLocator: location,
+    });
+  }
+  if (stream && !stream.streamCompleted) {
+    model.verification.status = 'partial';
+    model.verification.issues.push({
+      code: 'stream-incomplete',
+      message:
+        'The live answer has not been confirmed complete. Review the source before handing off.',
+      sourceLocator: location,
     });
   }
   return validateConversation(model);
