@@ -2,6 +2,8 @@
 
 Current reconstruction evidence (2026-10-13) is in [Mac acceptance](mac-acceptance.md): **101/101 unit checks, 58/58 ordinary browser checks, 23/23 extension checks**, seven native WebKit synthetic scenarios, Swift typecheck and unsigned native build. Source-level independent review covers the new stream boundary and automatic preparation. These are scoped checkpoints, not final R1–R8 acceptance. Live login, native composer insertion, file transport and distribution checks remain open. The record below preserves earlier Linux delivery evidence.
 
+Native file follow-up: 30 exporter checks and eight actual WKWebView download scenarios passed on synthetic data; separate candidate build passed without replacing the app being used for login. See the native file/export section of [Mac acceptance](mac-acceptance.md) for fixture assumptions and remaining runtime gaps.
+
 2026-10-12 · Linux cloud VM · synthetic data only.
 
 | Check                                                          | Result                                                                                                                                                                                                                                                               |

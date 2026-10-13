@@ -19,7 +19,7 @@ bash scripts/build-macos.sh /opt/homebrew/bin/node
 open 'dist/gpt-handoff.app'
 ```
 
-Use `/usr/local/bin/node` or another installed path if appropriate. The script builds for the current Mac architecture and stores that path in the bundle's `Runtime.plist`. It does not embed Node or produce a portable installer. Moving or removing that Node executable requires rebuilding. Move an earlier `.app` aside before rebuilding. The result is unsigned and intended for local acceptance checks; it is not a signed distributable release.
+Use `/usr/local/bin/node` or another installed path if appropriate. The script builds for the current Mac architecture and stores that path in the bundle's `Runtime.plist`. It does not embed Node or produce a portable installer. Moving or removing that Node executable requires rebuilding. Move an earlier `.app` aside before rebuilding, or pass a second absolute output `.app` path to build a separate candidate without touching the running app. The result is unsigned and intended for local acceptance checks; it is not a signed distributable release.
 
 `Info.plist` sets `LSUIElement`, so the launcher lives in the menu bar. The app bundle includes only `src/`, `web/`, and package metadata. Server launch uses Foundation `Process` with fixed arguments and a small environment, never a shell. No transcript is passed as a process argument. Output is discarded rather than retained in logs.
 
@@ -28,7 +28,9 @@ Use `/usr/local/bin/node` or another installed path if appropriate. The script b
 1. Open Handoff and sign in to ChatGPT in its own window. The local compiler starts separately; a port or Node failure is shown in the outer frame and does not block the chat with an app modal.
 2. Open the conversation normally. The observer reads only the currently displayed conversation's own response and introduces no fetch or refresh. The observer handles selected GET responses and normal classic/v1 SSE replies, including ongoing and new conversations. WebSocket/handoff delivery remains explicitly partial; actual logged-in compatibility is unverified.
 3. Focus the intended target composer once, then return to Handoff. Enable composer access when wanted, using the system's Accessibility grant. Choose the exact app/window in **Choose Agent**. Selection does not activate that target. Unsupported fields stay unavailable.
-4. The source prepares automatically. **Preview** is available before target selection; **Add to Agent** becomes available only for verified current data and a selected target. Add focuses the bound target, rechecks source identity, appends and compares exact text. The button is the explicit action; this primary path has no additional modal confirmation. Preview is a separate, nonmodal view. Partial sources/files, long-context transport and actual-client support still need the remaining implementation and acceptance work. Send remains the user's action.
+4. The source prepares automatically. **Preview** is available before target selection; **Add to Agent** becomes available only for verified current data and a selected target. Add focuses the bound target, rechecks source identity, appends and compares exact text. The button is the explicit action; this primary path has no additional modal confirmation. Preview is a separate, nonmodal view. Partial source data and actual-client support still need the remaining acceptance work. **Save…** provides a complete Markdown/file export when the text cannot fit the 2 MiB native append limit; it does not attach files to a target. Send remains the user's action.
+
+**Save…** chooses a destination folder, then downloads up to ten supported exposed source files through normal WebKit downloads (5 MiB each, 10 MiB total). No refresh or separate browser is opened. **Cancel save** cancels pending work. The output contains `context.md`, `conversation.json`, `files/` and `manifest.json` with source associations and actual SHA-256 hashes. The source model remains capture evidence; the manifest records what was exported. Missing files remain explicit. All temporary download files are removed; only an explicit completed export persists. Exporting does not send text or prove that a target received files. The full native Save interaction and signed-in file compatibility remain unaccepted.
 
 Discovery reads app names and window titles when the workspace or utility menu opens after Accessibility access has been granted. It does not read target editor contents until Add. Discovery is asynchronous, bounded to 80 apps and 30 windows per app. Every accessibility attribute read applies a 150 ms messaging timeout. Window titles and target selections remain in memory.
 
@@ -48,9 +50,10 @@ Quit from the menu to terminate only the server process this launcher started. A
 
 ```sh
 bash scripts/test-native-source.sh
+bash scripts/test-native-files.sh
 ```
 
-This compiles a separate nonvisible WebKit runner using a nonpersistent data store, synthetic fetch responses and the same injected observer bundle. Seven scenarios passed on the current Mac. It exercises the real JavaScript engine and native message channel, not login, network protocol compatibility, Accessibility or Workspace control-state behavior.
+This compiles a separate nonvisible WebKit runner using a nonpersistent data store, synthetic fetch responses and the same injected observer bundle. Seven scenarios passed on the current Mac. It exercises the real JavaScript engine and native message channel. The file runner adds 30 exporter checks and eight WKDownload scenarios against a synthetic loopback server. Neither runner establishes login, production protocol compatibility, Accessibility or Workspace control-state behavior.
 
 ## Remaining native acceptance checks
 

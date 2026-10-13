@@ -2,7 +2,7 @@
 
 Runnable development handoff. Not a release-verified macOS build.
 
-The reconstruction must satisfy **R1–R8 in [product-contract.md](product-contract.md)**, including the user's later embedded-chat/no-refresh UX requirements. Its native window renders, original-response parsing is implemented, and focused checks pass, but synthetic GET/SSE/new-chat updates now pass, while live protocol compatibility, WebSocket/handoff streams, automatic files/long context, real-client insertion and the remaining real-machine matrix are open. Earlier counts below do not substitute for a final-state verification run. The independent foundation review found four transition defects; fixes and remaining runtime limits are recorded in [independent-review.md](independent-review.md).
+The reconstruction must satisfy **R1–R8 in [product-contract.md](product-contract.md)**, including the user's later embedded-chat/no-refresh UX requirements. Its native window renders, original-response parsing is implemented, and focused checks pass, but synthetic GET/SSE/new-chat updates now pass, while live protocol compatibility, WebSocket/handoff streams, native Save UI/live downloads and target file delivery (explicit long-context export is implemented), real-client insertion and the remaining real-machine matrix are open. Earlier counts below do not substitute for a final-state verification run. The independent foundation review found four transition defects; fixes and remaining runtime limits are recorded in [independent-review.md](independent-review.md).
 
 ## Completed in the cloud VM
 

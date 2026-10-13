@@ -21,6 +21,16 @@ Earlier in this chat Codex built and launched both native apps, inspected the ol
 
 The pre-streaming app and its owned server were stopped for rebuilding; its bundle was preserved as `dist/gpt-handoff-before-streaming.app`. A CUA attempt to inspect that older running app timed out; the rebuilt app subsequently opened and rendered successfully. The original package/bundle remains untouched. See [product contract](product-contract.md) for R1–R8 and [independent review](independent-review.md) for reviewed defects. No release readiness is claimed.
 
+## Native file/export checkpoint — 2026-10-13
+
+The owner's current login attempt reached Google's passkey challenge and showed a Bluetooth/device-proximity failure. CUA selected the provider's existing **Try another way** action and confirmed that a password sign-in option was offered. No credential was entered, no account setting changed, and no browser cookie/cache was copied. Authentication remains unverified. WKWebView uses Handoff's own persistent website data store; Chrome/Safari cookies are not shared with it. No auth URL, challenge token or account identifier is recorded here.
+
+The new **Save…** outer-frame control is implemented for a prepared current source. It asks for an export folder only after the explicit action, downloads supported exposed HTTPS files through that webview's ordinary `startDownload` API, and saves full `context.md`, original `conversation.json`, actual file bytes and a SHA-256 receipt manifest. Missing/expired/unsupported files remain unresolved. It never changes Add's completeness decision or calls a saved file attached/inserted. Native file insertion into a real target remains unfinished.
+
+Validation: `bash scripts/test-native-files.sh` passed **30 exporter checks** and **eight native WKWebView download scenarios**, including exact Unicode bytes, same-name files with distinct ownership, stale redirect callbacks, login HTML/type refusal, chunked oversize, size mismatch, interruption, cancellation and source-change cleanup. Export checks cover >2 MiB text without truncation, unsafe/NFD filenames, hashes, source mismatch, missing files and cancellation around staging/publication. The fixture uses a loopback HTTP server and an injected URL-eligibility function; production eligibility requires HTTPS. WebKit emitted `sandbox_extension_issue_file failed` diagnostics in the unbundled runner, but the observed files/bytes and cleanup assertions passed. This does not establish live signed-in file-download compatibility.
+
+Swift typecheck and a separate unsigned app build passed. `dist/gpt-handoff-files-reviewed.app` is the latest file/export checkpoint; it was **not launched**, preserving the owner's active login in `dist/gpt-handoff.app` (streaming checkpoint). The actual Save chooser, positive export from that running native UI, cancellation responsiveness and real-client attachment reception still require runtime acceptance. The build script accepts an optional absolute output `.app` path so a candidate can be built without replacing a running app.
+
 ## Previous worker's report
 
 2026-10-12 · macOS 27.0.1 (arm64) · Xcode SDK 26.5 / Swift 6.3.3 · Node 25.9.0 · Google Chrome 154.0.8037.98 · Chrome for Testing 149.0.7827.55 · synthetic data only.

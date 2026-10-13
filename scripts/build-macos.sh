@@ -5,8 +5,8 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   printf '%s\n' 'macOS and the Xcode command-line tools are required. No native build was performed.' >&2
   exit 1
 fi
-if [[ $# -ne 1 || "$1" != /* || ! -x "$1" ]]; then
-  printf '%s\n' 'Usage: bash scripts/build-macos.sh /absolute/path/to/installed/node' >&2
+if [[ $# -lt 1 || $# -gt 2 || "$1" != /* || ! -x "$1" ]]; then
+  printf '%s\n' 'Usage: bash scripts/build-macos.sh /absolute/path/to/installed/node [/absolute/output.app]' >&2
   exit 1
 fi
 
@@ -17,9 +17,14 @@ if [[ ! "$node_major" =~ ^[0-9]+$ ]] || (( node_major < 24 )); then
   printf '%s\n' 'Use an installed Node.js 24 or newer executable.' >&2
   exit 1
 fi
-output_bundle="$project_root/dist/gpt-handoff.app"
+output_bundle="${2:-$project_root/dist/gpt-handoff.app}"
+if [[ "$output_bundle" != /* || "$output_bundle" != *.app ]]; then
+  printf '%s\n' 'The output must be an absolute .app path.' >&2
+  exit 1
+fi
+output_parent="$(dirname "$output_bundle")"
 if [[ -e "$output_bundle" ]]; then
-  printf '%s\n' 'dist/gpt-handoff.app already exists. Move it aside before rebuilding.' >&2
+  printf '%s\n' 'The output app already exists. Choose another output or move it aside before rebuilding.' >&2
   exit 1
 fi
 
@@ -30,8 +35,8 @@ for required in src/server.js web package.json native/main.swift native/Info.pli
   fi
 done
 
-mkdir -p "$project_root/dist"
-build_root="$(mktemp -d "$project_root/dist/.gpt-handoff-build.XXXXXX")"
+mkdir -p "$output_parent"
+build_root="$(mktemp -d "$output_parent/.gpt-handoff-build.XXXXXX")"
 trap 'rm -r "$build_root"' EXIT
 app_bundle="$build_root/gpt-handoff.app"
 mkdir -p "$app_bundle/Contents/MacOS" "$app_bundle/Contents/Resources/project"
@@ -51,7 +56,7 @@ fi
 "$node_executable" "$project_root/scripts/build-embedded-source.js" "$app_bundle/Contents/Resources/embedded-source.js"
 xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos13.0" \
   -framework AppKit -framework ApplicationServices -framework WebKit \
-  "$project_root/native/main.swift" "$project_root/native/Workspace.swift" -o "$app_bundle/Contents/MacOS/gpt-handoff"
+  "$project_root/native/main.swift" "$project_root/native/Workspace.swift" "$project_root/native/ContextExport.swift" "$project_root/native/ContextDownloads.swift" -o "$app_bundle/Contents/MacOS/gpt-handoff"
 plutil -lint "$app_bundle/Contents/Info.plist" "$app_bundle/Contents/Resources/Runtime.plist"
 mv "$app_bundle" "$output_bundle"
 printf 'Created unsigned local build: %s\n' "$output_bundle"

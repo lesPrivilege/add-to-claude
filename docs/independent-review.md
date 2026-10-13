@@ -1,5 +1,11 @@
 # Independent review
 
+## Native file/export review — 2026-10-13
+
+An independent read-only reviewer examined the new native download/export boundary and Workspace integration. Two concrete findings were repaired: a late redirect callback from a previous download could cancel the current file; and destination hashing/serialization/disk writes blocked the main thread. Stale callbacks now cancel and return before touching current state. Export uses a background queue with a cancellation token checked during staging and before/after publication; old completion callbacks cannot update a newer export and remove only their own unpublished output.
+
+The reviewer reported no new concrete defect after reinspection. The implementation owner ran 30 native exporter checks and eight real WKWebView synthetic download scenarios, including the stale redirect and post-rename cancellation regressions. A Swift Unicode-normalization comparison error was separately found by the initial filename tests and repaired using UTF-8 equality. Tests retain actual original-byte/hash/source mappings and never call exported files inserted. The reviewer did not rerun the suites or inspect the Save UI; live source, native control-state responsiveness and target file reception remain open.
+
 ## Streaming reconstruction review — 2026-10-13
 
 A separate read-only reviewer inspected the current stream/source boundary, native automatic preparation and delayed insertion gate, then reviewed four refreshed synthetic web screenshots. No remaining concrete defect was reported after two repair rounds. The reviewer did not independently rerun all suites, inspect native rendering or exercise Accessibility. This is scoped review, not release acceptance.

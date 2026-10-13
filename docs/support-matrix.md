@@ -1,6 +1,6 @@
 # Support and evidence
 
-Current reconstruction evidence (2026-10-13): native signed-out embedding was visually inspected; the passive GET/classic/v1 SSE adapter now passes Chromium fixtures and seven actual WebKit synthetic scenarios. The automatic native preparation/Preview/Add path compiles and has source review, but no real-client insertion certification. WebSocket/handoff streams, native files/long context and logged-in source acceptance remain open. Unit 101/101, ordinary browser 58/58, extension 23/23; extension permissions are pregranted in lifecycle fixtures. The historical matrix below must not be read as current native compatibility evidence.
+Current reconstruction evidence (2026-10-13): native signed-out embedding was visually inspected; the passive GET/classic/v1 SSE adapter now passes Chromium fixtures and seven actual WebKit synthetic scenarios. The automatic native preparation/Preview/Add path compiles and has source review, but no real-client insertion certification. WebSocket/handoff streams, native files/long context and logged-in source acceptance remain open. Unit 101/101, ordinary browser 58/58, extension 23/23; extension permissions are pregranted in lifecycle fixtures. The historical matrix below must not be read as current native compatibility evidence. The subsequent native Save path passes 30 export checks and eight synthetic WebKit download scenarios. It exports full Markdown/files with hashes; live file download, Save UI and actual target attachment delivery remain unverified.
 
 ## Reconstruction status
 

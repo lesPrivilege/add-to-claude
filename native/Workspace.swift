@@ -15,6 +15,12 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
     private let status = NSTextField(labelWithString: "Sign in to ChatGPT here. Choose an open composer when ready.")
     private let target = NSPopUpButton(frame: .zero, pullsDown: true)
     private let add = NSButton(title: "Add to Agent", target: nil, action: nil)
+    private let saveContext = NSButton(title: "Save…", target: nil, action: nil)
+    private var downloads: ContextDownloads?
+    private var exportPanel: NSOpenPanel?
+    private var exporting = false
+    private var exportOperation: UUID?
+    private var exportCancellation: ContextExportCancellation?
     private let preview = NSButton(title: "Preview", target: nil, action: nil)
     private var response: [String: Any]?
     private var prepared: [String: Any]?
@@ -64,11 +70,13 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
         chat.font = .systemFont(ofSize: 13, weight: .medium)
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        for button in [back, target, add, preview] { button.controlSize = .small; button.bezelStyle = .rounded }
+        for button in [back, target, add, preview, saveContext] { button.controlSize = .small; button.bezelStyle = .rounded }
         add.target = self; add.action = #selector(addPrepared)
         preview.target = self; preview.action = #selector(showPreview)
         preview.isEnabled = false
-        let bar = NSStackView(views: [back, chat, spacer, target, preview, add])
+        saveContext.target = self; saveContext.action = #selector(exportContext)
+        saveContext.toolTip = "Save full context and downloadable files; nothing is attached or sent"
+        let bar = NSStackView(views: [back, chat, spacer, target, preview, saveContext, add])
         bar.orientation = .horizontal
         bar.spacing = 8
         bar.edgeInsets = NSEdgeInsets(top: 7, left: 12, bottom: 7, right: 12)
@@ -130,7 +138,10 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
         return verification?["status"] as? String == "verified"
     }
     private func updateAdd() {
-        add.isEnabled = selectedTarget && preparedIsVerified && coreReady && preparingVersion == nil && !inserting
+        let textFits = (prepared?["markdown"] as? String).map { $0.utf8.count <= 2 * 1024 * 1024 } ?? false
+        add.isEnabled = selectedTarget && preparedIsVerified && textFits && coreReady && preparingVersion == nil && !inserting
+        saveContext.isEnabled = prepared != nil
+        saveContext.title = exporting ? "Cancel save" : "Save…"
         preview.isEnabled = prepared != nil
     }
     func connectCore(_ url: URL) { if !coreReady && !core.isLoading { core.load(URLRequest(url: url)) } }
@@ -139,6 +150,12 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
 
     private func invalidateSource(_ message: String, keepingResponse: Bool = false) {
         sourceVersion += 1
+        exportOperation = nil
+        exportCancellation?.cancel(); exportCancellation = nil
+        status.toolTip = nil
+        downloads?.cancel(); downloads = nil
+        exportPanel?.cancel(nil); exportPanel = nil
+        exporting = false
         preparingVersion = nil
         prepared = nil
         if !keepingResponse {
@@ -209,6 +226,9 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
             self.status.stringValue = self.preparedIsVerified
                 ? "Context ready. Choose a composer, then Add. Nothing is sent by Handoff."
                 : "Some content or files need attention. Open Preview to review the gaps."
+            if let text = compiled["markdown"] as? String, text.utf8.count > 2 * 1024 * 1024 {
+                self.status.stringValue = "This context needs a file. Use Save to keep the full text and downloadable attachments."
+            }
         }
     }
 
@@ -231,6 +251,83 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
             if version == self.sourceVersion { self.status.stringValue = message }
             if success { self.setTarget(name: nil) }
             self.updateAdd()
+        }
+    }
+
+    @objc private func exportContext() {
+        if exporting {
+            exportOperation = nil
+            exportCancellation?.cancel(); exportCancellation = nil
+            downloads?.cancel(); downloads = nil
+            exportPanel?.cancel(nil); exportPanel = nil
+            exporting = false; updateAdd()
+            status.stringValue = "Save cancelled. Nothing attached or sent."
+            return
+        }
+        guard !exporting, let prepared, let markdown = prepared["markdown"] as? String,
+              let model = prepared["model"] as? [String: Any],
+              let references = model["attachments"] as? [[String: Any]] else { return }
+        let version = sourceVersion
+        let operation = UUID()
+        exportOperation = operation
+        let isCurrent: () -> Bool = { [weak self] in
+            guard let self, self.exportOperation == operation, version == self.sourceVersion, let response = self.response else { return false }
+            return self.packetMatchesCurrentPage(response) && self.responsePageIdentity == self.source.url?.absoluteString
+        }
+        guard isCurrent() else { invalidateSource("The source changed. Wait for the current conversation."); return }
+        exporting = true; updateAdd()
+        let chooser = NSOpenPanel()
+        chooser.title = "Save context folder"
+        chooser.message = "Choose where to save the full Markdown and supported downloadable files. Nothing will be attached or sent."
+        chooser.prompt = "Save here"
+        chooser.canChooseDirectories = true; chooser.canChooseFiles = false; chooser.canCreateDirectories = true
+        chooser.allowsMultipleSelection = false
+        exportPanel = chooser
+        chooser.begin { [weak self] response in
+            guard let self, self.exportOperation == operation, version == self.sourceVersion else { return }
+            self.exportPanel = nil
+            guard response == .OK, let parent = chooser.url, isCurrent() else {
+                self.exportOperation = nil; self.exporting = false; self.updateAdd(); return
+            }
+            let batch = ContextDownloads(references: references,
+                startDownload: { [weak self] request, completion in
+                    self?.source.startDownload(using: request, completionHandler: completion)
+                }, isCurrent: isCurrent,
+                progress: { [weak self] index, total in
+                    self?.status.stringValue = "Downloading source file \(index) of \(total)…"
+                }, completion: { [weak self] files, failures in
+                    guard let self, isCurrent() else { return }
+                    self.downloads = nil
+                    let cancellation = ContextExportCancellation()
+                    self.exportCancellation = cancellation
+                    self.status.stringValue = "Saving full context…"
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let result = Result {
+                            try ContextExport.write(markdown: markdown, model: model, files: files, failures: failures, parent: parent,
+                                                    isCancelled: { cancellation.isCancelled })
+                        }
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self, isCurrent(), !cancellation.isCancelled else {
+                                // A cancelled/source-changed export must not publish a late folder.
+                                if case .success(let destination) = result {
+                                    DispatchQueue.global(qos: .utility).async { try? FileManager.default.removeItem(at: destination) }
+                                }
+                                return
+                            }
+                            self.exportCancellation = nil; self.exportOperation = nil; self.exporting = false; self.updateAdd()
+                            switch result {
+                            case .success(let destination):
+                                let missing = references.count - files.count
+                                self.status.stringValue = "Exported full context and \(files.count) files; \(missing) unresolved. Nothing attached or sent."
+                                self.status.toolTip = destination.path
+                            case .failure:
+                                self.status.stringValue = "The context could not be saved. Choose a writable folder and retry."
+                            }
+                        }
+                    }
+                })
+            self.downloads = batch
+            batch.start()
         }
     }
 
