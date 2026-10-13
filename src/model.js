@@ -139,6 +139,26 @@ export function validateConversation(data) {
       capturedAt: response.capturedAt,
       observedNodes: response.observedNodes,
     };
+    if (response.webSocket !== undefined) {
+      const socket = record(response.webSocket, 'WebSocket source evidence');
+      if (
+        responseMethod !== 'POST' ||
+        socket.origin !== 'wss://ws.chatgpt.com' ||
+        typeof socket.topic !== 'string' ||
+        !/^conversation-turn-[A-Za-z0-9_-]{1,200}$/u.test(socket.topic) ||
+        socket.coverage !== 'unverified-replay' ||
+        typeof socket.terminalObserved !== 'boolean'
+      )
+        throw new TypeError(
+          'WebSocket evidence must identify an observed turn topic with explicit coverage.',
+        );
+      source.response.webSocket = {
+        origin: socket.origin,
+        topic: socket.topic,
+        coverage: socket.coverage,
+        terminalObserved: socket.terminalObserved,
+      };
+    }
     if (responseMethod === 'POST') {
       if (
         !['observed-response', 'new-conversation', 'partial-history'].includes(response.coverage) ||
@@ -496,6 +516,7 @@ export function validateConversation(data) {
       attachments.some((attachment) => attachment.status !== 'available'))
   )
     status = 'partial';
+  if (source.response?.webSocket) status = 'partial';
   // A snapshot cannot prove that ChatGPT has rendered every turn, regardless of a supplied claim.
   if (source.type === 'dom-snapshot') status = 'unverified';
   return {

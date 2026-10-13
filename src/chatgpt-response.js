@@ -102,6 +102,7 @@ export function importBrowserResponse(body, { pageUrl, responseUrl, capturedAt, 
       ...(stream
         ? {
             method,
+            ...(stream.socket ? { webSocket: stream.socket } : {}),
             coverage: stream.coverage,
             streamCompleted: stream.streamCompleted,
             requestMessageIds: stream.requestMessageIds,
@@ -132,6 +133,15 @@ export function importBrowserResponse(body, { pageUrl, responseUrl, capturedAt, 
     model.verification.issues.push({
       code: 'history-unobserved',
       message: 'Only this exchange was observed. Earlier conversation history was not available.',
+      sourceLocator: location,
+    });
+  }
+  if (stream?.socket) {
+    model.verification.status = 'partial';
+    model.verification.issues.push({
+      code: 'socket-replay-unverified',
+      message:
+        'WebSocket text was observed, but complete replay coverage is unverified. A terminal event alone cannot prove all messages were received.',
       sourceLocator: location,
     });
   }

@@ -6,6 +6,14 @@ The user's subsequent clarification makes the main surface an embedded ChatGPT c
 
 The [verbatim current-thread clarification](sources/current-thread-ux-2026-10-13.txt) is preserved separately. “bar 退出后” is interpreted in the context of the following messages as the status-bar app's opened chat surface, not a request to terminate ChatGPT.
 
+## Browser-session reuse clarification
+
+The owner subsequently reported Google login failure in the separate WebKit environment, asked to integrate the original browser and identified **Google Chrome** as the already-signed-in browser. The [verbatim clarification](sources/current-thread-browser-reuse-2026-10-13.txt) is retained separately. Supported reuse of that Chrome session now takes priority over requiring another WebKit login. Chat must still be the main surface, with small frame-level controls, no forced refresh or blocking handoff overlay; copying browser credentials is not the implementation path.
+
+Codex verified on this Mac that Chrome opens the signed-in ChatGPT homepage and that Chrome's existing **Open in ChatGPT** action opens an installed browser-owned ChatGPT app window without the normal address/tab bars, retaining login. Its observed bundle identity is `com.google.Chrome.app.naboeedjljbhciiecpeahakaafbhknkj`; it also exposes an extension entry point. No historical conversation was opened, extracted or sent during this check. The system default browser is Safari, which is not the user's confirmed source browser.
+
+The next implementation direction is to connect the status-bar utility and small handoff controls to that existing Chrome chat surface. This is **not yet implemented or accepted**; the currently running Handoff app still contains the previous WebKit surface. Preserve the working Chrome session while completing the adapter/controls. Previous WebKit results remain useful component evidence, not proof of the new Chrome integration. Real selected synthetic conversation capture, actual target insertion/files and release gates remain required.
+
 ## Source and interpretation
 
 The user requested that Codex read [开源工具读取ChatGPT会话](chatgpt-conversation://6acb722f-383c-83ec-91f6-66d491c0af55), restructure the project, and complete the goal. The [source record](sources/chatgpt-6acb722f-383c-83ec-91f6-66d491c0af55/README.md) preserves the accessible conversation separately from this accepted project state.

@@ -317,3 +317,271 @@ test('a response finishing after navigation cannot repopulate the previous conve
     await page.evaluate(() => window.receivedSource.some((packet) => packet.kind === 'response')),
   ).toBe(false);
 });
+
+const socketTopic = 'conversation-turn-synthetic-exchange';
+const handoffWire = `data: ${JSON.stringify({ type: 'stream_handoff', conversation_id: 'embedded-synthetic', turn_exchange_id: 'exchange-id-distinct-from-topic', options: [{ type: 'subscribe_ws_topic', topic_id: socketTopic }] })}\n\ndata: [DONE]\n\n`;
+const socketItem = (encoded) => ({
+  type: 'message',
+  topic_id: socketTopic,
+  payload: {
+    type: 'conversation-turn-stream',
+    turn_id: 'turn-distinct-from-topic',
+    payload: { type: 'stream-item', conversation_id: 'embedded-synthetic', encoded_item: encoded },
+  },
+});
+const socketAnswer = () =>
+  JSON.stringify([
+    socketItem(
+      `data: ${JSON.stringify({ conversation_id: 'embedded-synthetic', message: message('a1', 'assistant', 'Socket **original** 中文 ✓\n') })}\n\n`,
+    ),
+    socketItem('data: [DONE]\n\n'),
+  ]);
+async function socketSetup(page, offset = '0') {
+  const sent = [];
+  let server;
+  await page.routeWebSocket('wss://ws.chatgpt.com/**', (socket) => {
+    server = socket;
+    socket.onMessage((value) => sent.push(value));
+  });
+  const requests = await setup(page);
+  await page.route(responseURL, (route) =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(base()) }),
+  );
+  await page.route(liveEndpoint, (route) =>
+    route.fulfill({ contentType: 'text/event-stream', body: handoffWire }),
+  );
+  await page.evaluate(
+    async ({ get, post }) => {
+      window.websiteSocketFrames = [];
+      window.websiteSocket = new WebSocket(
+        'wss://ws.chatgpt.com/p4/ws/user/synthetic?verify=SYNTHETIC_SECRET',
+      );
+      window.websiteSocket.addEventListener('message', (event) =>
+        window.websiteSocketFrames.push(event.data),
+      );
+      await new Promise((resolve) =>
+        window.websiteSocket.addEventListener('open', resolve, { once: true }),
+      );
+      await (await fetch(get)).text();
+      await (
+        await fetch(post, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'next',
+            conversation_id: 'embedded-synthetic',
+            parent_message_id: 'a0',
+            messages: [messageForSocket()],
+          }),
+        })
+      ).text();
+      function messageForSocket() {
+        return {
+          id: 'u1',
+          author: { role: 'user' },
+          content: { content_type: 'text', parts: ['Selected source question.'] },
+        };
+      }
+    },
+    { get: responseURL, post: liveEndpoint },
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => window.receivedSource.filter((packet) => packet.kind === 'response').at(-1)?.method,
+      ),
+    )
+    .toBe('POST');
+  await page.evaluate(
+    ({ topic, offset }) =>
+      window.websiteSocket.send(
+        JSON.stringify([{ id: 8, command: { type: 'subscribe', topic_id: topic, offset } }]),
+      ),
+    { topic: socketTopic, offset },
+  );
+  await expect.poll(() => sent.length).toBe(1);
+  return { server, sent, requests };
+}
+
+test('website-owned WebSocket handoff reaches preview with distinct unverified replay evidence and no new traffic', async ({
+  page,
+}) => {
+  const { server, sent } = await socketSetup(page);
+  server.send(socketAnswer());
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.receivedSource
+          .filter((packet) => packet.kind === 'response')
+          .at(-1)
+          ?.body.includes('Socket **original**'),
+      ),
+    )
+    .toBe(true);
+  const packet = await page.evaluate(() =>
+    window.receivedSource.filter((packet) => packet.kind === 'response').at(-1),
+  );
+  const model = importBrowserResponse(packet.body, packet);
+  expect(model.turns.map((turn) => turn.id)).toEqual(['u0', 'a0', 'u1', 'a1']);
+  expect(model.turns[3].markdown).toBe('Socket **original** 中文 ✓\n');
+  expect(model.verification.status).toBe('partial');
+  expect(model.verification.issues.some((issue) => issue.code === 'socket-replay-unverified')).toBe(
+    true,
+  );
+  expect(model.source.response.webSocket).toEqual({
+    origin: 'wss://ws.chatgpt.com',
+    topic: socketTopic,
+    coverage: 'unverified-replay',
+    terminalObserved: true,
+  });
+  expect(packet.body).not.toContain('SYNTHETIC_SECRET');
+  expect(await page.evaluate(() => window.websiteSocketFrames)).toEqual([socketAnswer()]);
+  expect(sent).toHaveLength(1);
+  const count = await page.evaluate(() => window.receivedSource.length);
+  server.send(
+    JSON.stringify({
+      type: 'message',
+      topic_id: 'unrelated-presence',
+      payload: { token: 'SYNTHETIC_SECRET' },
+    }),
+  );
+  await expect.poll(() => page.evaluate(() => window.websiteSocketFrames.length)).toBe(2);
+  expect(await page.evaluate(() => window.receivedSource.length)).toBe(count);
+});
+
+test('nonzero or repeated website subscriptions cannot establish a socket capture', async ({
+  page,
+}) => {
+  const { server } = await socketSetup(page, '50');
+  server.send(socketAnswer());
+  await expect.poll(() => page.evaluate(() => window.websiteSocketFrames.length)).toBe(1);
+  expect(
+    await page.evaluate(() =>
+      window.receivedSource.some((packet) => packet.body?.includes('Socket **original**')),
+    ),
+  ).toBe(false);
+  await page.evaluate(
+    (topic) =>
+      window.websiteSocket.send(
+        JSON.stringify([{ command: { type: 'subscribe', topic_id: topic, offset: '0' } }]),
+      ),
+    socketTopic,
+  );
+  server.send(socketAnswer());
+  await expect.poll(() => page.evaluate(() => window.websiteSocketFrames.length)).toBe(2);
+  expect(
+    await page.evaluate(() =>
+      window.receivedSource.some((packet) => packet.body?.includes('Socket **original**')),
+    ),
+  ).toBe(false);
+});
+
+test('source navigation ignores late socket data without closing the website socket', async ({
+  page,
+}) => {
+  const { server, sent } = await socketSetup(page);
+  await page.evaluate(() => history.pushState({}, '', '/c/other-synthetic'));
+  server.send(socketAnswer());
+  await expect.poll(() => page.evaluate(() => window.websiteSocketFrames.length)).toBe(1);
+  expect(await page.evaluate(() => window.receivedSource.at(-1).kind)).toBe('changed');
+  expect(await page.evaluate(() => window.websiteSocket.readyState)).toBe(1);
+  expect(sent).toHaveLength(1);
+});
+
+test('an authoritative website GET replaces socket replay uncertainty without an observer fetch', async ({
+  page,
+}) => {
+  const { server, sent } = await socketSetup(page);
+  server.send(socketAnswer());
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.receivedSource
+          .filter((packet) => packet.kind === 'response')
+          .at(-1)
+          ?.body.includes('Socket **original**'),
+      ),
+    )
+    .toBe(true);
+  const fresh = base();
+  fresh.current_node = 'a1';
+  fresh.mapping.u1 = {
+    id: 'u1',
+    parent: 'a0',
+    message: message('u1', 'user', 'Selected source question.'),
+  };
+  fresh.mapping.a1 = {
+    id: 'a1',
+    parent: 'u1',
+    message: message('a1', 'assistant', 'Socket **original** 中文 ✓\n'),
+  };
+  await page.route(responseURL, (route) =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(fresh) }),
+  );
+  await page.evaluate(async (url) => (await fetch(url)).text(), responseURL);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => window.receivedSource.filter((packet) => packet.kind === 'response').at(-1)?.method,
+      ),
+    )
+    .toBe('GET');
+  const packet = await page.evaluate(() =>
+    window.receivedSource.filter((packet) => packet.kind === 'response').at(-1),
+  );
+  const model = importBrowserResponse(packet.body, packet);
+  expect(model.verification.status).toBe('verified');
+  expect(model.source.response.webSocket).toBeUndefined();
+  expect(sent).toHaveLength(1);
+});
+
+test('authentication-provider documents retain their original fetch and WebSocket APIs', async ({
+  page,
+}) => {
+  await page.addInitScript({
+    content: `
+    window.fixtureOriginalFetch = window.fetch;
+    window.fixtureOriginalSocket = window.WebSocket;
+    window.webkit = { messageHandlers: { handoffSource: { postMessage() {} } } };
+    ${createEmbeddedSourceScript()}
+  `,
+  });
+  await page.route('https://accounts.google.com/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<title>Synthetic auth document</title>' }),
+  );
+  await page.goto('https://accounts.google.com/synthetic-fixture');
+  expect(
+    await page.evaluate(
+      () =>
+        window.fetch === window.fixtureOriginalFetch &&
+        window.WebSocket === window.fixtureOriginalSocket,
+    ),
+  ).toBe(true);
+});
+
+test('normal website unsubscribe after terminal data preserves the partial source snapshot', async ({
+  page,
+}) => {
+  const { server, sent } = await socketSetup(page);
+  server.send(socketAnswer());
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.receivedSource
+          .filter((packet) => packet.kind === 'response')
+          .at(-1)
+          ?.body.includes('Socket **original**'),
+      ),
+    )
+    .toBe(true);
+  const before = await page.evaluate(() => window.receivedSource.at(-1));
+  await page.evaluate(
+    (topic) =>
+      window.websiteSocket.send(
+        JSON.stringify([{ id: 9, command: { type: 'unsubscribe', topic_id: topic } }]),
+      ),
+    socketTopic,
+  );
+  await expect.poll(() => sent.length).toBe(2);
+  expect(await page.evaluate(() => window.receivedSource.at(-1))).toEqual(before);
+  expect(importBrowserResponse(before.body, before).verification.status).toBe('partial');
+});

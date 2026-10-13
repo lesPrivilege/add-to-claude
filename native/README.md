@@ -1,5 +1,7 @@
 # macOS embedded chat workspace
 
+**Current direction:** the owner requested reuse of the existing Google Chrome login. A signed-in Chrome ChatGPT app window has now been verified on this Mac. Wiring the status-bar utility and handoff controls to it remains implementation work; the WebKit implementation below is the previous working component and should not require another owner login as the primary workflow. See [product contract](../docs/product-contract.md#browser-session-reuse-clarification).
+
 The status-bar app displays the real ChatGPT website in its own WebKit window. Target selection, Preview and Add are small controls in the outer frame. The reconstructed app has compiled and displayed the signed-out ChatGPT homepage on the Mac. **Login, complete embedded capture and real-client insertion are not yet accepted.** See [Mac acceptance](../docs/mac-acceptance.md) and the [product contract](../docs/product-contract.md). The utility does not install or run an agent.
 
 The icon opens or hides the retained chat window; right-click exposes the utility menu. Normal use opens no separate browser. WebKit uses the app's own login session, not Chrome's cookies. The optional [Chrome extension](../docs/browser-extension.md) is a separate source adapter. No Apple Events/Automation permission is needed by the app.
@@ -26,7 +28,7 @@ Use `/usr/local/bin/node` or another installed path if appropriate. The script b
 ## Use
 
 1. Open Handoff and sign in to ChatGPT in its own window. The local compiler starts separately; a port or Node failure is shown in the outer frame and does not block the chat with an app modal.
-2. Open the conversation normally. The observer reads only the currently displayed conversation's own response and introduces no fetch or refresh. The observer handles selected GET responses and normal classic/v1 SSE replies, including ongoing and new conversations. WebSocket/handoff delivery remains explicitly partial; actual logged-in compatibility is unverified.
+2. Open the conversation normally. The observer reads only the currently displayed conversation's own response and introduces no fetch or refresh. The observer handles selected GET responses and normal classic/v1 SSE replies, including ongoing and new conversations. Supported WebSocket/handoff text now has explicitly unverified replay coverage; actual logged-in compatibility is unverified.
 3. Focus the intended target composer once, then return to Handoff. Enable composer access when wanted, using the system's Accessibility grant. Choose the exact app/window in **Choose Agent**. Selection does not activate that target. Unsupported fields stay unavailable.
 4. The source prepares automatically. **Preview** is available before target selection; **Add to Agent** becomes available only for verified current data and a selected target. Add focuses the bound target, rechecks source identity, appends and compares exact text. The button is the explicit action; this primary path has no additional modal confirmation. Preview is a separate, nonmodal view. Partial source data and actual-client support still need the remaining acceptance work. **Save…** provides a complete Markdown/file export when the text cannot fit the 2 MiB native append limit; it does not attach files to a target. Send remains the user's action.
 

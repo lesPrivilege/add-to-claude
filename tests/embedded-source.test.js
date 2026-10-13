@@ -7,7 +7,7 @@ import { importBrowserResponse } from '../src/chatgpt-response.js';
 const page = 'https://chatgpt.com/c/a';
 const endpoint = (id) => `https://chatgpt.com/backend-api/conversation/${id}`;
 const tick = () => new Promise((resolve) => setImmediate(resolve));
-function harness(initialURL = page) {
+function harness(initialURL = page, { socketSupport = false } = {}) {
   const messages = [],
     requests = [];
   const location = {
@@ -28,6 +28,23 @@ function harness(initialURL = page) {
       return new Promise((resolve) => requests.push({ url, init, resolve }));
     },
   };
+  if (socketSupport)
+    window.WebSocket = class {
+      constructor(url) {
+        this.url = url;
+        this.listeners = new Map();
+        this.sent = [];
+      }
+      send(value) {
+        this.sent.push(value);
+      }
+      addEventListener(name, callback) {
+        this.listeners.set(name, [...(this.listeners.get(name) ?? []), callback]);
+      }
+      emit(name, data) {
+        for (const callback of this.listeners.get(name) ?? []) callback({ data });
+      }
+    };
   const history = {
     pushState(_data, _unused, url) {
       location.href = new URL(url, location.href).href;
@@ -44,12 +61,15 @@ function harness(initialURL = page) {
     TextDecoder,
     TextEncoder,
     structuredClone,
+    setTimeout,
+    clearTimeout,
     addEventListener() {},
   });
   vm.runInContext(createEmbeddedSourceScript(), context);
   return {
     messages,
     requests,
+    socket: () => new window.WebSocket('wss://ws.chatgpt.com/p4/ws/user/synthetic'),
     navigate: (url) => history.pushState({}, '', url),
     request: (id) => window.fetch(endpoint(id)).then((response) => response.text()),
     post: (request) =>
@@ -311,4 +331,52 @@ test('GET decoding failure cancels only the observer branch before releasing it'
   h.navigate('/c/b');
   await tick();
   assert.equal(observerCancelled, 1);
+});
+
+test('known early selected-topic frames reject later socket reconstruction instead of silently losing a turn', async () => {
+  const h = harness(page, { socketSupport: true });
+  const socket = h.socket();
+  const topic = 'conversation-turn-early';
+  const sending = h.post({
+    action: 'next',
+    conversation_id: 'a',
+    parent_message_id: 'root',
+    messages: [originalMessage('u1', 'user', 'Synthetic question.')],
+  });
+  socket.send(JSON.stringify([{ command: { type: 'subscribe', topic_id: topic, offset: '0' } }]));
+  const frame = (encoded) => ({
+    type: 'message',
+    topic_id: topic,
+    payload: { payload: { encoded_item: encoded } },
+  });
+  socket.emit(
+    'message',
+    JSON.stringify(
+      frame(
+        `data: ${JSON.stringify({ conversation_id: 'a', message: originalMessage('early', 'assistant', 'Early visible answer.') })}`,
+      ),
+    ),
+  );
+  h.reply(
+    0,
+    `data: ${JSON.stringify({ type: 'stream_handoff', conversation_id: 'a', options: [{ type: 'subscribe_ws_topic', topic_id: topic }] })}\n\ndata: [DONE]\n\n`,
+    'text/event-stream',
+  );
+  await sending;
+  await tick();
+  socket.emit(
+    'message',
+    JSON.stringify([
+      frame(
+        `data: ${JSON.stringify({ conversation_id: 'a', message: originalMessage('late', 'assistant', 'Late visible answer.') })}`,
+      ),
+      frame('data: [DONE]'),
+    ]),
+  );
+  await tick();
+  assert.equal(
+    h.messages.some((packet) => packet.body?.includes('Late visible answer.')),
+    false,
+  );
+  assert.equal(socket.sent.length, 1);
 });

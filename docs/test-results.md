@@ -6,6 +6,8 @@ Native file follow-up: 30 exporter checks and eight actual WKWebView download sc
 
 Native Workspace follow-up: 24 production-controller/AppKit/WebKit integration checks passed, including a failing-before/passing-after compiler-readiness recovery regression. Target writes and the compiler-stop notification are simulated; source observation, compilation and button states are real. The focused browser native-core check and candidate build also passed. No broad browser/extension rerun was needed for this scoped readiness change; their last complete runs remain the earlier checkpoint.
 
+Passive-socket follow-up: 110/110 unit, 64/64 ordinary browser checks and the seven native WebKit observer scenarios passed. Socket browser fixtures are routed/synthetic, not live-account evidence; replay remains partial. Chrome's real signed-in home page and installed ChatGPT app window were separately observed through CUA; no conversation capture or target delivery was exercised.
+
 2026-10-12 · Linux cloud VM · synthetic data only.
 
 | Check                                                          | Result                                                                                                                                                                                                                                                               |

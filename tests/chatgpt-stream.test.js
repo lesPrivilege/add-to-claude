@@ -157,3 +157,22 @@ test('root envelopes validate explicit operations and paths', () => {
     assert.throws(() => send(createChatGPTStream(), { ...fields, v: initial() }));
   }
 });
+
+test('handoff retains only explicit distinct correlation IDs and rejects a second handoff', () => {
+  const stream = createChatGPTStream();
+  const packet = {
+    type: 'stream_handoff',
+    conversation_id: 'chat-1',
+    turn_exchange_id: 'exchange-separate',
+    token: 'SYNTHETIC_SECRET',
+    options: [{ type: 'subscribe_ws_topic', topic_id: 'conversation-turn-topic-separate' }],
+  };
+  send(stream, packet);
+  assert.deepEqual(stream.handoff, {
+    conversationId: 'chat-1',
+    turnExchangeId: 'exchange-separate',
+    topic: 'conversation-turn-topic-separate',
+  });
+  assert.equal(JSON.stringify(stream.result()).includes('SYNTHETIC_SECRET'), false);
+  assert.throws(() => send(stream, packet));
+});

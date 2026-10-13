@@ -1,3 +1,4 @@
+import { createChatGPTSocketTurn } from '../src/chatgpt-socket.js';
 import { isInternalMessage } from '../src/message-visibility.js';
 import { createEventStreamDecoder } from '../src/event-stream.js';
 import { createChatGPTStream } from '../src/chatgpt-stream.js';
@@ -7,6 +8,12 @@ import { mergeConversationStream } from '../src/stream-conversation.js';
 export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = {}) {
   const channel = window.webkit?.messageHandlers?.handoffSource;
   if (!channel) return;
+  const documentURL = new URL(location.href);
+  if (
+    documentURL.protocol !== 'https:' ||
+    !['chatgpt.com', 'chat.openai.com'].includes(documentURL.hostname)
+  )
+    return;
   let generation = 0,
     getSequence = 0,
     cached = null,
@@ -43,6 +50,7 @@ export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = 
     generation++;
     for (const reader of readers) void reader.cancel().catch(() => {});
     readers.clear();
+    if (job?.socketTimer) clearTimeout(job.socketTimer);
     job = null;
     snapshot = null;
     if (!keepBase) cached = null;
@@ -152,11 +160,194 @@ export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = 
       }),
     };
   };
+  const failSocket = (active) => {
+    if (job !== active || active.version !== generation) return;
+    active.socketFailed = true;
+    active.socketReader = null;
+    if (active.socketTimer) clearTimeout(active.socketTimer);
+    if (active.socketReady) {
+      active.ready = null;
+      active.socketReply = null;
+      snapshot = null;
+      cached = active.base;
+      unavailable(active.version);
+    }
+  };
+  const retireSocket = (active) => {
+    active.socketRetired = true;
+    active.socketReader = null;
+    active.socket = null;
+    if (active.socketTimer) clearTimeout(active.socketTimer);
+    if (active.finished && active.ready && surface()?.id === active.replyId) job = null;
+  };
+  const publishSocket = (active) => {
+    if (
+      job !== active ||
+      active.version !== generation ||
+      !active.finished ||
+      !active.socketReply ||
+      active.socketFailed
+    )
+      return;
+    const next = mergeConversationStream(active.base, active.request, active.socketReply);
+    next.socket = {
+      origin: 'wss://ws.chatgpt.com',
+      topic: active.handoff.topic,
+      coverage: 'unverified-replay',
+      terminalObserved: active.socketReply.socketTerminalObserved,
+    };
+    cached = next;
+    active.ready = {
+      id: active.replyId,
+      body: JSON.stringify(next),
+      method: 'POST',
+      responseUrl: active.responseURL,
+      capturedAt: new Date().toISOString(),
+    };
+    active.socketReady = true;
+    const published = publish(active.ready);
+    if (published && active.socketRetired) job = null;
+    if (active.socketTimer) clearTimeout(active.socketTimer);
+  };
+  const bindSocket = (active) => {
+    if (!active.handoff || active.socketFailed || active.socketReader || active.socketRetired)
+      return;
+    const subscription = active.subscriptions.get(active.handoff.topic);
+    if (!subscription) return;
+    if (subscription.bad) {
+      failSocket(active);
+      return;
+    }
+    active.socket = subscription.socket;
+    active.socketReader = createChatGPTSocketTurn({ ...active.handoff, maxBytes });
+    active.socketTimer = setTimeout(() => failSocket(active), 120000);
+  };
+  const markEarlySocketFrames = (active, socket, data) => {
+    const candidates = [...active.subscriptions.entries()].filter(
+      ([, item]) => item.socket === socket,
+    );
+    if (!candidates.length) return;
+    try {
+      if (
+        typeof data !== 'string' ||
+        data.length > 8 * 1024 * 1024 ||
+        encoder.encode(data).byteLength > 8 * 1024 * 1024
+      )
+        throw new Error('unsupported early frame');
+      const raw = JSON.parse(data),
+        frames = Array.isArray(raw) ? raw : [raw];
+      if (frames.length > 1000) throw new Error('too many frames');
+      for (const frame of frames) {
+        const topic = frame?.type === 'reply' ? frame.reply?.topic_id : frame?.topic_id;
+        const subscription = active.subscriptions.get(topic);
+        if (subscription?.socket === socket) subscription.bad = true;
+      }
+    } catch {
+      for (const [, subscription] of candidates) subscription.bad = true;
+    }
+    // Only the missed-frame flag survives; never queue another topic's transcript or raw frame.
+  };
+  // Observe only website-owned sockets on the known ChatGPT endpoint. No query/protocol/auth values retained.
+  if (typeof window.WebSocket === 'function') {
+    const NativeSocket = window.WebSocket;
+    window.WebSocket = new Proxy(NativeSocket, {
+      construct(target, args, newTarget) {
+        const socket = Reflect.construct(target, args, newTarget);
+        try {
+          const url = new URL(socket.url);
+          if (
+            url.origin !== 'wss://ws.chatgpt.com' ||
+            !/^\/p4\/ws\/user\/[^/]+$/u.test(url.pathname)
+          )
+            return socket;
+          const send = socket.send;
+          socket.send = function (...outgoing) {
+            const result = Reflect.apply(send, this, outgoing);
+            try {
+              const active = job;
+              if (
+                this !== socket ||
+                !active ||
+                active.socketRetired ||
+                typeof outgoing[0] !== 'string' ||
+                encoder.encode(outgoing[0]).byteLength > 65536
+              )
+                return result;
+              const commands = JSON.parse(outgoing[0]);
+              if (!Array.isArray(commands) || commands.length > 64) return result;
+              for (const entry of commands) {
+                const command = entry?.command,
+                  topic = command?.topic_id;
+                if (
+                  typeof topic !== 'string' ||
+                  !/^conversation-turn-[A-Za-z0-9_-]{1,200}$/u.test(topic) ||
+                  !['subscribe', 'unsubscribe'].includes(command.type) ||
+                  (active.handoff && topic !== active.handoff.topic)
+                )
+                  continue;
+                if (!active.subscriptions.has(topic) && active.subscriptions.size >= 4) {
+                  failSocket(active);
+                  break;
+                }
+                if (
+                  command.type === 'unsubscribe' &&
+                  active.handoff?.topic === topic &&
+                  active.socketReply
+                ) {
+                  retireSocket(active);
+                  continue;
+                }
+                const previous = active.subscriptions.get(topic);
+                active.subscriptions.set(topic, {
+                  socket,
+                  bad: Boolean(previous) || command.type !== 'subscribe' || command.offset !== '0',
+                });
+                if (previous && active.handoff?.topic === topic) failSocket(active);
+                else bindSocket(active);
+              }
+            } catch {
+              if (job?.socket === socket) failSocket(job);
+            }
+            return result;
+          };
+          socket.addEventListener('message', (event) => {
+            const active = job;
+            if (!active || active.socketRetired || active.version !== generation) return;
+            if (active.socket !== socket || !active.socketReader) {
+              markEarlySocketFrames(active, socket, event.data);
+              return;
+            }
+            try {
+              if (typeof event.data !== 'string') throw new Error('unsupported socket data');
+              const selected = active.socketReader.accept(event.data);
+              if (selected && active.socketReader.ended) {
+                active.socketReply = active.socketReader.result();
+                publishSocket(active);
+              }
+            } catch {
+              failSocket(active);
+            }
+          });
+          for (const event of ['close', 'error'])
+            socket.addEventListener(event, () => {
+              if (job?.socket !== socket) return;
+              if (job.socketReply) retireSocket(job);
+              else failSocket(job);
+            });
+        } catch {
+          /* The original socket remains usable even if observation cannot attach. */
+        }
+        return socket;
+      },
+    });
+  }
   const captureStream = async (responsePromise, bodyPromise, selected, requested, active) => {
     try {
       const request = selectedRequest(await bodyPromise, selected);
       if (active.version !== generation) return;
       active.isNew = request.conversation_id === null;
+      active.request = request;
+      active.responseURL = requested.href;
       const response = await responsePromise;
       if (active.version !== generation) return;
       if (
@@ -170,6 +361,10 @@ export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = 
         onEvent: (event) => {
           stream.accept(event);
           active.replyId = stream.conversationId;
+          if (stream.handoff && !active.handoff && stream.result().messages.length === 0) {
+            active.handoff = stream.handoff;
+            bindSocket(active);
+          }
           if (active.boundId && active.replyId && active.boundId !== active.replyId)
             throw new Error('changed source');
         },
@@ -192,8 +387,11 @@ export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = 
         responseUrl: requested.href,
         capturedAt: new Date().toISOString(),
       };
-      if (publish(active.ready)) job = null;
+      const published = publish(active.ready);
+      if (active.handoff) publishSocket(active);
+      else if (published) job = null;
     } catch {
+      if (active.socketTimer) clearTimeout(active.socketTimer);
       active.finished = true;
       if (job === active) {
         job = null;
@@ -235,7 +433,13 @@ export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = 
       void observed.catch(() => {});
       const base = cached;
       invalidate(true);
-      const active = { version: generation, base, isNew: !selected.id, boundId: selected.id };
+      const active = {
+        version: generation,
+        base,
+        isNew: !selected.id,
+        boundId: selected.id,
+        subscriptions: new Map(),
+      };
       job = active;
       void captureStream(observed, readRequest(active.version), selected, requested, active);
       return promise;
@@ -310,7 +514,13 @@ export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = 
       (!job.replyId || job.replyId === selected.id)
     ) {
       job.boundId = selected.id;
-      if (job.ready && publish(job.ready)) job = null;
+      if (
+        job.ready &&
+        !job.socketFailed &&
+        publish(job.ready) &&
+        (!job.handoff || job.socketRetired)
+      )
+        job = null;
       return;
     }
     if (snapshot && before.split('#')[0] === location.href.split('#')[0] && publish(snapshot))
@@ -332,5 +542,5 @@ export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = 
 
 /** The native app and browser tests install this same isolated source-observer bundle. */
 export function createEmbeddedSourceScript(options = {}) {
-  return `(() => {\nconst isInternalMessage = ${isInternalMessage.toString()};\nconst createEventStreamDecoder = ${createEventStreamDecoder.toString()};\nconst createChatGPTStream = ${createChatGPTStream.toString()};\nconst mergeConversationStream = ${mergeConversationStream.toString()};\n(${installEmbeddedSourceObserver.toString()})(${JSON.stringify(options)});\n})();\n`;
+  return `(() => {\nconst isInternalMessage = ${isInternalMessage.toString()};\nconst createEventStreamDecoder = ${createEventStreamDecoder.toString()};\nconst createChatGPTStream = ${createChatGPTStream.toString()};\nconst createChatGPTSocketTurn = ${createChatGPTSocketTurn.toString()};\nconst mergeConversationStream = ${mergeConversationStream.toString()};\n(${installEmbeddedSourceObserver.toString()})(${JSON.stringify(options)});\n})();\n`;
 }

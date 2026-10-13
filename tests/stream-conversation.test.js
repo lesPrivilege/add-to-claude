@@ -216,3 +216,25 @@ test('a trailing internal node cannot hide uncertainty in a visible answer', () 
   );
   assert.equal(next.streamCompleted, false);
 });
+
+test('socket replay provenance cannot be upgraded by terminal flags or serialized verification claims', () => {
+  const observed = mergeConversationStream(null, request(), reply());
+  observed.socket = {
+    origin: 'wss://ws.chatgpt.com',
+    topic: 'conversation-turn-topic',
+    coverage: 'unverified-replay',
+    terminalObserved: true,
+  };
+  const evidence = {
+    pageUrl: 'https://chatgpt.com/c/stream-chat',
+    responseUrl: 'https://chatgpt.com/backend-api/f/conversation',
+    method: 'POST',
+    capturedAt: '2026-10-13T05:00:00.000Z',
+  };
+  const model = importBrowserResponse(JSON.stringify(observed), evidence);
+  assert.equal(model.verification.status, 'partial');
+  model.verification = { status: 'verified', issues: [] };
+  assert.equal(validateConversation(model).verification.status, 'partial');
+  observed.socket.origin = 'wss://elsewhere.example';
+  assert.throws(() => importBrowserResponse(JSON.stringify(observed), evidence));
+});

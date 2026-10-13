@@ -13,7 +13,8 @@ export function createChatGPTStream({ expectedConversationId = null, maxMessages
     conversationId = expectedConversationId;
   let done = false,
     handedOff = false,
-    title;
+    title,
+    handoff = null;
   const bind = (value) => {
     if (value === undefined || value === null) return;
     if (!identifier(value) || (conversationId && value !== conversationId))
@@ -114,6 +115,9 @@ export function createChatGPTStream({ expectedConversationId = null, maxMessages
     get conversationId() {
       return conversationId;
     },
+    get handoff() {
+      return handoff ? { ...handoff } : null;
+    },
     accept({ event, data }) {
       if (done) throw new Error('Conversation data arrived after the stream ended.');
       if (data === '[DONE]') {
@@ -133,8 +137,21 @@ export function createChatGPTStream({ expectedConversationId = null, maxMessages
       if (!record(packet)) throw new Error('Unsupported source stream event.');
       if (packet.error) throw new Error('The source reported a failed answer.');
       bind(packet.conversation_id);
-      if (packet.type === 'stream_handoff') {
+      if (packet.type === 'stream_handoff' || event === 'stream_handoff') {
+        if (handedOff) throw new Error('The source handed off the exchange more than once.');
         handedOff = true;
+        const options = Array.isArray(packet.options)
+          ? packet.options.filter(
+              (option) =>
+                option?.type === 'subscribe_ws_topic' &&
+                typeof option.topic_id === 'string' &&
+                /^conversation-turn-[A-Za-z0-9_-]{1,200}$/u.test(option.topic_id),
+            )
+          : [];
+        if (identifier(packet.conversation_id) && options.length === 1) {
+          handoff = { conversationId: packet.conversation_id, topic: options[0].topic_id };
+          if (identifier(packet.turn_exchange_id)) handoff.turnExchangeId = packet.turn_exchange_id;
+        }
         return;
       }
       if (packet.type === 'resume_conversation_token') return;
@@ -175,6 +192,7 @@ export function createChatGPTStream({ expectedConversationId = null, maxMessages
         messages: structuredClone(captured),
         complete,
         handedOff,
+        ...(handoff ? { handoff: { ...handoff } } : {}),
         ...(title ? { title } : {}),
       };
     },

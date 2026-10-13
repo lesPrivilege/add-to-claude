@@ -1,5 +1,11 @@
 # Independent review
 
+## Passive WebSocket review — 2026-10-13
+
+Independent public-protocol review found insufficient replay/cursor guarantees to claim complete handoff reconstruction. The implemented observer retains `unverified-replay` coverage, requires an explicit handoff topic and the website's own offset-zero subscription, and never operates the site's socket. A terminal event is recorded separately from completeness.
+
+Independent code review reproduced three defects, now repaired and covered: normal post-terminal unsubscribe erased the partial answer; only the outer turn ID was checked; and known frames arriving before handoff correlation were silently missed. Terminal cleanup now preserves the snapshot; outer/nested turn IDs reject changes without equating them to topic/exchange IDs; early candidate frames retain only an unusable-subscription flag, not their contents. The reviewer reported no new concrete defect after reinspection. Auth-provider documents return before network wrappers install. The reviewer did not rerun suites or inspect user apps/accounts. Owner-run evidence is 110 unit and 64 browser cases, with routed socket fixtures and explicitly partial results.
+
 ## Native Workspace readiness review — 2026-10-13
 
 The owner added 24 native Workspace integration checks and reproduced recovery calling `window.handoffCore.compile` before the ES module existed. The fix treats navigation completion and compiler readiness separately: a signal is accepted only from the configured loopback core webview/main frame, followed by a current-document function check guarded by loading state and core generation. Reconnection retains current raw source and never refetches the chat.
