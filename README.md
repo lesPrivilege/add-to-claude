@@ -2,13 +2,15 @@
 
 A small local utility for moving one selected ChatGPT conversation into a composer you already have open. Agent names are choices in a shared handoff flow. Nothing is sent or executed automatically.
 
-**Status: working portable build; native macOS acceptance pending.** The Linux cloud VM verifies rendered-page extraction and local source handoff on synthetic browser fixtures, plus export import, Markdown projection, clipboard copying, and insertion into the included test composer. Managed Chromium policy blocks all extensions here, so the actual extension lifecycle could not be exercised. The macOS menu-bar app, running-window picker, and guarded Accessibility append are implemented in source, but have not been compiled or run on a Mac. No external agent is certified compatible.
+**Active work:** [product contract and acceptance requirements](docs/product-contract.md), derived from the user's referenced ChatGPT session and subsequent embedded-chat clarification. The reconstruction starts from the Mac acceptance branch; the full acceptance goal remains open.
 
-The included Chrome extension collects the conversation you explicitly select by scrolling overlapping rendered windows, accumulating stable message IDs, and showing progress and Cancel. It also discovers open ChatGPT tabs on request and focuses the exact selected tab. The collection is always **unverified**: observed scroll boundaries cannot prove the service supplied every turn or hidden branch. A separate visible-only snapshot remains available. Original Markdown is obtainable through a selected [official data export](https://help.openai.com/en/articles/7260999-exporting-your-chatgpt-history-and-data). Live authenticated ChatGPT acceptance has not been exercised. The [terms review](docs/research.md) records a separate service-use restriction; browser permission and fixture tests do not establish permission under an account’s applicable agreement.
+**Status: embedded macOS workspace in development; not release ready.** The native app now displays the real ChatGPT website inside its own window, with small target, preview and Add controls in the outer frame. It has compiled and rendered on the Mac. WebKit has its own login session. The selected-page observer makes no capture requests or forced reloads; new-message streaming and live-account acceptance remain unfinished. No external agent is certified compatible. See the [Mac acceptance log](docs/mac-acceptance.md) for the distinction between native observations, synthetic browser checks and installed-extension checks.
+
+The optional Chrome extension can read original messages from the selected page's own conversation response, using a temporary debugger attachment and an explicitly disclosed reload. This external-source path passed a 128-turn synthetic installed-extension check; it is not the embedded app's normal interaction. Rendered scrolling and a visible-only snapshot remain explicit **unverified** alternatives. Original Markdown is also obtainable through a selected [official data export](https://help.openai.com/en/articles/7260999-exporting-your-chatgpt-history-and-data). Live authenticated acceptance remains open. The [research notes](docs/research.md) distinguish technical behavior from service-use conditions.
 
 ## Run on the cloud VM
 
-Use an installed Node.js 24 runtime. The utility has no runtime npm dependencies.
+Use an installed Node.js 24 or newer runtime. The utility has no runtime npm dependencies.
 
 ```sh
 cd /workspace/gpt-handoff
@@ -39,7 +41,7 @@ npm run build
 
 Browser tests use the installed `/usr/bin/chromium`. Set `CHROMIUM_PATH` to another trusted installed Chrome/Chromium executable when needed. They use only synthetic data and never connect to an agent. On macOS, use `CHROMIUM_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' npm run test:e2e`. The installed-extension lifecycle cases run only when `EXTENSION_CHROMIUM_PATH` names a Chromium or Chrome for Testing binary (branded Chrome ignores `--load-extension`); they open a visible window. See the [Mac acceptance log](docs/mac-acceptance.md).
 
-`npm run build` creates a deterministic file manifest and a runnable copy at `dist/gpt-handoff`. Native build requires macOS 13+, Xcode command-line tools, and an installed Node 24 path:
+`npm run build` creates a deterministic file manifest and a runnable copy at `dist/gpt-handoff`. Native build requires macOS 13+, Xcode command-line tools, and an installed Node 24 or newer path:
 
 ```sh
 bash scripts/build-macos.sh /opt/homebrew/bin/node

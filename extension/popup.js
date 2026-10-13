@@ -10,9 +10,20 @@ let busyKind = null;
 let activeCollection = null;
 function freezeControls(frozen, kind = null) {
   busyKind = frozen ? kind : null;
-  for (const id of ['deliver', 'capture', 'snapshot', 'find', 'focus', 'choose', 'discard', 'copy'])
+  for (const id of [
+    'deliver',
+    'original',
+    'capture',
+    'snapshot',
+    'find',
+    'focus',
+    'choose',
+    'discard',
+    'copy',
+  ])
     $(id).disabled = frozen;
   if (!frozen) {
+    $('original').disabled = !selected;
     $('capture').disabled = !selected;
     $('snapshot').disabled = !selected;
   }
@@ -48,8 +59,9 @@ function clearCapture() {
   $('checks').replaceChildren();
   $('status').hidden = true;
   $('capture').disabled = !selected;
+  $('original').disabled = !selected;
   $('snapshot').disabled = !selected;
-  $('capture').firstChild.textContent = 'Use this conversation ';
+  $('capture').firstChild.textContent = 'Collect rendered turns';
   window.dispatchEvent(new CustomEvent('gh-capture-clear'));
 }
 function select(tab) {
@@ -63,6 +75,7 @@ function select(tab) {
     ? `${new URL(tab.url).hostname} · window ${tab.windowId} · tab ${tab.id}`
     : 'Then open this extension from that tab.';
   $('capture').disabled = !selected;
+  $('original').disabled = !selected;
   $('snapshot').disabled = !selected;
   $('focus').hidden = !selected;
 }
@@ -76,11 +89,20 @@ function showCapture(result) {
   $('counts').textContent =
     `${captured.model.turns.length} observed turns · ${captured.model.attachments.length} file ref${captured.model.attachments.length === 1 ? '' : 's'}`;
   const collection = captured.model.source.collection;
-  $('capture-note').textContent = collection
-    ? collection.stoppedReason === 'observed-boundaries'
-      ? 'Reached the rendered start and end. Full history and original Markdown remain unverified.'
-      : 'Collection stopped before both rendered boundaries were confirmed. Review the content checks.'
-    : 'Visible turns only. Earlier or unloaded turns may be missing.';
+  document.querySelector('#review .badge').textContent =
+    captured.model.verification.status === 'verified'
+      ? 'Branch verified'
+      : captured.model.verification.status === 'partial'
+        ? 'Partial'
+        : 'Unverified';
+  $('capture-note').textContent =
+    captured.model.source.type === 'chatgpt-response'
+      ? 'Original messages from the selected branch. Review citation and file checks; hidden service data is not implied.'
+      : collection
+        ? collection.stoppedReason === 'observed-boundaries'
+          ? 'Reached the rendered start and end. Full history and original Markdown remain unverified.'
+          : 'Collection stopped before both rendered boundaries were confirmed. Review the content checks.'
+        : 'Visible turns only. Earlier or unloaded turns may be missing.';
   $('checks-label').textContent = `Content checks (${captured.model.verification.issues.length})`;
   $('checks').replaceChildren(
     ...captured.model.verification.issues.map((issue) => {
@@ -94,7 +116,7 @@ function showCapture(result) {
   window.dispatchEvent(new CustomEvent('gh-capture', { detail: captured }));
 }
 
-function collectSelected() {
+function collectSelected(mode = 'collect') {
   return new Promise((resolve, reject) => {
     const jobId = crypto.randomUUID().replaceAll('-', '');
     const port = chrome.runtime.connect({ name: 'collection' });
@@ -116,6 +138,8 @@ function collectSelected() {
       if (message.type === 'progress' && !job.cancelled) {
         const labels = {
           starting: 'Starting collection…',
+          attaching: 'Preparing original messages…',
+          reading: 'Reading original conversation…',
           up: 'Finding earlier turns…',
           down: 'Collecting later turns…',
           restoring: 'Restoring your position…',
@@ -149,7 +173,7 @@ function collectSelected() {
       ),
     );
     try {
-      port.postMessage({ type: 'collect', jobId, selected });
+      port.postMessage({ type: mode, jobId, selected });
     } catch {
       finish(new Error('Collection could not start. Reopen the extension and try again.'));
     }
@@ -218,11 +242,13 @@ $('focus').addEventListener('click', async () => {
     showStatus(error.message, true);
   }
 });
-$('capture').addEventListener('click', async () => {
+async function readSelected(mode) {
   if (busyKind || !selected) return;
   clearCapture();
   const operation = generation;
   freezeControls(true, 'collection');
+  $('original').hidden = true;
+  $('original-help').hidden = true;
   $('capture').hidden = true;
   $('collection-help').hidden = true;
   $('snapshot').hidden = true;
@@ -231,23 +257,27 @@ $('capture').addEventListener('click', async () => {
   $('collection-count').textContent = '0 turns observed · 0s';
   $('cancel-collection').disabled = false;
   try {
-    const result = await collectSelected();
+    const result = await collectSelected(mode);
     if (operation !== generation) return;
     showCapture(result);
   } catch (error) {
     if (operation === generation) showStatus(error.message, true);
   } finally {
     if (operation === generation) {
+      $('original').hidden = false;
+      $('original-help').hidden = false;
       $('capture').hidden = false;
       $('collection-help').hidden = false;
       $('snapshot').hidden = false;
       $('collection-progress').hidden = true;
       freezeControls(false);
       if (captured) $('deliver').focus();
-      else $('capture').focus();
+      else $(mode === 'original' ? 'original' : 'capture').focus();
     }
   }
-});
+}
+$('original').addEventListener('click', () => readSelected('original'));
+$('capture').addEventListener('click', () => readSelected('collect'));
 $('cancel-collection').addEventListener('click', () => {
   if (!activeCollection || activeCollection.cancelled) return;
   activeCollection.cancelled = true;

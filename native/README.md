@@ -1,12 +1,12 @@
-# macOS menu-bar app
+# macOS embedded chat workspace
 
-This is the optional menu-bar app for gpt-handoff's local transfer desk. **The source has not been compiled or exercised on macOS.** The Linux VM cannot verify AppKit, Accessibility permissions, native focus behavior, signing, or notarization. The utility does not install or run an agent.
+The status-bar app displays the real ChatGPT website in its own WebKit window. Target selection, Preview and Add are small controls in the outer frame. The reconstructed app has compiled and displayed the signed-out ChatGPT homepage on the Mac. **Login, complete embedded capture and real-client insertion are not yet accepted.** See [Mac acceptance](../docs/mac-acceptance.md) and the [product contract](../docs/product-contract.md). The utility does not install or run an agent.
 
-The menu opens ChatGPT in the installed Google Chrome app, opens the local transfer desk, discovers running app windows, and offers an explicit append of text copied from the desk. Chrome controls whether opening the URL reuses a tab. Existing conversation-tab discovery and exact focusing are provided by the optional [Chrome extension](../docs/browser-extension.md), not this menu action. The launcher does not enumerate Chrome tabs or request Apple Events/Automation access. Activating Chrome alone would not establish that its current tab is ChatGPT, so the action truthfully opens the fixed ChatGPT URL instead.
+The icon opens or hides the retained chat window; right-click exposes the utility menu. Normal use opens no separate browser. WebKit uses the app's own login session, not Chrome's cookies. The optional [Chrome extension](../docs/browser-extension.md) is a separate source adapter. No Apple Events/Automation permission is needed by the app.
 
 ## Local build
 
-Requirements: macOS 13 or later, an already-installed Node.js 24 or newer, Google Chrome, and Xcode command-line tools. No installer or build step downloads a runtime or accepts a license. If Xcode asks for a license, the owner must resolve it before building.
+Requirements: macOS 13 or later, an already-installed Node.js 24 or newer, and Xcode command-line tools. WebKit is supplied by macOS; Chrome is only required for the optional extension. No installer or build step downloads a runtime or accepts a license. If Xcode asks for a license, the owner must resolve it before building.
 
 From the repository root, use the absolute path of the Node executable you already trust:
 
@@ -25,20 +25,22 @@ Use `/usr/local/bin/node` or another installed path if appropriate. The script b
 
 ## Use
 
-1. Choose **Open transfer desk**. The launcher checks `http://127.0.0.1:43119/health`. It launches its bundled server only when no service accepts the connection. A server it starts must return the same random `ADD_IT_NATIVE_INSTANCE` marker before the desk opens. An already-running desk must return the exact app/protocol marker; this is a compatibility check, not authentication against other software running as the same user.
-2. Capture the selected conversation with the Chrome extension, import an export, or manually prepare it in the transfer desk, then copy it. Copying alone does not insert text anywhere.
-3. In the target app, focus the intended composer. Choose **Enable composer access…** only if native append is wanted; macOS controls the Accessibility grant. Then choose the app and exact window under **Choose composer window…**. Other running apps appear automatically, so an unknown client can be selected without a plugin or a persistent registration. No choice survives quit.
-4. Choose **Append copied text…**, check the app/window title, confirm that the selected text area is the intended composer, then choose **Append text**. Cancel leaves the target untouched. Success says **Text appended and verified** only after exact readback. Review the draft and attach downloaded files manually. Send remains the user's action.
+1. Open Handoff and sign in to ChatGPT in its own window. The local compiler starts separately; a port or Node failure is shown in the outer frame and does not block the chat with an app modal.
+2. Open the conversation normally. The observer reads only the currently displayed conversation's own response and introduces no fetch or refresh. The present implementation handles the original conversation GET response; new-message streaming remains unfinished and invalidates the old snapshot rather than silently reusing it.
+3. Focus the intended target composer once, then return to Handoff. Enable composer access when wanted, using the system's Accessibility grant. Choose the exact app/window in **Choose Agent**. Selection does not activate that target. Unsupported fields stay unavailable.
+4. **Add to Agent** compiles the observed source and, when its checks pass, focuses the bound target, appends and compares exact text. The button is the explicit action; this primary path has no additional modal confirmation. Preview is a separate, nonmodal view. Partial sources/files, long-context transport and actual-client support still need the remaining implementation and acceptance work. Send remains the user's action.
 
-Discovery reads app names and window titles only while the menu is opened after Accessibility access has been granted. It does not read target editor contents until the explicit append action. Discovery is asynchronous, bounded to 80 apps and 30 windows per app, and refreshed whenever the menu opens. Every accessibility attribute read applies a 150 ms messaging timeout, including fresh app elements used for main-thread validation. Window titles and target selections remain in memory.
+Discovery reads app names and window titles when the workspace or utility menu opens after Accessibility access has been granted. It does not read target editor contents until Add. Discovery is asynchronous, bounded to 80 apps and 30 windows per app. Every accessibility attribute read applies a 150 ms messaging timeout. Window titles and target selections remain in memory.
 
 The native path requires a readable, writable `AXTextArea`. It rejects single-line text fields, known terminal hosts, and text areas whose accessibility names identify terminal, shell, or code panes. That is deliberately narrow: many browser/Electron/editor composers do not expose a writable accessibility value and therefore need manual paste. The user confirms composer identity because accessibility roles cannot prove the business purpose of every text area. Unknown apps are not declared compatible merely because they appear in the picker.
 
-Before insertion the app rechecks process identity and launch time, live window identity and title, frontmost app, focused window, focused editor identity, writable role, and clipboard change counter. It appends to the latest readable plain-text value, caps the resulting plain text at 2 MiB, then compares readback exactly. It emits no keyboard events, never presses Return, never opens a terminal, and never handles an attachment as executable input. If readback fails, the UI asks the user to inspect the draft before retrying because some text may already have changed.
+Before insertion the app rechecks process identity and launch time, live window identity and title, frontmost app, focused window, focused editor identity and writable role. Add uses a prepared immutable string and does not change the clipboard. The app appends to the latest readable plain-text value, caps the resulting plain text at 2 MiB, then compares readback exactly. It emits no keyboard events, never presses Return and never handles an attachment as executable input. If readback fails, the outer-frame status asks the user to inspect the draft before retrying because some text may already have changed. The old separate clipboard/confirmation menu path has been removed.
 
 Exact string readback does not verify attachment chips or rich spans already in a third-party composer. Those hosts require explicit native acceptance before claiming draft preservation; the native test fixture uses plain text.
 
 ## Uninstall and privacy
+
+Handoff keeps one selected response in memory and does not write a conversation archive. The embedded ChatGPT website and WebKit manage normal cookies, cache and site storage in the app's web data store; those are separate from Handoff's in-memory preparation data. Website content has no native target-operation handler. The local compilation webview has a separate nonpersistent data store and is never used to display website content.
 
 Quit from the menu to terminate only the server process this launcher started. An independently started server is left running. Remove the `.app` bundle. Revoke this app under System Settings → Privacy & Security → Accessibility if access was granted. No login item, daemon, account, runtime, credential, transcript archive, or registration file is installed. Clipboard text remains on the system clipboard until the user or another app replaces it; the launcher does not silently clear unrelated clipboard contents.
 

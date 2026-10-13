@@ -10,7 +10,13 @@ export const LIMITS = Object.freeze({
 });
 
 const encoder = new TextEncoder();
-const sourceTypes = new Set(['chatgpt-export', 'dom-snapshot', 'synthetic', 'imported']);
+const sourceTypes = new Set([
+  'chatgpt-export',
+  'chatgpt-response',
+  'dom-snapshot',
+  'synthetic',
+  'imported',
+]);
 const fidelities = new Set(['original-markdown', 'rendered-text', 'partial']);
 const attachmentStates = new Set(['download-needed', 'inaccessible', 'expired', 'available']);
 const statuses = new Set(['verified', 'partial', 'unverified']);
@@ -85,6 +91,38 @@ export function validateConversation(data) {
   };
   const url = optionalUrl(inputSource.url, 'Source URL');
   if (url) source.url = url;
+  if (source.type === 'chatgpt-response' || inputSource.response !== undefined) {
+    const response = record(inputSource.response, 'Original response evidence');
+    if (source.type !== 'chatgpt-response' || !source.url)
+      throw new TypeError('Original response evidence requires a browser response source.');
+    const page = new URL(source.url);
+    const pageId = /^\/(?:g\/[A-Za-z0-9_-]{1,200}\/)?c\/([A-Za-z0-9_-]{1,200})\/?$/u.exec(
+      page.pathname,
+    )?.[1];
+    if (
+      page.protocol !== 'https:' ||
+      !['chatgpt.com', 'chat.openai.com'].includes(page.hostname) ||
+      page.port ||
+      pageId !== source.id ||
+      response.url !== `${page.origin}/backend-api/conversation/${source.id}`
+    )
+      throw new TypeError('Original response evidence must match the selected conversation.');
+    if (
+      typeof response.capturedAt !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(response.capturedAt) ||
+      !Number.isFinite(Date.parse(response.capturedAt)) ||
+      new Date(response.capturedAt).toISOString() !== response.capturedAt ||
+      !Number.isSafeInteger(response.observedNodes) ||
+      response.observedNodes < 1 ||
+      response.observedNodes > LIMITS.maxNodes
+    )
+      throw new TypeError('Original response evidence needs a valid time and bounded node count.');
+    source.response = {
+      url: response.url,
+      capturedAt: response.capturedAt,
+      observedNodes: response.observedNodes,
+    };
+  }
   let bytes = 0;
   const count = (value) => {
     bytes += encoder.encode(value).byteLength;

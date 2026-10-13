@@ -17,8 +17,8 @@ if [[ ! "$node_major" =~ ^[0-9]+$ ]] || (( node_major < 24 )); then
   printf '%s\n' 'Use an installed Node.js 24 or newer executable.' >&2
   exit 1
 fi
-app_bundle="$project_root/dist/gpt-handoff.app"
-if [[ -e "$app_bundle" ]]; then
+output_bundle="$project_root/dist/gpt-handoff.app"
+if [[ -e "$output_bundle" ]]; then
   printf '%s\n' 'dist/gpt-handoff.app already exists. Move it aside before rebuilding.' >&2
   exit 1
 fi
@@ -30,6 +30,10 @@ for required in src/server.js web package.json native/main.swift native/Info.pli
   fi
 done
 
+mkdir -p "$project_root/dist"
+build_root="$(mktemp -d "$project_root/dist/.gpt-handoff-build.XXXXXX")"
+trap 'rm -r "$build_root"' EXIT
+app_bundle="$build_root/gpt-handoff.app"
 mkdir -p "$app_bundle/Contents/MacOS" "$app_bundle/Contents/Resources/project"
 cp "$project_root/native/Info.plist" "$app_bundle/Contents/Info.plist"
 cp -R "$project_root/src" "$project_root/web" "$app_bundle/Contents/Resources/project/"
@@ -44,9 +48,11 @@ fi
 # PlistBuddy receives the path as one argument; it is never evaluated by a shell.
 /usr/libexec/PlistBuddy -c 'Clear dict' "$app_bundle/Contents/Resources/Runtime.plist"
 /usr/libexec/PlistBuddy -c "Add :NodeExecutable string $node_executable" "$app_bundle/Contents/Resources/Runtime.plist"
+"$node_executable" "$project_root/scripts/build-embedded-source.js" "$app_bundle/Contents/Resources/embedded-source.js"
 xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos13.0" \
-  -framework AppKit -framework ApplicationServices \
-  "$project_root/native/main.swift" -o "$app_bundle/Contents/MacOS/gpt-handoff"
+  -framework AppKit -framework ApplicationServices -framework WebKit \
+  "$project_root/native/main.swift" "$project_root/native/Workspace.swift" -o "$app_bundle/Contents/MacOS/gpt-handoff"
 plutil -lint "$app_bundle/Contents/Info.plist" "$app_bundle/Contents/Resources/Runtime.plist"
-printf 'Created unsigned local build: %s\n' "$app_bundle"
+mv "$app_bundle" "$output_bundle"
+printf 'Created unsigned local build: %s\n' "$output_bundle"
 printf '%s\n' 'Run the native acceptance checks in native/README.md before using or distributing it.'

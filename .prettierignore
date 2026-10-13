@@ -3,3 +3,4 @@ dist/
 test-results/
 artifacts/
 package-lock.json
+docs/sources/**/source-*.json

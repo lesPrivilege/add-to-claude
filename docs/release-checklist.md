@@ -2,6 +2,8 @@
 
 Runnable development handoff. Not a release-verified macOS build.
 
+The reconstruction must satisfy **R1–R8 in [product-contract.md](product-contract.md)**, including the user's later embedded-chat/no-refresh UX requirements. Its native window renders, original-response parsing is implemented, and focused checks pass, but streaming/new-chat source updates, automatic files/long context, real-client insertion and the remaining real-machine matrix are open. Earlier counts below do not substitute for a final-state verification run. The independent foundation review found four transition defects; fixes and remaining runtime limits are recorded in [independent-review.md](independent-review.md).
+
 ## Completed in the cloud VM
 
 - [x] Independent repository; no Praxis file or remote modified.
@@ -27,8 +29,8 @@ Runnable development handoff. Not a release-verified macOS build.
 - [ ] Validate each real client's writable composer before claiming support. No agent runtime/account was installed here.
 - [ ] Verify native keyboard/VoiceOver, appearance, contrast and Reduce Motion on the intended Mac.
 - [ ] Sign using the owner's existing Developer ID, hardened runtime, notarize/staple, and test clean-Mac Gatekeeper. No new credential/agreement was created.
-- [ ] Restore an authorized GitHub publication path. Recheck `lesPrivilege/gpt-handoff` for collision, create **private** only if absent, and push preserved `main` history. Do not reuse an unrelated repository.
+- [x] Private repository and preserved base history verified: `lesPrivilege/gpt-handoff`, `main` at `e0a7fca`, Mac base at `e60dc03`. Reconstruction work is local on `codex/session-handoff`; no release publication is implied.
 
-GitHub blocker: the existing `GH_TOKEN` failed `gh auth status`. The connected app identified `lesPrivilege`, but exact repository lookup returned 404 (not proof of absence under all permissions) and exposed no repository-create action. No credentials, OAuth grants, or access-policy changes were attempted. No remote was created or pushed.
+The prior VM GitHub authentication blocker was resolved before this reconstruction. Codex verified private visibility and cloned the existing Mac branch. Do not create a duplicate repository or infer that new reconstruction changes have been pushed.
 
 The remaining owner/platform work is an extension acceptance run in an authorized Chrome environment, a Mac acceptance run, a permitted service-use path, distribution signing, and authorized private-repository publication. The original 0.1.0 and 0.2.0 Library archives are preserved. Version 0.3.0 adds bounded traversal, download assistance and fidelity fixes. Final visual refinement is deferred to Claude at the user’s request.

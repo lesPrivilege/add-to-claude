@@ -36,7 +36,7 @@ export function receiveBrowserSource(adopt, rejected = () => {}) {
       const model = validateConversation(packet.model);
       const url = new URL(model.source.url);
       if (
-        model.source.type !== 'dom-snapshot' ||
+        !['dom-snapshot', 'chatgpt-response'].includes(model.source.type) ||
         url.protocol !== 'https:' ||
         !['chatgpt.com', 'chat.openai.com'].includes(url.hostname) ||
         url.port ||

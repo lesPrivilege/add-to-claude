@@ -1,5 +1,7 @@
 # Validation record
 
+Current reconstruction evidence is in [Mac acceptance](mac-acceptance.md): 71/71 latest unit checks, 5/5 embedded observer browser fixtures, 23/23 external-extension checks before the final draft-race repair, and actual signed-out WebKit rendering. These are scoped checkpoints, not final R1–R8 acceptance. The record below preserves the earlier Linux delivery evidence.
+
 2026-10-12 · Linux cloud VM · synthetic data only.
 
 | Check                                                          | Result                                                                                                                                                                                                                                                               |

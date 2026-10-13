@@ -23,6 +23,31 @@ area.innerHTML='<div style="height:'+start*row+'px"></div>'+Array.from({length:v
 area.addEventListener('scroll',()=>requestAnimationFrame(render));render();area.scrollTop=1904;render();
 </script></body></html>`;
 
+const originalResponse = (() => {
+  const mapping = { root: { id: 'root', parent: null, message: null } };
+  for (let index = 0; index < 128; index += 1) {
+    const id = `original-${index}`;
+    mapping[id] = {
+      id,
+      parent: index ? `original-${index - 1}` : 'root',
+      message: {
+        author: { role: index % 2 ? 'assistant' : 'user' },
+        status: 'finished_successfully',
+        content: {
+          content_type: 'text',
+          parts: [`Original turn ${index} — **Markdown**.\n\n<https://example.com/source>\n`],
+        },
+      },
+    };
+  }
+  return {
+    conversation_id: 'original-response',
+    title: 'Synthetic original conversation',
+    current_node: 'original-127',
+    mapping,
+  };
+})();
+
 // Installed-extension lifecycle. Needs a headed Chromium that still honours
 // --load-extension (Chrome for Testing or Chromium; branded Chrome 137+ ignores it).
 // Playwright does not surface the action popup as a Page, so the real popup is
@@ -46,7 +71,7 @@ test.describe('unpacked extension lifecycle (headed Chromium with --load-extensi
     await cp(path.resolve('dist/extension'), extensionPath, { recursive: true });
     const manifest = JSON.parse(await readFile(path.join(extensionPath, 'manifest.json'), 'utf8'));
     // Real Chrome extension APIs, but fixture-only pregrants replace native permission prompts
-    // and the toolbar gesture. Production ships activeTab+scripting with optional hosts only.
+    // and the toolbar gesture. Production declares activeTab+scripting+debugger; host grants remain optional.
     manifest.host_permissions = [
       'https://chatgpt.com/*',
       'https://chat.openai.com/*',
@@ -66,8 +91,21 @@ test.describe('unpacked extension lifecycle (headed Chromium with --load-extensi
     debugPort = Number(
       (await readFile(path.join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0],
     );
-    worker = context.serviceWorkers()[0] || (await context.waitForEvent('serviceworker'));
+    const isExtensionWorker = (item) =>
+      /^chrome-extension:\/\/[^/]+\/worker\.js$/u.test(item.url());
+    worker =
+      context.serviceWorkers().find(isExtensionWorker) ||
+      (await context.waitForEvent('serviceworker', { predicate: isExtensionWorker }));
     extensionId = new URL(worker.url()).host;
+    // Worker creation precedes extension API initialization on a fresh Chrome profile.
+    await expect
+      .poll(() =>
+        worker.evaluate(() => ({
+          name: globalThis.chrome?.runtime?.getManifest?.().name,
+          action: typeof globalThis.chrome?.action?.openPopup,
+        })),
+      )
+      .toEqual({ name: 'gpt-handoff', action: 'function' });
     // Test-only keepalive: idle suspension would orphan this Playwright worker handle.
     // Real service-worker suspension is therefore NOT covered here.
     keepAlive = setInterval(
@@ -75,10 +113,24 @@ test.describe('unpacked extension lifecycle (headed Chromium with --load-extensi
       10_000,
     );
     await context.route('https://chatgpt.com/**', async (route) => {
+      if (
+        route.request().url() === 'https://chatgpt.com/backend-api/conversation/original-response'
+      ) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify(originalResponse),
+        });
+        return;
+      }
       if (route.request().isNavigationRequest())
         await route.fulfill({
           contentType: 'text/html',
-          body: route.request().url().includes('virtualized') ? collectionFixture : fixture(),
+          body: route.request().url().includes('virtualized')
+            ? collectionFixture
+            : route.request().url().includes('/c/original-response')
+              ? fixture() +
+                '<script>fetch("/backend-api/conversation/original-response").catch(() => {});</script>'
+              : fixture(),
         });
       else await route.abort();
     });
@@ -173,6 +225,103 @@ test.describe('unpacked extension lifecycle (headed Chromium with --load-extensi
       )
       .toBe(true);
   }
+
+  async function expectOriginalReaderDetached(source) {
+    // getTargets().attached includes Playwright. This checks the extension's own capability.
+    expect(
+      await worker.evaluate(async (url) => {
+        const [tab] = await chrome.tabs.query({ url });
+        try {
+          await chrome.debugger.sendCommand({ tabId: tab.id }, 'Page.getFrameTree');
+          return 'still attached';
+        } catch (error) {
+          return error.message;
+        }
+      }, source.url()),
+    ).toMatch(/not attached/iu);
+  }
+
+  test('original capture reads the real selected-page response across reload and delivers all 128 turns', async () => {
+    const source = await conversation('original-response');
+    const panel = await popup(source);
+    await panel.click('#original');
+    await expect
+      .poll(
+        async () => {
+          if (await panel.visible('#review')) return 'ready';
+          return await panel.text('#status');
+        },
+        { timeout: 30_000 },
+      )
+      .toBe('ready');
+    expect(await panel.text('#counts')).toContain('128 observed turns');
+    expect(await panel.text('.badge')).toBe('Branch verified');
+    await expectOriginalReaderDetached(source);
+    const deskPromise = context.waitForEvent('page');
+    await panel.click('#deliver');
+    const desk = await deskPromise;
+    await desk.waitForURL('http://127.0.0.1:43119/#capture');
+    await expect(desk.locator('#conversation-title')).toHaveText('Synthetic original conversation');
+    await expect(desk.locator('#verification')).toContainText('Selected branch verified');
+    await desk.locator('#preview-btn').click();
+    const markdown = await desk.locator('#preview-content').textContent();
+    for (let index = 0; index < 128; index += 1)
+      expect(markdown).toContain(
+        originalResponse.mapping[`original-${index}`].message.content.parts[0],
+      );
+    expect(markdown.indexOf('Original turn 0')).toBeLessThan(markdown.indexOf('Original turn 127'));
+  });
+
+  test('original capture refuses to reload a page with an unsent draft', async () => {
+    const source = await conversation('original-response');
+    await source.evaluate(() => {
+      const draft = document.createElement('textarea');
+      draft.id = 'prompt-textarea';
+      draft.value = 'Keep this synthetic unsent draft.';
+      document.body.append(draft);
+    });
+    const panel = await popup(source);
+    await panel.click('#original');
+    await expect.poll(() => panel.text('#status')).toContain('unsent draft');
+    expect(await panel.visible('#review')).toBe(false);
+    await expect(source.locator('#prompt-textarea')).toHaveValue(
+      'Keep this synthetic unsent draft.',
+    );
+    await expectOriginalReaderDetached(source);
+  });
+
+  test('original capture cancellation detaches and permits another capture', async () => {
+    const source = await conversation('original-response');
+    let release;
+    let intercepted = false;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    await source.route(
+      'https://chatgpt.com/backend-api/conversation/original-response',
+      async (route) => {
+        intercepted = true;
+        await held;
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify(originalResponse),
+        });
+      },
+    );
+    const panel = await popup(source);
+    await panel.click('#original');
+    await expect.poll(() => panel.text('#collection-phase')).toContain('Reading original');
+    await expect.poll(() => intercepted).toBe(true);
+    await panel.click('#cancel-collection');
+    await expect.poll(() => panel.text('#status')).toContain('cancelled');
+    await expectOriginalReaderDetached(source);
+    release();
+    await source.unrouteAll({ behavior: 'wait' });
+    await panel.click('#original');
+    await expect.poll(() => panel.visible('#review'), { timeout: 30_000 }).toBe(true);
+    expect(await panel.text('#counts')).toContain('128 observed turns');
+    await expectOriginalReaderDetached(source);
+  });
 
   test('real popup collects only the selected virtualized page, in order, and reviews it as unverified', async () => {
     const source = await conversation('virtualized');
@@ -813,7 +962,7 @@ test.describe('portable transport API harness (Chrome APIs mocked)', () => {
 
 test('production manifest contains no background capture, cookie or broad host grant', async () => {
   const manifest = JSON.parse(await readFile('extension/manifest.json', 'utf8'));
-  expect(manifest.permissions).toEqual(['activeTab', 'scripting']);
+  expect(manifest.permissions).toEqual(['activeTab', 'scripting', 'debugger']);
   expect(manifest.host_permissions).toBeUndefined();
   expect(manifest.content_scripts).toBeUndefined();
   expect(manifest.externally_connectable).toBeUndefined();

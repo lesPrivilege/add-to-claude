@@ -4,7 +4,7 @@
   "version": "0.3.0",
   "description": "Bring the selected ChatGPT conversation to your local composer, without sending it.",
   "minimum_chrome_version": "116",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "debugger"],
   "optional_permissions": ["downloads"],
   "optional_host_permissions": [
     "https://chatgpt.com/*",

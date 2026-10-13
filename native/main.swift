@@ -70,11 +70,6 @@ private struct Composer {
     let editor: AXUIElement
 }
 
-private final class ConsentGate: NSObject {
-    weak var button: NSButton?
-    @objc func changed(_ sender: NSButton) { button?.isEnabled = sender.state == .on }
-}
-
 private enum Health { case absent, ready(String?), occupied }
 
 // Bound even a hostile response from an unrelated local service to 4 KiB.
@@ -146,9 +141,10 @@ private final class HealthProbe: NSObject, URLSessionDataDelegate {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
+    private var workspace: WorkspaceController?
     private var menu = NSMenu()
     private var message = "Ready when you are" {
-        didSet { statusItem?.button?.toolTip = message }
+        didSet { statusItem?.button?.toolTip = message; workspace?.showStatus(message) }
     }
     private var child: Process?
     private var nativeInstance: String?
@@ -166,8 +162,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.image = NSImage(systemSymbolName: "text.badge.plus", accessibilityDescription: displayName)
         statusItem.button?.toolTip = displayName
         menu.delegate = self
-        statusItem.menu = menu
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(toggleWorkspace)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         rebuildMenu()
+        openDesk()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -177,6 +176,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) { rebuildMenu(); discoverWindows() }
+
+    @objc private func toggleWorkspace() {
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            statusItem.menu = menu
+            statusItem.button?.performClick(nil)
+            statusItem.menu = nil
+        } else if workspace?.window?.isVisible == true {
+            workspace?.window?.orderOut(nil)
+        } else { openDesk() }
+    }
+
+    private func showWorkspace() {
+        if workspace == nil {
+            guard let resource = Bundle.main.resourceURL,
+                  let observer = try? String(contentsOf: resource.appendingPathComponent("embedded-source.js"), encoding: .utf8) else {
+                message = "The embedded reader is missing. Rebuild Handoff."
+                return
+            }
+            let controller = WorkspaceController(coreURL: deskURL.appendingPathComponent("native-core.html"), observerScript: observer)
+            controller.refreshTargets = { [weak self] in self?.discoverWindows() }
+            controller.addText = { [weak self] text, completion in
+                guard let self else { completion("Handoff is no longer available.", false); return }
+                self.appendPreparedText(text, completion: completion)
+            }
+            controller.setTargets(targetMenu())
+            workspace = controller
+        }
+        workspace?.present()
+    }
 
     private func item(_ title: String, _ action: Selector? = nil, key: String = "") -> NSMenuItem {
         let result = NSMenuItem(title: title, action: action, keyEquivalent: key)
@@ -189,21 +217,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item(displayName))
         menu.addItem(item(safeLabel(message)))
         menu.addItem(.separator())
-        menu.addItem(item("Open ChatGPT in Chrome", #selector(openChatGPT), key: "g"))
-        let desk = item(busy ? "Working…" : "Open transfer desk", #selector(openDesk), key: "o")
-        desk.isEnabled = !busy
-        menu.addItem(desk)
-        menu.addItem(.separator())
-        let picker = item("Choose composer window…")
-        picker.submenu = targetMenu()
-        picker.isEnabled = !busy
-        menu.addItem(picker)
+        menu.addItem(item("Show ChatGPT", #selector(openChatGPT), key: "g"))
         if let composer {
             menu.addItem(item("Selected: \(safeLabel(composer.choice.app.localizedName ?? "App", limit: 32)) · \(composer.choice.displayLabel(limit: 48))"))
         }
-        let append = item("Append copied text…", #selector(appendClipboard), key: "v")
-        append.isEnabled = composer != nil && !busy
-        menu.addItem(append)
         if composer != nil { menu.addItem(item("Clear selected composer", #selector(clearComposer))) }
         menu.addItem(.separator())
         if !AXIsProcessTrusted() { menu.addItem(item("Enable composer access…", #selector(enableAccess))) }
@@ -284,33 +301,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.availableWindows = found
                 self.discoveringWindows = false
                 self.rebuildMenu()
+                self.workspace?.setTargets(self.targetMenu())
             }
         }
     }
 
     @objc private func enableAccess() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        if AXIsProcessTrustedWithOptions(options) { message = "Choose a composer window" }
+        if AXIsProcessTrustedWithOptions(options) { message = "Choose a composer window"; discoverWindows() }
         else { message = "Enable this app in System Settings → Accessibility" }
     }
 
-    @objc private func clearComposer() { operation = UUID(); composer = nil; message = "Selection cleared" }
+    @objc private func clearComposer() { operation = UUID(); composer = nil; workspace?.setTarget(name: nil); message = "Selection cleared" }
     @objc private func quit() { NSApp.terminate(nil) }
 
-    @objc private func openChatGPT() { openInChrome(URL(string: "https://chatgpt.com/")!) }
-
-    private func openInChrome(_ url: URL) {
-        guard let chrome = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.google.Chrome") else {
-            notice("Chrome is not installed", "Install or open Google Chrome, then try again.")
-            return
-        }
-        let config = NSWorkspace.OpenConfiguration()
-        config.activates = true
-        NSWorkspace.shared.open([url], withApplicationAt: chrome, configuration: config) { [weak self] _, error in
-            guard error != nil else { return }
-            DispatchQueue.main.async { self?.notice("Chrome could not open", "Open Chrome and try again.") }
-        }
-    }
+    @objc private func openChatGPT() { openDesk() }
 
     private func probe(_ completion: @escaping (Health) -> Void) {
         let request = HealthProbe { [weak self] result in
@@ -322,6 +327,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func openDesk() {
+        showWorkspace()
         guard !busy else { return }
         busy = true
         message = "Checking transfer desk…"
@@ -334,7 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else {
                     self.busy = false
                     self.message = "Transfer desk ready"
-                    self.openInChrome(deskURL)
+                    self.workspace?.connectCore(deskURL.appendingPathComponent("native-core.html"))
                 }
             case .absent: self.launchServer()
             case .occupied: self.startFailure("Port 43119 is occupied or not responding as this app. Close the other local service, then try again.")
@@ -392,19 +398,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if case .ready(let actual) = health, actual == instance, self.child?.isRunning == true {
                 self.busy = false
                 self.message = "Transfer desk ready"
-                self.openInChrome(deskURL)
+                self.workspace?.connectCore(deskURL.appendingPathComponent("native-core.html"))
                 return
             }
             guard attempts > 0, self.child?.isRunning == true else {
                 if self.child?.isRunning == true { self.child?.terminate() }
-                self.startFailure("The bundled server did not become ready. Check Node 24 and that port 43119 is free, then open the transfer desk again.")
+                self.startFailure("The bundled server did not become ready. Check Node 24 or newer and that port 43119 is free, then open the transfer desk again.")
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.waitForServer(instance, attempts: attempts - 1) }
         }
     }
 
-    private func startFailure(_ detail: String) { busy = false; message = "Transfer desk needs attention"; notice("Could not open transfer desk", detail) }
+    private func startFailure(_ detail: String) { busy = false; message = detail }
 
     private func validWindow(_ choice: WindowChoice) -> Bool {
         guard !choice.app.isTerminated, choice.app.launchDate == choice.launchDate, !isTerminal(choice.app) else { return false }
@@ -419,8 +425,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return choice.app.activate(options: [.activateIgnoringOtherApps])
     }
 
-    private func focusedComposer(_ choice: WindowChoice) -> AXUIElement? {
-        guard AXIsProcessTrusted(), validWindow(choice), NSWorkspace.shared.frontmostApplication?.processIdentifier == choice.app.processIdentifier else { return nil }
+    private func focusedComposer(_ choice: WindowChoice, requireFrontmost: Bool = true) -> AXUIElement? {
+        guard AXIsProcessTrusted(), validWindow(choice),
+              !requireFrontmost || NSWorkspace.shared.frontmostApplication?.processIdentifier == choice.app.processIdentifier else { return nil }
         let app = AXUIElementCreateApplication(choice.app.processIdentifier)
         guard same(axElement(app, kAXFocusedWindowAttribute), choice.window),
               let field = axElement(app, kAXFocusedUIElementAttribute),
@@ -439,82 +446,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         composer = nil
         let id = UUID()
         operation = id
-        guard focus(choice) else { notice("Window is no longer available", "Focus the intended composer, then choose its window again."); return }
         busy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self, self.operation == id else { return }
-            self.busy = false
-            guard let field = self.focusedComposer(choice) else {
-                self.message = "Focus a writable composer and select again"
-                self.notice("Composer is not ready", "Focus a writable text area in this window, then choose it again. Terminal hosts and code panes are not supported. If the app does not expose a writable composer, paste manually.")
-                return
+        workspace?.setTarget(name: nil)
+        message = "Checking the selected composer…"
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let field = self.focusedComposer(choice, requireFrontmost: false)
+            DispatchQueue.main.async {
+                self.busy = false
+                guard self.operation == id else { return }
+                guard let field else {
+                    self.message = "Focus a writable composer and select again"
+                    return
+                }
+                self.composer = Composer(choice: choice, editor: field)
+                self.workspace?.setTarget(name: choice.app.localizedName ?? "Agent", detail: choice.displayLabel())
+                self.message = "Composer selected · Add when your conversation is ready"
             }
-            self.composer = Composer(choice: choice, editor: field)
-            self.message = "Composer selected · copy text in the transfer desk"
         }
     }
 
-    @objc private func appendClipboard() {
-        guard !busy, let selected = composer else { return }
-        let pasteboard = NSPasteboard.general
-        let clipboardVersion = pasteboard.changeCount
-        guard let text = pasteboard.string(forType: .string), !text.isEmpty, text.utf8.count <= maximumTextBytes else {
-            notice("Copy text first", "Copy the conversation from the transfer desk. Native append accepts plain text up to 2 MiB; attach downloaded files manually.")
+    /// The outer-frame Add action is the user's confirmation. It never opens a modal alert.
+    private func appendPreparedText(_ text: String, completion: @escaping (String, Bool) -> Void) {
+        guard !busy, let selected = composer else { completion("Choose the intended composer first.", false); return }
+        guard !text.isEmpty, text.utf8.count <= maximumTextBytes else {
+            completion("This context exceeds the native text limit. A file handoff is required.", false)
             return
         }
-        guard validWindow(selected.choice) else { composer = nil; notice("Target changed", "Choose the intended composer window again."); return }
-        let alert = NSAlert()
-        alert.messageText = "Append to \(safeLabel(selected.choice.app.localizedName ?? "this app", limit: 48))?"
-        alert.informativeText = "\(selected.choice.displayLabel(limit: 140))\n\nAppend \(text.count.formatted()) characters to the selected text area. Existing text stays above it. Files must be attached separately."
-        let append = alert.addButton(withTitle: "Append text")
-        append.isEnabled = false
-        alert.addButton(withTitle: "Cancel").keyEquivalent = "\u{1b}"
-        let gate = ConsentGate()
-        gate.button = append
-        let consent = NSButton(checkboxWithTitle: "I selected the intended composer", target: gate, action: #selector(ConsentGate.changed(_:)))
-        consent.setAccessibilityHelp("Confirm this text area is the intended composer, not a shell or a code editor.")
-        consent.frame = NSRect(x: 0, y: 0, width: 310, height: 28)
-        alert.accessoryView = consent
-        NSApp.activate(ignoringOtherApps: true)
-        let result = withExtendedLifetime(gate) { alert.runModal() }
-        guard result == .alertFirstButtonReturn, consent.state == .on else { message = "Append cancelled · nothing changed"; return }
-        guard pasteboard.changeCount == clipboardVersion else { notice("Clipboard changed", "Copy the intended text and try again."); return }
-        guard focus(selected.choice) else { composer = nil; notice("Target changed", "Choose the intended composer window again."); return }
+        guard AXIsProcessTrusted(), focus(selected.choice) else {
+            composer = nil
+            workspace?.setTarget(name: nil)
+            completion("The target or its permission changed. Choose the composer again.", false)
+            return
+        }
         busy = true
         let id = UUID()
         operation = id
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self, self.operation == id else { return }
+            guard let self else { completion("Handoff closed before insertion.", false); return }
             defer { self.busy = false }
-            guard pasteboard.changeCount == clipboardVersion,
+            guard self.operation == id,
                   let current = self.focusedComposer(selected.choice), CFEqual(current, selected.editor),
-                  let old = axString(current, kAXValueAttribute), old.utf8.count + text.utf8.count + 2 <= maximumTextBytes else {
+                  let old = axString(current, kAXValueAttribute),
+                  old.utf8.count + text.utf8.count + 2 <= maximumTextBytes else {
                 self.composer = nil
-                self.notice("Target is no longer ready", "Nothing was appended. Focus the intended composer, choose its window again, and retry.")
+                self.workspace?.setTarget(name: nil)
+                completion("The composer is no longer ready. Nothing was added; choose it again.", false)
                 return
             }
             let combined = old.isEmpty ? text : old + "\n\n" + text
-            // No synthetic keys, Return, paste shortcut, shell, or executable attachments.
             let result = AXUIElementSetAttributeValue(current, kAXValueAttribute as CFString, combined as CFString)
+            self.composer = nil
+            self.workspace?.setTarget(name: nil)
             guard result == .success, axString(current, kAXValueAttribute) == combined else {
-                self.composer = nil
-                self.message = "Append could not be verified"
-                self.notice("Inspect the composer before retrying", "The app did not confirm the exact text. Some text may have changed. Review the draft before copying or trying again.")
+                completion("Insertion could not be verified. Inspect the draft before retrying.", false)
                 return
             }
-            self.message = "Text appended and verified · review before sending"
-            self.composer = nil
+            completion("Added and verified. Review the target draft; nothing was sent.", true)
         }
     }
 
-    private func notice(_ title: String, _ detail: String) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = detail
-        alert.addButton(withTitle: "OK")
-        NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
-    }
+
 }
 
 let app = NSApplication.shared

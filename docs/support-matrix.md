@@ -1,5 +1,11 @@
 # Support and evidence
 
+## Reconstruction status
+
+The [product contract](product-contract.md) now requires embedded ChatGPT with small outer-frame Add controls and no forced refresh in normal handoff. The native window has compiled and displayed the real signed-out ChatGPT homepage on this Mac. Login, ongoing-message capture, target insertion and automatic native file handling are not accepted yet. The optional Chrome original-response adapter has separate synthetic installed-extension evidence, including 128 ordered original turns; it is not proof of the embedded path or a real client. See [Mac acceptance](mac-acceptance.md) for current counts and precise limits. No external client is certified and this work is not release ready.
+
+## Historical Linux delivery evidence
+
 Checked on the Linux cloud VM, 2026-10-12. Nothing was installed on the user's computer. No real private conversation or external agent received test data.
 
 | Path                                                   | Implementation         | Evidence and limits                                                                                                                                                                                                                                             |

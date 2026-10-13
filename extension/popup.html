@@ -35,10 +35,17 @@
           >Open conversation<select id="choose"></select
         ></label>
       </section>
-      <button id="capture" class="primary" disabled>
-        Use this conversation <span aria-hidden="true">→</span>
+      <button id="original" class="primary" disabled>
+        Read original conversation <span aria-hidden="true">→</span>
       </button>
-      <p id="collection-help" class="hint">Scrolls only this chat. Cancel at any time.</p>
+      <p id="original-help" class="hint">
+        Reloads this chat to read its original Markdown. Save unsent text first. Chrome shows a
+        temporary debugging banner while reading.
+      </p>
+      <button id="capture" class="text-button" disabled>Collect rendered turns</button>
+      <p id="collection-help" class="hint">
+        Alternative: scroll this chat. Rendered content remains unverified.
+      </p>
       <button id="snapshot" class="text-button" disabled>Capture visible turns only</button>
       <section
         id="collection-progress"

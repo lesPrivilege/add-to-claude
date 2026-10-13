@@ -5,13 +5,16 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const out = path.join(root, 'dist/gpt-handoff');
-if (process.versions.node.split('.')[0] !== '24') throw new Error('Build with Node.js 24.');
+if (Number(process.versions.node.split('.')[0]) < 24)
+  throw new Error('Build with Node.js 24 or newer.');
 const files = [];
 async function collect(relative) {
   for (const entry of (await readdir(path.join(root, relative), { withFileTypes: true })).sort(
     (a, b) => a.name.localeCompare(b.name),
   )) {
     const name = path.posix.join(relative, entry.name);
+    // Project conversation provenance stays in the private repository, not the runnable build.
+    if (name === 'docs/sources') continue;
     if (entry.isSymbolicLink()) throw new Error(`Do not package symlinks: ${name}`);
     if (entry.isDirectory()) await collect(name);
     else if (entry.isFile()) files.push(name);

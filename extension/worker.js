@@ -4,6 +4,7 @@ import { inspectConversationViewport, scrollConversationViewport } from './page-
 import { validateConversation } from './model.js';
 import { deliverToDesk, probeDesk } from './bridge.js';
 import { createDownloadAssistance, CAPTURE_MAX_AGE } from './downloads.js';
+import { captureOriginalConversation } from './original.js';
 
 const deskUrl = 'http://127.0.0.1:43119/#capture';
 const popupUrl = chrome.runtime.getURL('popup.html');
@@ -163,7 +164,8 @@ chrome.runtime.onConnect.addListener((port) => {
       job.controller.abort();
       return;
     }
-    if (message?.type !== 'collect' || !/^[a-f0-9]{32}$/u.test(message.jobId)) return;
+    if (!['collect', 'original'].includes(message?.type) || !/^[a-f0-9]{32}$/u.test(message.jobId))
+      return;
     if (job || collectionJob || deliveryBusy) {
       post({
         type: 'error',
@@ -180,7 +182,7 @@ chrome.runtime.onConnect.addListener((port) => {
       job.timedOut = true;
       job.controller.abort();
     }, 95_000);
-    const phases = new Set(['starting', 'up', 'down', 'restoring', 'done']);
+    const phases = new Set(['starting', 'up', 'down', 'restoring', 'done', 'attaching', 'reading']);
     const progress = (value) => {
       if (!phases.has(value?.phase) || job.controller.signal.aborted) return;
       if (
@@ -197,7 +199,14 @@ chrome.runtime.onConnect.addListener((port) => {
       )
         job.controller.abort();
     };
-    collect(message.selected, job.controller.signal, progress)
+    const reading =
+      message.type === 'original'
+        ? captureOriginalConversation({ chromeApi: chrome, inspect }, message.selected, {
+            signal: job.controller.signal,
+            onProgress: progress,
+          }).then((result) => ({ ...result, model: boundedModel(result.model) }))
+        : collect(message.selected, job.controller.signal, progress);
+    reading
       .then(
         (result) => {
           if (!job.controller.signal.aborted) post({ type: 'done', jobId: job.id, ...result });
@@ -258,7 +267,10 @@ async function deliver(message) {
     await inspect(message.identity);
     model = boundedModel(message.model);
     const url = sourceUrl(message.identity.url);
-    if (model.source.type !== 'dom-snapshot' || model.source.url !== `${url.origin}${url.pathname}`)
+    if (
+      !['dom-snapshot', 'chatgpt-response'].includes(model.source.type) ||
+      model.source.url !== `${url.origin}${url.pathname}`
+    )
       throw new Error('The source changed. Capture the conversation again.');
     if (!(await chrome.permissions.contains({ origins: ['http://127.0.0.1/*'] })))
       throw new Error('Allow access to the local desk, then try again.');

@@ -125,3 +125,9 @@ No additional portable implementation blocker remains from this review. The curr
 ### Maintenance handoff
 
 Keep three boundaries explicit when reviewing or simplifying this code: stable-ID ordering and source evidence in the collector; cancellation/identity/lifetime across popup, worker and page helper; and metadata association versus accepted file bytes. Their failure states carry correctness information and should not be collapsed into a generic success flag. The transport remains shared across destinations; no vendor-specific execution framework is needed. The separate [Claude review handoff](claude-handoff.md) provides repository entry points; this review did not contact an external agent or transmit conversation content.
+
+## Embedded foundation review — reconstruction in progress
+
+The independent read-only reviewer `source_boundary_review` inspected the original-response adapter, embedded observer, native webview boundary and focused tests. This was a bounded source review, not final release or real-client acceptance. It found four actionable defects: draft changes during debugger setup, out-of-order same-conversation GETs, stale failed streams clearing newer state, and retained preview text after navigation. The first three were reproduced in synthetic in-memory harnesses; the preview issue was established from native source.
+
+The implementation owner added three behavioral regressions and observed all three fail before repair. After repair, the focused suite passed 11/11 and the full unit suite 71/71. A follow-up independent inspection confirmed all four reported defects were addressed in code. The observer browser suite also passed 5/5. Native preview/lifecycle runtime checks, live embedded capture, real clients, automatic files, long context and final rendered UX review remain open. This is not an independent approval of release readiness.

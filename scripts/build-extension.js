@@ -9,7 +9,15 @@ await mkdir(out, { recursive: true });
 for (const name of (await readdir(path.join(root, 'extension'))).sort()) {
   await writeFile(path.join(out, name), await readFile(path.join(root, 'extension', name)));
 }
-for (const name of ['capture.js', 'collect.js', 'page-scroll.js', 'model.js']) {
+for (const name of [
+  'capture.js',
+  'collect.js',
+  'page-scroll.js',
+  'model.js',
+  'import.js',
+  'chatgpt-response.js',
+  'original.js',
+]) {
   await writeFile(path.join(out, name), await readFile(path.join(root, 'src', name)));
 }
 process.stdout.write('Built dist/extension. Load this directory unpacked in Chrome.\n');

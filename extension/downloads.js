@@ -55,7 +55,7 @@ export function createDownloadAssistance({ chromeApi, inspect, boundedModel, now
     const identity = await inspect(message.identity);
     const selected = new URL(identity.url);
     if (
-      model.source.type !== 'dom-snapshot' ||
+      !['dom-snapshot', 'chatgpt-response'].includes(model.source.type) ||
       model.source.url !== selected.origin + selected.pathname
     )
       throw new Error('Select the captured conversation again.');

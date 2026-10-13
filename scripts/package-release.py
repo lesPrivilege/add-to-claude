@@ -42,7 +42,7 @@ for name, data in list(files.items()):
     prefix = "source/gpt-handoff/extension/"
     if name.startswith(prefix):
         files[f"chrome-extension/{name[len(prefix):]}"] = data
-for module in ("capture.js", "model.js", "collect.js", "page-scroll.js"):
+for module in ("capture.js", "model.js", "collect.js", "page-scroll.js", "import.js", "chatgpt-response.js", "original.js"):
     files[f"chrome-extension/{module}"] = files[f"source/gpt-handoff/src/{module}"]
 with tempfile.TemporaryDirectory(prefix="gpt-handoff-package-") as temp:
     bundle = Path(temp) / "gpt-handoff.bundle"
@@ -53,7 +53,7 @@ Local branch: {branch}
 Local commit: {sha}
 Remote: not created/pushed; see source/gpt-handoff/docs/release-checklist.md.
 
-Run with installed Node 24:
+Run with installed Node 24 or newer:
   cd source/gpt-handoff
   node src/server.js
   Open http://127.0.0.1:43119/ on that machine.
@@ -70,7 +70,8 @@ Portable development handoff only. No macOS binary/signature or real-agent valid
 Selected-tab traversal, virtualized accumulation, cancellation and desk handoff have synthetic browser tests. Normal file downloads/file selection/controlled composer bytes are exercised separately from API-mocked download receipts. Installed-extension lifecycle is blocked by managed VM policy.
 DOM collections remain unverified; observed start/end boundaries are not proof of server completeness. Live authenticated ChatGPT acceptance is outstanding.
 See source/gpt-handoff/docs/claude-handoff.md for the requested final visual/maintenance handoff.
-No private conversation, agent account, credentials or telemetry are included.
+This is a private development checkpoint with full Git history and project provenance.
+Do not publish it as an end-user binary distribution.
 """.encode()
 files["SHA256SUMS"] = "".join(
     f"{hashlib.sha256(data).hexdigest()}  {name}\n" for name, data in sorted(files.items())
