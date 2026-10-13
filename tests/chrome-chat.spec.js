@@ -2,6 +2,9 @@ import { test, expect, chromium } from '@playwright/test';
 import { cp, mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+const execute = promisify(execFile);
 
 const url = 'https://chatgpt.com/c/chrome-synthetic';
 const record = {
@@ -31,11 +34,11 @@ const record = {
     },
   },
 };
-let context, worker, temp, debugPort, extensionId;
+let context, worker, temp, debugPort, extensionId, journal;
 const sockets = [];
 test.beforeAll(async () => {
   test.skip(
-    !process.env.EXTENSION_CHROMIUM_PATH,
+    !process.env.EXTENSION_CHROMIUM_PATH || process.platform !== 'darwin',
     'Set EXTENSION_CHROMIUM_PATH for the installed Chrome chat integration fixture.',
   );
   temp = await mkdtemp(path.join(os.tmpdir(), 'handoff-chrome-chat-'));
@@ -46,6 +49,42 @@ test.beforeAll(async () => {
   // Fixture-only host pregrant; native permission prompts and user toolbar click are not covered.
   manifest.host_permissions = ['https://chatgpt.com/*', 'https://chat.openai.com/*'];
   await writeFile(path.join(extension, 'manifest.json'), JSON.stringify(manifest));
+  const host = path.join(temp, 'native-host-fixture');
+  journal = path.join(temp, 'native-fixture-result.json');
+  await execute('xcrun', [
+    '--sdk',
+    'macosx',
+    'swiftc',
+    '-swift-version',
+    '5',
+    '-target',
+    `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macos13.0`,
+    '-framework',
+    'AppKit',
+    'native/NativeHostProtocol.swift',
+    'native/NativeHostOrigin.swift',
+    'native/NativeHostRuntime.swift',
+    'tests/native/ChromeHostFixture.swift',
+    '-o',
+    host,
+  ]);
+  const origin = (await readFile('native/NativeHostOrigin.swift', 'utf8')).match(
+    /"(chrome-extension:\/\/[^" ]+\/)"/u,
+  )[1];
+  // Chromium resolves user native hosts under this throwaway user-data directory.
+  // No manifest is written into the owner's Chrome profile or system registration directories.
+  const hostDirectory = path.join(profile, 'NativeMessagingHosts');
+  await mkdir(hostDirectory, { recursive: true });
+  await writeFile(
+    path.join(hostDirectory, 'io.lesprivilege.gpt_handoff.json'),
+    JSON.stringify({
+      name: 'io.lesprivilege.gpt_handoff',
+      description: 'Synthetic Handoff transport fixture',
+      path: host,
+      type: 'stdio',
+      allowed_origins: [origin],
+    }),
+  );
   context = await chromium.launchPersistentContext(profile, {
     executablePath: process.env.EXTENSION_CHROMIUM_PATH,
     headless: false,
@@ -60,6 +99,7 @@ test.beforeAll(async () => {
   );
   worker = context.serviceWorkers()[0] || (await context.waitForEvent('serviceworker'));
   extensionId = new URL(worker.url()).host;
+  expect(origin).toBe(`chrome-extension://${extensionId}/`);
   await expect.poll(() => worker.evaluate(() => typeof chrome.action?.openPopup)).toBe('function');
   await context.route('https://chatgpt.com/**', (route) =>
     route.fulfill({
@@ -150,73 +190,10 @@ async function popup(page) {
   };
 }
 
-test('primary installed popup observes one selected chat without reload, then routes explicit Add through a source-checked native transport fixture', async () => {
+test('primary installed popup observes one selected chat without reload, then routes explicit Add through a real source-checked native process and closes it with the selected tab', async () => {
   const page = await context.newPage();
   await page.goto(url);
-  // Native transport is mocked; Chrome source/permission/scripting/popup APIs are real.
-  await worker.evaluate(() => {
-    const event = () => {
-      const listeners = [];
-      return {
-        addListener: (fn) => listeners.push(fn),
-        emit: (value) => listeners.forEach((fn) => fn(value)),
-      };
-    };
-    globalThis.fixtureDraft = 'Existing synthetic draft.';
-    globalThis.fixtureNativeCommands = [];
-    chrome.runtime.connectNative = () => {
-      const port = {
-        onMessage: event(),
-        onDisconnect: event(),
-        disconnect() {
-          port.onDisconnect.emit();
-        },
-        postMessage(message) {
-          fixtureNativeCommands.push(message.command);
-          if (message.command === 'targets')
-            queueMicrotask(() =>
-              port.onMessage.emit({
-                id: message.id,
-                ok: true,
-                trusted: true,
-                targets: [{ id: 'window-a', app: 'Synthetic Agent', window: 'Composer A' }],
-              }),
-            );
-          if (message.command === 'select')
-            queueMicrotask(() =>
-              port.onMessage.emit({
-                id: message.id,
-                ok: true,
-                name: 'Synthetic Agent',
-                targetToken: 'target-a',
-              }),
-            );
-          if (message.command === 'append') {
-            port.pending = message;
-            queueMicrotask(() =>
-              port.onMessage.emit({
-                event: 'source-check',
-                operationId: message.id,
-                ticket: 'synthetic-ticket',
-                revision: message.revision,
-                hash: message.hash,
-              }),
-            );
-          }
-          if (message.command === 'source-permit') {
-            if (message.current) fixtureDraft += '\n\n' + port.pending.text;
-            port.onMessage.emit({
-              id: port.pending.id,
-              ok: message.current,
-              inserted: message.current,
-              message: message.current ? 'Added and verified. Nothing sent.' : 'Source changed.',
-            });
-          }
-        },
-      };
-      return port;
-    };
-  });
+  // Real Chrome -> native OS process -> shared protocol/runtime; only composer state is synthetic.
   const panel = await popup(page);
   await panel.click('enable');
   await expect.poll(() => panel.text('status')).toContain('Reader enabled');
@@ -242,14 +219,16 @@ test('primary installed popup observes one selected chat without reload, then ro
   await panel.screenshot();
   await panel.click('add');
   await expect.poll(() => panel.text('status')).toContain('Added and verified');
-  const draft = await worker.evaluate(() => fixtureDraft);
+  const receipt = JSON.parse(await readFile(journal, 'utf8'));
+  const draft = receipt.draft;
   expect(draft).toContain('Existing synthetic draft.\n\n# Synthetic Chrome chat');
   expect(draft).toContain('Original **Markdown** 中文 ✓\n');
-  expect(await worker.evaluate(() => fixtureNativeCommands)).toEqual([
+  expect(receipt.events).toEqual([
+    'started',
     'targets',
     'select',
-    'append',
-    'source-permit',
+    'append-requested',
+    'append-confirmed',
   ]);
   await expect(page.locator('#draft')).toHaveValue('Unsent synthetic draft.');
   expect(requests).toEqual(['https://chatgpt.com/backend-api/conversation/chrome-synthetic']);
@@ -259,4 +238,18 @@ test('primary installed popup observes one selected chat without reload, then ro
   await expect.poll(() => reopened.text('status')).toContain('Last handoff: Added and verified');
   expect(await reopened.enabled('add')).toBe(false);
   await page.close();
+  await expect
+    .poll(async () => JSON.parse(await readFile(journal, 'utf8')).events.at(-1))
+    .toBe('terminated');
+  await expect
+    .poll(() => {
+      try {
+        process.kill(receipt.pid, 0);
+        return true;
+      } catch (error) {
+        if (error.code === 'ESRCH') return false;
+        throw error;
+      }
+    })
+    .toBe(false);
 });

@@ -64,7 +64,7 @@ xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos13
 xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos13.0" \
   -framework AppKit -framework ApplicationServices \
   "$project_root/native/ComposerAccess.swift" "$project_root/native/NativeHostProtocol.swift" \
-  "$project_root/native/NativeHostOrigin.swift" "$project_root/native/NativeHost.swift" -o "$app_bundle/Contents/MacOS/gpt-handoff-host"
+  "$project_root/native/NativeHostOrigin.swift" "$project_root/native/NativeHostRuntime.swift" "$project_root/native/NativeHost.swift" -o "$app_bundle/Contents/MacOS/gpt-handoff-host"
 plutil -lint "$app_bundle/Contents/Info.plist" "$app_bundle/Contents/Resources/Runtime.plist"
 mv "$app_bundle" "$output_bundle"
 printf 'Created unsigned local build: %s\n' "$output_bundle"

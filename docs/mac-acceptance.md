@@ -66,7 +66,17 @@ The app bundles a stable-ID primary extension and a native-messaging helper. The
 
 The initial popup reopen test failed because the debugger-attached action popup had not actually closed. The fixture now explicitly closes that popup, waits for its target to disappear, and reopens it. The final scenario passes; this was not an owner-profile interaction.
 
-The old development app and its owned Node process were stopped to free the fixed legacy test port. Chrome's account/session remains browser-owned. The new candidate is running as a status-bar launcher. **Owner-profile extension installation and native-host registration have not occurred.** Normal permission prompts, actual Chrome → native connection, synthetic live-account capture, real target readback/failure cases, primary file attachment delivery and signing remain open. The prior native file exporter remains available only through legacy WebKit tooling; primary Save Markdown exports text/references and never claims attachment delivery.
+The old development app and its owned Node process were stopped to free the fixed legacy test port. Chrome's account/session remains browser-owned. The new candidate is running as a status-bar launcher. **Owner-profile extension installation and native-host registration have not occurred.** Normal permission prompts, owner-profile Chrome → production AX-helper connection, synthetic live-account capture, real target readback/failure cases, primary file attachment delivery and signing remain open. The prior native file exporter remains available only through legacy WebKit tooling; primary Save Markdown exports text/references and never claims attachment delivery.
+
+## Real Chrome/native transport follow-up — 2026-10-13
+
+After the candidate checkpoint above, `npm run test:chrome` passed its one installed-popup scenario using a **real Chrome-launched native process**, replacing the earlier mocked transport. Chrome for Testing uses a disposable user-data directory and a native-host manifest inside that directory. The helper compiles production `NativeHostProtocol.swift`, `NativeHostOrigin.swift` and the extracted `NativeHostRuntime.swift`, with an in-memory synthetic composer backend. It does not compile or invoke the Accessibility backend.
+
+The passing path covers selected synthetic GET capture without reload or extra requests, popup Preview/target selection, real native messaging pipes, final source permit, preserved draft plus Unicode/Markdown, Last handoff after popup reopening, and helper termination after selected-tab closure (termination journal plus PID exit). Site access remains pregranted and popup opening programmatic. No owner-profile extension installation, registration or grant occurred.
+
+The unsigned candidate `dist/gpt-handoff-chrome-transport-checked.app` built successfully. `scripts/install-native-host.py --check` passed the production executable's pinned-origin/framed-ping check without registration; its CLI-context Accessibility result does not establish Chrome-launched access. This candidate was not launched in place of the existing launcher. The independent reviewer found no concrete runtime-refactor or fixture-isolation defect; review did not rerun the scenario.
+
+Real ChatGPT protocol compatibility, owner-profile setup, real client insertion/readback and attachment delivery remain open. The isolated native-host lookup basis is recorded in [research](research.md#isolated-chrome-native-host-fixture).
 
 ## Previous worker's report
 

@@ -10,6 +10,7 @@ The reconstruction must satisfy **R1–R8 in [product-contract.md](product-contr
 - [x] Implement small extension-popup controls, selected-document passive source bridge, immutable Add intent and exact-origin native messaging.
 - [x] Remove debugger permission/reload action from the primary build; retain scoped legacy tests separately.
 - [x] Build candidate launcher/helper and verify real native framing/origin handshake; independent code/rendered-popup review.
+- [x] Exercise real Chrome-launched native messaging and selected-tab-close process exit in a disposable profile, with synthetic composer state.
 - [ ] Install in the owner's Chrome profile and verify actual popup/host permission flow.
 - [ ] Verify live selected synthetic-source capture and real native target insertion/readback, cancellation and failure modes.
 - [ ] Complete primary attachment-byte delivery and long-context target acceptance; Save Markdown alone does not close these gates.

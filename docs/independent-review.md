@@ -8,7 +8,11 @@ A P1 race was reproduced: an old source packet delayed in its first `tabs.get` c
 
 The reviewer also found legacy debugger controls reappearing without permission. They now remain hidden/disabled through collection completion, and the worker rejects that operation before entering the legacy adapter. Native port explicit-close cleanup and retained Last handoff receipts were inspected. No remaining concrete defect was reported after reinspection.
 
-The reviewer inspected the real installed-popup screenshot (`artifacts/12-chrome-handoff-popup.png`) and found readable source/target/status and no clipping. Its data/target are synthetic and native transport is mocked. The review did not exercise owner-profile installation, true AX writes, live source capture or actual permission grants.
+The reviewer inspected the real installed-popup screenshot (`artifacts/12-chrome-handoff-popup.png`) and found readable source/target/status and no clipping. At that checkpoint its data/target were synthetic and native transport was mocked. The review did not exercise owner-profile installation, true AX writes, live source capture or actual permission grants.
+
+## Real native transport fixture review — 2026-10-13
+
+The existing independent reviewer inspected the shared `NativeHostApplication` runtime extraction and Chrome-installed fixture. No concrete runtime-refactor or isolation defect was found. All fixture manifests, executables, synthetic draft journals and browser state are confined to the temporary test directory; the fixture compiles no AX backend. Production and fixture share framing, source-permit protocol, stdin EOF and termination handling. The reviewer requested that current evidence distinguish real native transport from the earlier mocked checkpoint; these records now do so. The reviewer did not rerun the test. The implementation run passed one installed Chrome scenario and built/probed the production candidate; actual client writes remain unverified.
 
 ## Passive WebSocket review — 2026-10-13
 
