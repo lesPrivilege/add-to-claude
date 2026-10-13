@@ -17,6 +17,7 @@ if [[ ! "$node_major" =~ ^[0-9]+$ ]] || (( node_major < 24 )); then
   printf '%s\n' 'Use an installed Node.js 24 or newer executable.' >&2
   exit 1
 fi
+"$node_executable" "$project_root/scripts/verify-native-identity.js"
 output_bundle="${2:-$project_root/dist/gpt-handoff.app}"
 if [[ "$output_bundle" != /* || "$output_bundle" != *.app ]]; then
   printf '%s\n' 'The output must be an absolute .app path.' >&2
@@ -43,6 +44,9 @@ mkdir -p "$app_bundle/Contents/MacOS" "$app_bundle/Contents/Resources/project"
 cp "$project_root/native/Info.plist" "$app_bundle/Contents/Info.plist"
 cp -R "$project_root/src" "$project_root/web" "$app_bundle/Contents/Resources/project/"
 cp "$project_root/package.json" "$app_bundle/Contents/Resources/project/"
+"$node_executable" "$project_root/scripts/build-extension.js"
+cp -R "$project_root/dist/extension" "$app_bundle/Contents/Resources/extension"
+cp "$project_root/scripts/install-native-host.py" "$app_bundle/Contents/Resources/install-native-host.py"
 if [[ -f "$project_root/package-lock.json" ]]; then
   cp "$project_root/package-lock.json" "$app_bundle/Contents/Resources/project/"
 fi
@@ -56,7 +60,11 @@ fi
 "$node_executable" "$project_root/scripts/build-embedded-source.js" "$app_bundle/Contents/Resources/embedded-source.js"
 xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos13.0" \
   -framework AppKit -framework ApplicationServices -framework WebKit \
-  "$project_root/native/main.swift" "$project_root/native/Workspace.swift" "$project_root/native/ContextExport.swift" "$project_root/native/ContextDownloads.swift" -o "$app_bundle/Contents/MacOS/gpt-handoff"
+  "$project_root/native/main.swift" "$project_root/native/ComposerAccess.swift" "$project_root/native/Workspace.swift" "$project_root/native/ContextExport.swift" "$project_root/native/ContextDownloads.swift" -o "$app_bundle/Contents/MacOS/gpt-handoff"
+xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos13.0" \
+  -framework AppKit -framework ApplicationServices \
+  "$project_root/native/ComposerAccess.swift" "$project_root/native/NativeHostProtocol.swift" \
+  "$project_root/native/NativeHostOrigin.swift" "$project_root/native/NativeHost.swift" -o "$app_bundle/Contents/MacOS/gpt-handoff-host"
 plutil -lint "$app_bundle/Contents/Info.plist" "$app_bundle/Contents/Resources/Runtime.plist"
 mv "$app_bundle" "$output_bundle"
 printf 'Created unsigned local build: %s\n' "$output_bundle"

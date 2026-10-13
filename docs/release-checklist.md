@@ -4,6 +4,16 @@ Runnable development handoff. Not a release-verified macOS build.
 
 The reconstruction must satisfy **R1–R8 in [product-contract.md](product-contract.md)**, including the user's later embedded-chat/no-refresh UX requirements. Its native window renders, original-response parsing is implemented, and focused checks pass, but synthetic GET/SSE/new-chat updates now pass, while live protocol compatibility, WebSocket/handoff streams, native Save UI/live downloads and target file delivery (explicit long-context export is implemented), real-client insertion and the remaining real-machine matrix are open. Earlier counts below do not substitute for a final-state verification run. The independent foundation review found four transition defects; fixes and remaining runtime limits are recorded in [independent-review.md](independent-review.md).
 
+## Current Chrome integration gates
+
+- [x] Preserve existing Chrome session through the already-installed ChatGPT app; real signed-in homepage/app-window observation.
+- [x] Implement small extension-popup controls, selected-document passive source bridge, immutable Add intent and exact-origin native messaging.
+- [x] Remove debugger permission/reload action from the primary build; retain scoped legacy tests separately.
+- [x] Build candidate launcher/helper and verify real native framing/origin handshake; independent code/rendered-popup review.
+- [ ] Install in the owner's Chrome profile and verify actual popup/host permission flow.
+- [ ] Verify live selected synthetic-source capture and real native target insertion/readback, cancellation and failure modes.
+- [ ] Complete primary attachment-byte delivery and long-context target acceptance; Save Markdown alone does not close these gates.
+
 ## Completed in the cloud VM
 
 - [x] Independent repository; no Praxis file or remote modified.

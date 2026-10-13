@@ -5,8 +5,17 @@ import { createChatGPTStream } from '../src/chatgpt-stream.js';
 import { mergeConversationStream } from '../src/stream-conversation.js';
 
 /** Observe only data the current ChatGPT page loads itself. Never fetch or refresh. */
-export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = {}) {
-  const channel = window.webkit?.messageHandlers?.handoffSource;
+export function installEmbeddedSourceObserver({
+  maxBytes = 64 * 1024 * 1024,
+  bridgeEvent = null,
+} = {}) {
+  const channel = bridgeEvent
+    ? {
+        postMessage(packet) {
+          window.postMessage({ type: bridgeEvent, packet }, location.origin);
+        },
+      }
+    : window.webkit?.messageHandlers?.handoffSource;
   if (!channel) return;
   const documentURL = new URL(location.href);
   if (
@@ -14,6 +23,12 @@ export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = 
     !['chatgpt.com', 'chat.openai.com'].includes(documentURL.hostname)
   )
     return;
+  if (bridgeEvent) {
+    const key = Symbol.for('gpt-handoff.passive-observer');
+    if (window[key]) return;
+    Object.defineProperty(window, key, { value: true });
+  }
+  let observing = true;
   let generation = 0,
     getSequence = 0,
     cached = null,
@@ -402,8 +417,23 @@ export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = 
       void responsePromise.then((response) => response.body?.cancel()).catch(() => {});
     }
   };
+  if (bridgeEvent)
+    addEventListener('message', (event) => {
+      if (
+        event.source !== window ||
+        event.origin !== location.origin ||
+        event.data?.type !== bridgeEvent + '-control' ||
+        typeof event.data.active !== 'boolean'
+      )
+        return;
+      if (observing !== event.data.active) {
+        invalidate();
+        observing = event.data.active;
+      }
+    });
   const originalFetch = window.fetch;
   window.fetch = function (...args) {
+    if (!observing) return Reflect.apply(originalFetch, this, args);
     let requested, selected, method, readRequest;
     try {
       requested = new URL(
@@ -503,6 +533,10 @@ export function installEmbeddedSourceObserver({ maxBytes = 64 * 1024 * 1024 } = 
     return promise;
   };
   const locationChanged = () => {
+    if (!observing) {
+      lastLocation = location.href;
+      return;
+    }
     const before = lastLocation;
     lastLocation = location.href;
     const selected = surface();

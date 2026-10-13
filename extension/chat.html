@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Handoff</title>
+    <link rel="stylesheet" href="chat.css" />
+  </head>
+  <body>
+    <header><strong>Handoff</strong><span>Nothing sent for you</span></header>
+    <main>
+      <p id="source" role="status">Preparing this chat…</p>
+      <button id="enable">Use this Chrome chat window</button>
+      <p id="help">Keeps your Chrome login. Reads only this selected chat as it loads normally.</p>
+      <div class="row">
+        <button id="targets">Choose composer</button><button id="preview" disabled>Preview</button>
+      </div>
+      <label id="target-label" hidden
+        >Existing window<select id="target">
+          <option value="">Choose a window…</option>
+        </select></label
+      >
+      <button id="access" hidden>Enable composer access…</button>
+      <button id="add" disabled>Add to Agent</button>
+      <div class="row">
+        <button id="save" disabled>Save Markdown</button><button id="cancel" hidden>Cancel</button>
+      </div>
+      <section id="preview-area" hidden>
+        <label for="text">Prepared context</label
+        ><textarea id="text" readonly spellcheck="false"></textarea>
+      </section>
+      <p id="status" role="status" aria-live="polite"></p>
+      <details>
+        <summary>Setup & import tools</summary>
+        <p id="setup">
+          Install the native helper from the Handoff app bundle to use existing macOS composers.
+        </p>
+        <a href="popup.html">Export and rendered-source tools</a>
+      </details>
+    </main>
+    <script type="module" src="chat.js"></script>
+  </body>
+</html>

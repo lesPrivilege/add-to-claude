@@ -70,8 +70,10 @@ test.describe('unpacked extension lifecycle (headed Chromium with --load-extensi
     const profile = path.join(temp, 'profile');
     await cp(path.resolve('dist/extension'), extensionPath, { recursive: true });
     const manifest = JSON.parse(await readFile(path.join(extensionPath, 'manifest.json'), 'utf8'));
+    manifest.permissions = [...manifest.permissions, 'debugger'];
+    manifest.action.default_popup = 'popup.html';
     // Real Chrome extension APIs, but fixture-only pregrants replace native permission prompts
-    // and the toolbar gesture. Production declares activeTab+scripting+debugger; host grants remain optional.
+    // and the toolbar gesture. This legacy suite explicitly adds debugger and the old popup; the primary Chrome path does not request debugger.
     manifest.host_permissions = [
       'https://chatgpt.com/*',
       'https://chat.openai.com/*',
@@ -962,7 +964,9 @@ test.describe('portable transport API harness (Chrome APIs mocked)', () => {
 
 test('production manifest contains no background capture, cookie or broad host grant', async () => {
   const manifest = JSON.parse(await readFile('extension/manifest.json', 'utf8'));
-  expect(manifest.permissions).toEqual(['activeTab', 'scripting', 'debugger']);
+  expect(manifest.permissions).toEqual(['activeTab', 'scripting', 'storage', 'nativeMessaging']);
+  expect(manifest.action.default_popup).toBe('chat.html');
+  expect(manifest.key).toBeTruthy();
   expect(manifest.host_permissions).toBeUndefined();
   expect(manifest.content_scripts).toBeUndefined();
   expect(manifest.externally_connectable).toBeUndefined();

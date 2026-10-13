@@ -4,72 +4,8 @@ import ApplicationServices
 // Utility name; keep menu and bundle labels consistent.
 private let displayName = "gpt-handoff"
 private let deskURL = URL(string: "http://127.0.0.1:43119/")!
+private let chromeChatBundleID = "com.google.Chrome.app.naboeedjljbhciiecpeahakaafbhknkj"
 private let healthURL = deskURL.appendingPathComponent("health")
-private let maximumTextBytes = 2 * 1024 * 1024
-private let accessibilityTimeout: Float = 0.15
-
-private func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
-    guard AXUIElementSetMessagingTimeout(element, accessibilityTimeout) == .success else { return nil }
-    var value: CFTypeRef?
-    return AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success ? value : nil
-}
-
-private func axElement(_ element: AXUIElement, _ name: String) -> AXUIElement? {
-    guard let value = attribute(element, name), CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-    let result = value as! AXUIElement
-    guard AXUIElementSetMessagingTimeout(result, accessibilityTimeout) == .success else { return nil }
-    return result
-}
-
-private func axString(_ element: AXUIElement, _ name: String) -> String? {
-    attribute(element, name) as? String
-}
-
-private func same(_ lhs: AXUIElement?, _ rhs: AXUIElement) -> Bool {
-    guard let lhs else { return false }
-    return CFEqual(lhs, rhs)
-}
-
-private func safeLabel(_ text: String, limit: Int = 90) -> String {
-    let visible = text.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }
-    return String(String.UnicodeScalarView(visible)).prefix(limit).description
-}
-
-private func isTerminal(_ app: NSRunningApplication) -> Bool {
-    let identity = ((app.bundleIdentifier ?? "") + " " + (app.localizedName ?? "")).lowercased()
-    return ["terminal", "iterm", "warp", "alacritty", "kitty", "wezterm", "ghostty", "hyper", "tabby", "rio-terminal", "termius"].contains { identity.contains($0) }
-}
-
-private final class WindowChoice: NSObject {
-    let app: NSRunningApplication
-    let launchDate: Date
-    let window: AXUIElement
-    let title: String
-    private let handleCue: String
-    var identityOrdinal = 0
-    var needsIdentityCue = false
-
-    init?(app: NSRunningApplication, window: AXUIElement) {
-        guard let launchDate = app.launchDate else { return nil }
-        self.app = app
-        self.launchDate = launchDate
-        self.window = window
-        self.title = axString(window, kAXTitleAttribute) ?? "Untitled window"
-        self.handleCue = String(CFHash(window), radix: 16).suffix(6).description
-    }
-
-    func displayLabel(limit: Int = 90) -> String {
-        let label = safeLabel(title, limit: limit)
-        // This identifies a live AX handle, not conversation content or a window title.
-        return needsIdentityCue ? "\(label) · window \(handleCue)-\(identityOrdinal)" : label
-    }
-}
-
-private struct Composer {
-    let choice: WindowChoice
-    let editor: AXUIElement
-}
-
 private enum Health { case absent, ready(String?), occupied }
 
 // Bound even a hostile response from an unrelated local service to 4 KiB.
@@ -166,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.action = #selector(toggleWorkspace)
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         rebuildMenu()
-        openDesk()
+        openChatGPT()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -175,16 +111,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let child, child.isRunning { child.terminate() }
     }
 
-    func menuWillOpen(_ menu: NSMenu) { rebuildMenu(); discoverWindows() }
+    func menuWillOpen(_ menu: NSMenu) { rebuildMenu(); if workspace != nil { discoverWindows() } }
 
     @objc private func toggleWorkspace() {
         if NSApp.currentEvent?.type == .rightMouseUp {
             statusItem.menu = menu
             statusItem.button?.performClick(nil)
             statusItem.menu = nil
-        } else if workspace?.window?.isVisible == true {
-            workspace?.window?.orderOut(nil)
-        } else { openDesk() }
+        } else if let chat = NSRunningApplication.runningApplications(withBundleIdentifier: chromeChatBundleID).first,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == chat.processIdentifier {
+            chat.hide()
+        } else { openChatGPT() }
     }
 
     private func showWorkspace() {
@@ -217,7 +154,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item(displayName))
         menu.addItem(item(safeLabel(message)))
         menu.addItem(.separator())
-        menu.addItem(item("Show ChatGPT", #selector(openChatGPT), key: "g"))
+        menu.addItem(item("Show signed-in Chrome chat", #selector(openChatGPT), key: "g"))
+        menu.addItem(item("Legacy WebKit workspace", #selector(openDesk)))
         if let composer {
             menu.addItem(item("Selected: \(safeLabel(composer.choice.app.localizedName ?? "App", limit: 32)) · \(composer.choice.displayLabel(limit: 48))"))
         }
@@ -315,7 +253,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func clearComposer() { operation = UUID(); composer = nil; workspace?.setTarget(name: nil); message = "Selection cleared" }
     @objc private func quit() { NSApp.terminate(nil) }
 
-    @objc private func openChatGPT() { openDesk() }
+    @objc private func openChatGPT() {
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: chromeChatBundleID) else {
+            message = "Open ChatGPT in Chrome and install its app window first. No new login is required."
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { [weak self] app, error in
+            DispatchQueue.main.async {
+                self?.message = app != nil && error == nil ? "Chrome chat ready · use the Handoff extension button" : "Chrome chat could not open. Open it from Chrome's app menu."
+            }
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openChatGPT()
+        return true
+    }
 
     private func probe(_ completion: @escaping (Health) -> Void) {
         let request = HealthProbe { [weak self] result in
@@ -412,35 +367,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func startFailure(_ detail: String) { busy = false; message = detail }
 
-    private func validWindow(_ choice: WindowChoice) -> Bool {
-        guard !choice.app.isTerminated, choice.app.launchDate == choice.launchDate, !isTerminal(choice.app) else { return false }
-        let app = AXUIElementCreateApplication(choice.app.processIdentifier)
-        guard let windows = attribute(app, kAXWindowsAttribute) as? [AXUIElement], windows.contains(where: { CFEqual($0, choice.window) }) else { return false }
-        return (axString(choice.window, kAXTitleAttribute) ?? "Untitled window") == choice.title
-    }
-
-    private func focus(_ choice: WindowChoice) -> Bool {
-        guard validWindow(choice) else { return false }
-        guard AXUIElementPerformAction(choice.window, kAXRaiseAction as CFString) == .success else { return false }
-        return choice.app.activate(options: [.activateIgnoringOtherApps])
-    }
-
-    private func focusedComposer(_ choice: WindowChoice, requireFrontmost: Bool = true) -> AXUIElement? {
-        guard AXIsProcessTrusted(), validWindow(choice),
-              !requireFrontmost || NSWorkspace.shared.frontmostApplication?.processIdentifier == choice.app.processIdentifier else { return nil }
-        let app = AXUIElementCreateApplication(choice.app.processIdentifier)
-        guard same(axElement(app, kAXFocusedWindowAttribute), choice.window),
-              let field = axElement(app, kAXFocusedUIElementAttribute),
-              same(axElement(field, kAXWindowAttribute), choice.window),
-              axString(field, kAXRoleAttribute) == kAXTextAreaRole else { return nil }
-        var settable: DarwinBoolean = false
-        guard AXUIElementIsAttributeSettable(field, kAXValueAttribute as CFString, &settable) == .success, settable.boolValue else { return nil }
-        let semantics = [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute, "AXIdentifier"].compactMap { axString(field, $0) }.joined(separator: " ").lowercased()
-        // Fail closed for accessible names that explicitly identify a shell or code pane.
-        guard !["terminal", "shell", "source editor", "code editor", "source code", "editor contents", "monaco"].contains(where: { semantics.contains($0) }) else { return nil }
-        return field
-    }
-
     @objc private func selectWindow(_ sender: NSMenuItem) {
         guard !busy, let choice = sender.representedObject as? WindowChoice else { return }
         composer = nil
@@ -451,7 +377,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         message = "Checking the selected composer…"
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            let field = self.focusedComposer(choice, requireFrontmost: false)
+            let field = focusedComposer(choice, requireFrontmost: false)
             DispatchQueue.main.async {
                 self.busy = false
                 guard self.operation == id else { return }
@@ -469,43 +395,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The outer-frame Add action is the user's confirmation. It never opens a modal alert.
     private func appendPreparedText(_ text: String, isSourceCurrent: @escaping () -> Bool, completion: @escaping (String, Bool) -> Void) {
         guard !busy, let selected = composer else { completion("Choose the intended composer first.", false); return }
-        guard !text.isEmpty, text.utf8.count <= maximumTextBytes else {
-            completion("This context exceeds the native text limit. A file handoff is required.", false)
-            return
-        }
-        guard isSourceCurrent() else { completion("The source changed. Nothing was added.", false); return }
-        guard AXIsProcessTrusted(), focus(selected.choice) else {
-            composer = nil
-            workspace?.setTarget(name: nil)
-            completion("The target or its permission changed. Choose the composer again.", false)
-            return
-        }
         busy = true
         let id = UUID()
         operation = id
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self else { completion("Handoff closed before insertion.", false); return }
-            defer { self.busy = false }
-            guard isSourceCurrent() else { completion("The source changed. Nothing was added.", false); return }
-            guard self.operation == id,
-                  let current = self.focusedComposer(selected.choice), CFEqual(current, selected.editor),
-                  let old = axString(current, kAXValueAttribute),
-                  old.utf8.count + text.utf8.count + 2 <= maximumTextBytes else {
+        appendToComposer(selected, text: text,
+            operationValid: { [weak self] in self?.operation == id && isSourceCurrent() },
+            revalidateSource: { reply in reply(isSourceCurrent()) }) { [weak self] message, success in
+                guard let self else { completion(message, success); return }
+                self.busy = false
                 self.composer = nil
                 self.workspace?.setTarget(name: nil)
-                completion("The composer is no longer ready. Nothing was added; choose it again.", false)
-                return
+                completion(message, success)
             }
-            let combined = old.isEmpty ? text : old + "\n\n" + text
-            let result = AXUIElementSetAttributeValue(current, kAXValueAttribute as CFString, combined as CFString)
-            self.composer = nil
-            self.workspace?.setTarget(name: nil)
-            guard result == .success, axString(current, kAXValueAttribute) == combined else {
-                completion("Insertion could not be verified. Inspect the draft before retrying.", false)
-                return
-            }
-            completion("Added and verified. Review the target draft; nothing was sent.", true)
-        }
     }
 
 

@@ -1,3 +1,4 @@
+import { installChatIntegration } from './chat-worker.js';
 import { captureChatGPT } from './capture.js';
 import { collectConversation } from './collect.js';
 import { inspectConversationViewport, scrollConversationViewport } from './page-scroll.js';
@@ -166,6 +167,19 @@ chrome.runtime.onConnect.addListener((port) => {
     }
     if (!['collect', 'original'].includes(message?.type) || !/^[a-f0-9]{32}$/u.test(message.jobId))
       return;
+    if (
+      message.type === 'original' &&
+      chrome.runtime.getManifest?.().permissions?.includes('debugger') !== true
+    ) {
+      post({
+        type: 'error',
+        jobId: message.jobId,
+        code: 'unavailable',
+        error:
+          'This build uses passive capture. Open the conversation normally in the signed-in chat.',
+      });
+      return;
+    }
     if (job || collectionJob || deliveryBusy) {
       post({
         type: 'error',
@@ -348,3 +362,5 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   );
   return true;
 });
+
+installChatIntegration(chrome);

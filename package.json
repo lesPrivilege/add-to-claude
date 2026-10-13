@@ -14,10 +14,11 @@
     "build": "node scripts/build.js",
     "build:extension": "node scripts/build-extension.js",
     "test:extension": "npm run build:extension && playwright test --config playwright.extension.config.js",
-    "check": "npm test && npm run test:e2e && npm run test:extension && npm run build",
+    "check": "npm test && npm run test:e2e && npm run test:extension && npm run test:chrome && npm run build",
     "build:macos": "bash scripts/build-macos.sh",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:chrome": "npm run build:extension && playwright test --config playwright.chrome-chat.config.js"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

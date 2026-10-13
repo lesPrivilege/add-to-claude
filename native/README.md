@@ -1,8 +1,14 @@
 # macOS embedded chat workspace
 
-**Current direction:** the owner requested reuse of the existing Google Chrome login. A signed-in Chrome ChatGPT app window has now been verified on this Mac. Wiring the status-bar utility and handoff controls to it remains implementation work; the WebKit implementation below is the previous working component and should not require another owner login as the primary workflow. See [product contract](../docs/product-contract.md#browser-session-reuse-clarification).
+**Current direction:** the owner requested reuse of the existing Google Chrome login. The Chrome launcher, primary extension popup and native-messaging helper are implemented for acceptance; owner-profile installation and real AX validation remain due. See [product contract](../docs/product-contract.md#browser-session-reuse-clarification).
 
-The status-bar app displays the real ChatGPT website in its own WebKit window. Target selection, Preview and Add are small controls in the outer frame. The reconstructed app has compiled and displayed the signed-out ChatGPT homepage on the Mac. **Login, complete embedded capture and real-client insertion are not yet accepted.** See [Mac acceptance](../docs/mac-acceptance.md) and the [product contract](../docs/product-contract.md). The utility does not install or run an agent.
+The primary launcher now opens or hides the existing Chrome ChatGPT app, preserving its browser session. The app also contains an exact-origin native-messaging helper for target discovery, selection and source-checked plain-text append. Setup and permission details are in [Chrome chat handoff](../docs/browser-extension.md). The helper's real Chrome-launched AX behavior remains unaccepted; a CLI probe is not equivalent to that launch context.
+
+The WebKit workspace below is retained under the explicit **Legacy WebKit workspace** menu action. It does not open on normal launch and is not required for Chrome login reuse.
+
+## Legacy WebKit workspace
+
+The legacy workspace displays the real ChatGPT website in its own WebKit window. Target selection, Preview and Add are small controls in the outer frame. The reconstructed app has compiled and displayed the signed-out ChatGPT homepage on the Mac. **Login, complete embedded capture and real-client insertion are not yet accepted.** See [Mac acceptance](../docs/mac-acceptance.md) and the [product contract](../docs/product-contract.md). The utility does not install or run an agent.
 
 The icon opens or hides the retained chat window; right-click exposes the utility menu. Normal use opens no separate browser. WebKit uses the app's own login session, not Chrome's cookies. The optional [Chrome extension](../docs/browser-extension.md) is a separate source adapter. No Apple Events/Automation permission is needed by the app.
 
@@ -54,6 +60,7 @@ Quit from the menu to terminate only the server process this launcher started. A
 bash scripts/test-native-source.sh
 bash scripts/test-native-files.sh
 bash scripts/test-native-workspace.sh
+bash scripts/test-native-host.sh
 ```
 
 This compiles a separate nonvisible WebKit runner using a nonpersistent data store, synthetic fetch responses and the same injected observer bundle. Seven scenarios passed on the current Mac. It exercises the real JavaScript engine and native message channel. The file runner adds 30 exporter checks and eight WKDownload scenarios against a synthetic loopback server. The Workspace runner adds 24 AppKit/WebKit controller checks, with synthetic target callbacks and a simulated compiler-stop notification. None establishes login, production protocol compatibility, Accessibility, actual process-kill recovery or rendered interaction acceptance.

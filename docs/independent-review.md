@@ -1,5 +1,15 @@
 # Independent review
 
+## Chrome/native integration review — 2026-10-13
+
+The independent reviewer inspected the primary popup/data bridge, selected-tab activation, worker-owned source revisions, native transport/framing and shared AX boundary. The privileged UI was kept in the extension popup instead of a webpage-embedded iframe, avoiding an extra embedding/clickjacking boundary.
+
+A P1 race was reproduced: an old source packet delayed in its first `tabs.get` could restore verified old text after a newer invalidation. Source receipts now revoke/stamp state synchronously before that first await, and a regression specifically delays this earliest lookup. Later source validation, selection, disconnected native ports and old Add completions cannot restore or clear newer state. The native permit is operation/revision/text-hash bound, single-use and time-limited; the shared append rechecks it after potentially slow AX reads and immediately before writing.
+
+The reviewer also found legacy debugger controls reappearing without permission. They now remain hidden/disabled through collection completion, and the worker rejects that operation before entering the legacy adapter. Native port explicit-close cleanup and retained Last handoff receipts were inspected. No remaining concrete defect was reported after reinspection.
+
+The reviewer inspected the real installed-popup screenshot (`artifacts/12-chrome-handoff-popup.png`) and found readable source/target/status and no clipping. Its data/target are synthetic and native transport is mocked. The review did not exercise owner-profile installation, true AX writes, live source capture or actual permission grants.
+
 ## Passive WebSocket review — 2026-10-13
 
 Independent public-protocol review found insufficient replay/cursor guarantees to claim complete handoff reconstruction. The implemented observer retains `unverified-replay` coverage, requires an explicit handoff topic and the website's own offset-zero subscription, and never operates the site's socket. A terminal event is recorded separately from completeness.

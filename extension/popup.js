@@ -2,6 +2,9 @@ import { projectMarkdown, validateConversation } from './model.js';
 
 const $ = (id) => document.getElementById(id);
 const origins = ['https://chatgpt.com/*', 'https://chat.openai.com/*'];
+const supportsOriginal = chrome.runtime.getManifest?.().permissions?.includes('debugger') === true;
+$('original').hidden = !supportsOriginal;
+$('original-help').hidden = !supportsOriginal;
 let selected = null;
 let captured = null;
 let generation = 0;
@@ -23,7 +26,7 @@ function freezeControls(frozen, kind = null) {
   ])
     $(id).disabled = frozen;
   if (!frozen) {
-    $('original').disabled = !selected;
+    $('original').disabled = !selected || !supportsOriginal;
     $('capture').disabled = !selected;
     $('snapshot').disabled = !selected;
   }
@@ -59,7 +62,7 @@ function clearCapture() {
   $('checks').replaceChildren();
   $('status').hidden = true;
   $('capture').disabled = !selected;
-  $('original').disabled = !selected;
+  $('original').disabled = !selected || !supportsOriginal;
   $('snapshot').disabled = !selected;
   $('capture').firstChild.textContent = 'Collect rendered turns';
   window.dispatchEvent(new CustomEvent('gh-capture-clear'));
@@ -75,7 +78,7 @@ function select(tab) {
     ? `${new URL(tab.url).hostname} · window ${tab.windowId} · tab ${tab.id}`
     : 'Then open this extension from that tab.';
   $('capture').disabled = !selected;
-  $('original').disabled = !selected;
+  $('original').disabled = !selected || !supportsOriginal;
   $('snapshot').disabled = !selected;
   $('focus').hidden = !selected;
 }
@@ -264,8 +267,8 @@ async function readSelected(mode) {
     if (operation === generation) showStatus(error.message, true);
   } finally {
     if (operation === generation) {
-      $('original').hidden = false;
-      $('original-help').hidden = false;
+      $('original').hidden = !supportsOriginal;
+      $('original-help').hidden = !supportsOriginal;
       $('capture').hidden = false;
       $('collection-help').hidden = false;
       $('snapshot').hidden = false;

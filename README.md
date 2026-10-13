@@ -4,9 +4,9 @@ A small local utility for moving one selected ChatGPT conversation into a compos
 
 **Active work:** [product contract and acceptance requirements](docs/product-contract.md), derived from the user's referenced ChatGPT session and subsequent embedded-chat clarification. The reconstruction starts from the Mac acceptance branch; the full acceptance goal remains open.
 
-**Status: embedded macOS workspace in development; not release ready.** The native app now displays the real ChatGPT website inside its own window, with small target, preview and Add controls in the outer frame. It has compiled and rendered on the Mac. WebKit has its own login session. The selected-page observer makes no capture requests or forced reloads; new-message streaming and live-account acceptance remain unfinished. No external agent is certified compatible. See the [Mac acceptance log](docs/mac-acceptance.md) for the distinction between native observations, synthetic browser checks and installed-extension checks.
+**Status: Chrome-session integration implemented for acceptance; not release ready.** The primary surface is the owner's existing signed-in Chrome ChatGPT app. The status-bar launcher opens/hides that window; Handoff's small extension popup prepares the selected conversation, previews it and requests an append through an allowlisted native helper. Normal capture/Add does not force a refresh or open a local desk. See [Chrome setup and boundaries](docs/browser-extension.md).
 
-The optional Chrome extension can read original messages from the selected page's own conversation response, using a temporary debugger attachment and an explicitly disclosed reload. This external-source path passed a 128-turn synthetic installed-extension check; it is not the embedded app's normal interaction. Rendered scrolling and a visible-only snapshot remain explicit **unverified** alternatives. Original Markdown is also obtainable through a selected [official data export](https://help.openai.com/en/articles/7260999-exporting-your-chatgpt-history-and-data). Live authenticated acceptance remains open. The [research notes](docs/research.md) distinguish technical behavior from service-use conditions.
+Current checks cover passive source parsing, a real installed popup with a simulated native transport, native protocol/framing and candidate builds. Owner-profile installation, live selected-source acceptance and real target insertion/files are still open. WebSocket replay remains explicitly partial. The prior WebKit/portable desk is retained as a legacy component. [Mac acceptance](docs/mac-acceptance.md) distinguishes every result and limit.
 
 ## Run on the cloud VM
 
@@ -19,7 +19,7 @@ node src/server.js
 
 Open `http://127.0.0.1:43119/` in the same machine's browser. The local test composer is at `/composer.html`; open two windows to test selection. The server deliberately listens on loopback. Do not expose it through a public tunnel. In a different checkout, use its own directory instead of `/workspace/gpt-handoff`.
 
-## Use
+## Legacy portable desk use
 
 1. Build and load the [Chrome extension](docs/browser-extension.md). Open the intended ChatGPT conversation, click gpt-handoff → **Use this conversation** → **Open in local desk**. **Find open ChatGPT tabs** offers exact tab/window choices after an optional site-access grant. To preserve original Markdown instead, choose **Choose export** and select `conversations.json` from the ZIP you downloaded through ChatGPT's normal export flow. Pick one conversation and its current or alternate branch. The rest of the export is released after selection. **Paste turns** accepts Markdown separated by `## User` and `## Assistant` headings and stays unverified.
 2. Review the turns, source links, branch, and missing-content checks. “Selected branch verified” means the supported text in that export path was accounted for. It does not authenticate the export, prove live-page completeness, or include other branches. Missing, streaming, nontext, or unresolved citation content remains partial.
@@ -35,6 +35,7 @@ npm ci --ignore-scripts
 npm test
 npm run test:e2e
 npm run test:extension
+npm run test:chrome
 npm run build:extension
 npm run build
 ```

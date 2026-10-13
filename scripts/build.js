@@ -30,6 +30,7 @@ files.push(
   'THIRD_PARTY_NOTICES.md',
   'playwright.config.js',
   'playwright.extension.config.js',
+  'playwright.chrome-chat.config.js',
   '.nvmrc',
   '.prettierrc.json',
   '.prettierignore',

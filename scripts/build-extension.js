@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { createEmbeddedSourceScript } from '../web/embedded-source.js';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -21,4 +22,8 @@ for (const name of [
 ]) {
   await writeFile(path.join(out, name), await readFile(path.join(root, 'src', name)));
 }
+await writeFile(
+  path.join(out, 'chat-observer.js'),
+  createEmbeddedSourceScript({ bridgeEvent: 'GH_CHROME_SOURCE', maxBytes: 16 * 1024 * 1024 }),
+);
 process.stdout.write('Built dist/extension. Load this directory unpacked in Chrome.\n');

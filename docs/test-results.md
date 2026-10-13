@@ -8,6 +8,8 @@ Native Workspace follow-up: 24 production-controller/AppKit/WebKit integration c
 
 Passive-socket follow-up: 110/110 unit, 64/64 ordinary browser checks and the seven native WebKit observer scenarios passed. Socket browser fixtures are routed/synthetic, not live-account evidence; replay remains partial. Chrome's real signed-in home page and installed ChatGPT app window were separately observed through CUA; no conversation capture or target delivery was exercised.
 
+Chrome-primary candidate: 116/116 unit, 64/64 ordinary browser, 23/23 legacy extension and one new installed Chrome/native-protocol scenario passed. The new scenario mocks native transport while using real Chrome APIs; the separate native host suite passes 16 framing/permit checks with a synthetic composer backend. The actual compiled host answers a pinned-origin framed ping. Owner-profile installation and real AX writes remain unverified; see [Mac acceptance](mac-acceptance.md).
+
 2026-10-12 · Linux cloud VM · synthetic data only.
 
 | Check                                                          | Result                                                                                                                                                                                                                                                               |
