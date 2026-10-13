@@ -4,6 +4,8 @@ Current reconstruction evidence (2026-10-13) is in [Mac acceptance](mac-acceptan
 
 Native file follow-up: 30 exporter checks and eight actual WKWebView download scenarios passed on synthetic data; separate candidate build passed without replacing the app being used for login. See the native file/export section of [Mac acceptance](mac-acceptance.md) for fixture assumptions and remaining runtime gaps.
 
+Native Workspace follow-up: 24 production-controller/AppKit/WebKit integration checks passed, including a failing-before/passing-after compiler-readiness recovery regression. Target writes and the compiler-stop notification are simulated; source observation, compilation and button states are real. The focused browser native-core check and candidate build also passed. No broad browser/extension rerun was needed for this scoped readiness change; their last complete runs remain the earlier checkpoint.
+
 2026-10-12 · Linux cloud VM · synthetic data only.
 
 | Check                                                          | Result                                                                                                                                                                                                                                                               |

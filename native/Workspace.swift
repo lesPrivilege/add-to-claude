@@ -12,6 +12,7 @@ private final class ChatPanel: NSPanel {
 final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, NSWindowDelegate {
     let source: WKWebView
     private let core: WKWebView
+    private let coreURL: URL
     private let status = NSTextField(labelWithString: "Sign in to ChatGPT here. Choose an open composer when ready.")
     private let target = NSPopUpButton(frame: .zero, pullsDown: true)
     private let add = NSButton(title: "Add to Agent", target: nil, action: nil)
@@ -29,6 +30,7 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
     private var inserting = false
     private var selectedTarget = false
     private var coreReady = false
+    private var coreGeneration = 0
     private var responsePageIdentity: String?
     private var locationObservation: NSKeyValueObservation?
     private var previewPanel: NSPanel?
@@ -36,9 +38,11 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
     var refreshTargets: (() -> Void)?
     var addText: ((String, @escaping () -> Bool, @escaping (String, Bool) -> Void) -> Void)?
 
-    init(coreURL: URL, observerScript: String) {
+    init(coreURL: URL, observerScript: String, websiteDataStore: WKWebsiteDataStore = .default(),
+         loadSource: ((WKWebView) -> Void)? = nil) {
+        self.coreURL = coreURL
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .default()
+        configuration.websiteDataStore = websiteDataStore
         source = WKWebView(frame: .zero, configuration: configuration)
         let coreConfiguration = WKWebViewConfiguration()
         coreConfiguration.websiteDataStore = .nonPersistent()
@@ -61,6 +65,7 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
             self.invalidateSource("Waiting for the current conversation's original data.")
         }
         core.navigationDelegate = self
+        core.configuration.userContentController.add(self, name: "handoffCoreReady")
         source.configuration.userContentController.add(self, name: "handoffSource")
         source.configuration.userContentController.addUserScript(WKUserScript(source: observerScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         let back = NSButton(title: "‹", target: self, action: #selector(goBack))
@@ -71,6 +76,10 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         for button in [back, target, add, preview, saveContext] { button.controlSize = .small; button.bezelStyle = .rounded }
+        add.identifier = NSUserInterfaceItemIdentifier("handoff.add")
+        preview.identifier = NSUserInterfaceItemIdentifier("handoff.preview")
+        saveContext.identifier = NSUserInterfaceItemIdentifier("handoff.save")
+        status.identifier = NSUserInterfaceItemIdentifier("handoff.status")
         add.target = self; add.action = #selector(addPrepared)
         preview.target = self; preview.action = #selector(showPreview)
         preview.isEnabled = false
@@ -104,7 +113,8 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
         source.setContentHuggingPriority(.defaultLow, for: .vertical)
         panel.center()
         core.load(URLRequest(url: coreURL))
-        source.load(URLRequest(url: URL(string: "https://chatgpt.com/")!))
+        if let loadSource { loadSource(source) }
+        else { source.load(URLRequest(url: URL(string: "https://chatgpt.com/")!)) }
         updateAdd()
     }
 
@@ -182,6 +192,14 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "handoffCoreReady" {
+            guard message.webView === core, message.frameInfo.isMainFrame,
+                  core.url == coreURL, message.frameInfo.securityOrigin.protocol == "http",
+                  message.frameInfo.securityOrigin.host == "127.0.0.1",
+                  message.frameInfo.securityOrigin.port == coreURL.port else { return }
+            checkCoreReadiness()
+            return
+        }
         guard message.webView === source, message.frameInfo.isMainFrame,
               message.frameInfo.securityOrigin.protocol == "https",
               ["chatgpt.com", "chat.openai.com"].contains(message.frameInfo.securityOrigin.host),
@@ -200,6 +218,18 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
         response = packet
         responsePageIdentity = source.url?.absoluteString
         prepareSource()
+    }
+
+    private func checkCoreReadiness() {
+        guard !core.isLoading, !coreReady else { return }
+        let generation = coreGeneration
+        core.evaluateJavaScript("typeof window.handoffCore?.compile === 'function'") { [weak self] value, _ in
+            guard let self, generation == self.coreGeneration, !self.core.isLoading,
+                  !self.coreReady, value as? Bool == true else { return }
+            self.coreReady = true
+            self.prepareSource()
+            self.updateAdd()
+        }
     }
 
     private func prepareSource() {
@@ -359,7 +389,7 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url else { decisionHandler(.cancel); return }
         if webView === core {
-            decisionHandler(url.scheme == "http" && url.host == "127.0.0.1" && url.port == 43119 && url.path == "/native-core.html" ? .allow : .cancel)
+            decisionHandler(url == coreURL && url.scheme == "http" && url.host == "127.0.0.1" && url.path == "/native-core.html" ? .allow : .cancel)
         } else { decisionHandler(url.scheme == "https" || url.absoluteString == "about:blank" ? .allow : .cancel) }
     }
 
@@ -369,16 +399,27 @@ final class WorkspaceController: NSWindowController, WKNavigationDelegate, WKUID
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        if webView === core { coreReady = true; prepareSource(); updateAdd() }
+        if webView === core { checkCoreReadiness() }
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         if webView === source { invalidateSource("Waiting for the current conversation's original data.") }
+        if webView === core {
+            coreGeneration += 1
+            coreReady = false
+            invalidateSource("Preparing the current conversation…", keepingResponse: true)
+        }
+    }
+
+    func compilerDidStop() {
+        coreGeneration += 1
+        coreReady = false
+        invalidateSource("Preparation stopped. Reopen Handoff to retry; the chat is retained.", keepingResponse: true)
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         if webView === source { invalidateSource("ChatGPT stopped responding. Reopen Handoff to reconnect.") }
-        if webView === core { coreReady = false; invalidateSource("Preparation stopped. Reopen Handoff to retry; the chat is retained.", keepingResponse: true) }
+        if webView === core { compilerDidStop() }
     }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {

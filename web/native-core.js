@@ -8,3 +8,6 @@ globalThis.handoffCore = Object.freeze({
     return { model, markdown: projectMarkdown(model) };
   },
 });
+
+// WebKit navigation completion can precede module evaluation. Signal actual compiler readiness.
+globalThis.webkit?.messageHandlers?.handoffCoreReady?.postMessage('ready');

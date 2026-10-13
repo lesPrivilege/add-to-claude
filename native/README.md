@@ -51,9 +51,10 @@ Quit from the menu to terminate only the server process this launcher started. A
 ```sh
 bash scripts/test-native-source.sh
 bash scripts/test-native-files.sh
+bash scripts/test-native-workspace.sh
 ```
 
-This compiles a separate nonvisible WebKit runner using a nonpersistent data store, synthetic fetch responses and the same injected observer bundle. Seven scenarios passed on the current Mac. It exercises the real JavaScript engine and native message channel. The file runner adds 30 exporter checks and eight WKDownload scenarios against a synthetic loopback server. Neither runner establishes login, production protocol compatibility, Accessibility or Workspace control-state behavior.
+This compiles a separate nonvisible WebKit runner using a nonpersistent data store, synthetic fetch responses and the same injected observer bundle. Seven scenarios passed on the current Mac. It exercises the real JavaScript engine and native message channel. The file runner adds 30 exporter checks and eight WKDownload scenarios against a synthetic loopback server. The Workspace runner adds 24 AppKit/WebKit controller checks, with synthetic target callbacks and a simulated compiler-stop notification. None establishes login, production protocol compatibility, Accessibility, actual process-kill recovery or rendered interaction acceptance.
 
 ## Remaining native acceptance checks
 

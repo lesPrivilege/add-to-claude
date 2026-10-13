@@ -1,5 +1,11 @@
 # Independent review
 
+## Native Workspace readiness review — 2026-10-13
+
+The owner added 24 native Workspace integration checks and reproduced recovery calling `window.handoffCore.compile` before the ES module existed. The fix treats navigation completion and compiler readiness separately: a signal is accepted only from the configured loopback core webview/main frame, followed by a current-document function check guarded by loading state and core generation. Reconnection retains current raw source and never refetches the chat.
+
+An independent read-only reviewer found no concrete defect in the origin/generation checks, production-default initialization or late-result handling. Production still uses the app's persistent WebKit store and normal ChatGPT load; test injection is opt-in and nonpersistent. The reviewer inspected fixtures but did not rerun apps. The runtime suite's target callback and compiler-stop event are synthetic; real target insertion, actual process termination, rendered UI and Accessibility remain separate gates.
+
 ## Native file/export review — 2026-10-13
 
 An independent read-only reviewer examined the new native download/export boundary and Workspace integration. Two concrete findings were repaired: a late redirect callback from a previous download could cancel the current file; and destination hashing/serialization/disk writes blocked the main thread. Stale callbacks now cancel and return before touching current state. Export uses a background queue with a cancellation token checked during staging and before/after publication; old completion callbacks cannot update a newer export and remove only their own unpublished output.

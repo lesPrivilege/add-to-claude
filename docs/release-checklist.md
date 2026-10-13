@@ -28,7 +28,7 @@ The reconstruction must satisfy **R1–R8 in [product-contract.md](product-contr
 - [ ] Run the native acceptance matrix, including permission denial/revocation, focus races, editor replacement, same-title conversation changes, long text and multiple windows.
 - [ ] Validate each real client's writable composer before claiming support. No agent runtime/account was installed here.
 - [ ] Verify native keyboard/VoiceOver, appearance, contrast and Reduce Motion on the intended Mac.
-- [ ] Sign using the owner's existing Developer ID, hardened runtime, notarize/staple, and test clean-Mac Gatekeeper. No new credential/agreement was created.
+- [ ] Sign using the owner's existing Developer ID, hardened runtime, notarize/staple, and test clean-Mac Gatekeeper. The current Mac reports 0 valid code-signing identities (2026-10-13). No new credential/agreement was created.
 - [x] Private repository and preserved base history verified: `lesPrivilege/gpt-handoff`, `main` at `e0a7fca`, Mac base at `e60dc03`. Reconstruction work is local on `codex/session-handoff`; no release publication is implied.
 
 The prior VM GitHub authentication blocker was resolved before this reconstruction. Codex verified private visibility and cloned the existing Mac branch. Do not create a duplicate repository or infer that new reconstruction changes have been pushed.
