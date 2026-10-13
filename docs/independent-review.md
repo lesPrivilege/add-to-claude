@@ -1,5 +1,11 @@
 # Independent review
 
+## Synthetic-app Accessibility harness review — 2026-10-13
+
+The independent reviewer inspected the new AX harness, its exact generated app launch, private temporary FIFOs, PID-scoped handles and bounded owned-app cleanup. A concrete test-only race was found: concurrent FIFO readers could split a framed response when a delayed fixture mutation overlapped the next snapshot. The harness now serializes each complete write/read exchange and awaits the mutation before source validation and before returning from the append check. Final Swift typechecking passes. The reviewer reinspected that fix and reported no remaining concrete finding. The review did not run or operate the fixture.
+
+The attempted runtime run stopped at the foreground prerequisite, independently explained by CUA's locked-Mac report. This is **NOT RUN**, not passing Accessibility evidence. No focus or permission check was bypassed. Even a future passing run covers synthetic AppKit composers, not real-client compatibility, Chrome-host permission identity, rich attachments or AX revocation.
+
 ## Chrome/native integration review — 2026-10-13
 
 The independent reviewer inspected the primary popup/data bridge, selected-tab activation, worker-owned source revisions, native transport/framing and shared AX boundary. The privileged UI was kept in the extension popup instead of a webpage-embedded iframe, avoiding an extra embedding/clickjacking boundary.

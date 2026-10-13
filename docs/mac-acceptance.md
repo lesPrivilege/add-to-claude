@@ -78,6 +78,14 @@ The unsigned candidate `dist/gpt-handoff-chrome-transport-checked.app` built suc
 
 Real ChatGPT protocol compatibility, owner-profile setup, real client insertion/readback and attachment delivery remain open. The isolated native-host lookup basis is recorded in [research](research.md#isolated-chrome-native-host-fixture).
 
+## Real Accessibility fixture — implemented, runtime acceptance pending
+
+`bash scripts/test-native-accessibility.sh` now builds production `ComposerAccess.swift` against an isolated AppKit fixture. The runner starts only its generated app bundle through Launch Services, uses private mode-0600 FIFOs under its temporary directory for fixture setup and independent draft readback, and derives AX handles only from that owned app's PID. It does not discover or mutate user apps, install a browser extension, change permissions, or send keyboard input. It contains no submit action or network code.
+
+Planned assertions exercise real AX append/readback, exact Unicode/Markdown and existing draft preservation, preservation of a draft edited while preparation is pending, same-title window isolation, oversized text rejection, changed focus/editor/title, read-only fields, source denial, cancellation, code-editor semantics and closed-window rejection. These assertions are **not passing evidence yet**. Initial direct-process launch lacked a Launch Services identity; the fixture now uses normal app launch. Subsequent selection attempts could not acquire foreground focus. CUA independently reported that the Mac was locked and automatic unlock failed.
+
+The latest run compiled successfully and exited **2 / NOT RUN** with an explicit desktop/focus prerequisite message; no production focus guard was relaxed. The owned fixture process exited and its temporary artifacts were removed. No Accessibility prompt was requested. After the owner unlocks the Mac, rerun this script while the desktop is available; without existing runner Accessibility access it also exits 2 instead of changing permissions. This is a synthetic-app check even when it passes: real client compatibility, rich-draft/attachment preservation, permission revocation and Chrome-launched helper identity still require separate acceptance.
+
 ## Previous worker's report
 
 2026-10-12 · macOS 27.0.1 (arm64) · Xcode SDK 26.5 / Swift 6.3.3 · Node 25.9.0 · Google Chrome 154.0.8037.98 · Chrome for Testing 149.0.7827.55 · synthetic data only.
