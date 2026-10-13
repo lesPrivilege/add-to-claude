@@ -78,13 +78,27 @@ The unsigned candidate `dist/gpt-handoff-chrome-transport-checked.app` built suc
 
 Real ChatGPT protocol compatibility, owner-profile setup, real client insertion/readback and attachment delivery remain open. The isolated native-host lookup basis is recorded in [research](research.md#isolated-chrome-native-host-fixture).
 
-## Real Accessibility fixture — implemented, runtime acceptance pending
+## Initial real Accessibility fixture — locked-desktop attempt
 
 `bash scripts/test-native-accessibility.sh` now builds production `ComposerAccess.swift` against an isolated AppKit fixture. The runner starts only its generated app bundle through Launch Services, uses private mode-0600 FIFOs under its temporary directory for fixture setup and independent draft readback, and derives AX handles only from that owned app's PID. It does not discover or mutate user apps, install a browser extension, change permissions, or send keyboard input. It contains no submit action or network code.
 
 Planned assertions exercise real AX append/readback, exact Unicode/Markdown and existing draft preservation, preservation of a draft edited while preparation is pending, same-title window isolation, oversized text rejection, changed focus/editor/title, read-only fields, source denial, cancellation, code-editor semantics and closed-window rejection. These assertions are **not passing evidence yet**. Initial direct-process launch lacked a Launch Services identity; the fixture now uses normal app launch. Subsequent selection attempts could not acquire foreground focus. CUA independently reported that the Mac was locked and automatic unlock failed.
 
 The latest run compiled successfully and exited **2 / NOT RUN** with an explicit desktop/focus prerequisite message; no production focus guard was relaxed. The owned fixture process exited and its temporary artifacts were removed. No Accessibility prompt was requested. After the owner unlocks the Mac, rerun this script while the desktop is available; without existing runner Accessibility access it also exits 2 instead of changing permissions. This is a synthetic-app check even when it passes: real client compatibility, rich-draft/attachment preservation, permission revocation and Chrome-launched helper identity still require separate acceptance.
+
+## Unlocked Accessibility acceptance and rich-draft repair — 2026-10-13
+
+After the owner confirmed unlock, CUA again listed native apps and the production-AX synthetic fixture passed its original **24 checks**. These cover actual AX insertion/readback and failure boundaries in the owned test app, not permission revocation or third-party clients.
+
+An added rich-draft scenario then failed: writing the complete combined string through `AXValue` erased the existing link, bold span and attachment object, while plain-text readback still reported success. Production now appends only the suffix through `AXSelectedText` at a verified zero-length tail range. Hosts without writable selected-text/range support are rejected; there is no whole-value replacement fallback. Range offsets use UTF-16, and the draft/focus/permit checks remain in place.
+
+Independent review identified two further defects in that change: checking the tail before later AX reads could allow a new user selection to be replaced; Swift canonical string equality could falsely certify normalized text. The range is now checked after focus/value reads immediately before mutation, and draft/readback equality compares exact UTF-16 units. Real fixture callbacks change the selection during the final value read and normalize text during the insertion setter. Temporary copies with the earlier range order or canonical equality each reproduced their expected regression failure; fixed repository source was retained.
+
+The final scoped run passed **34 real AX checks**, including independently read-back text bytes and rich objects, an updated draft with emoji/combining marks, untouched same-title windows, oversize/read-only/replaced/renamed/closed/code-editor rejection, source denial, cancellation, late-selection rejection and normalization uncertainty. Fixture processes and temporary data are cleaned up. No owner-profile Chrome installation or new permission grant occurred.
+
+The final unsigned `dist/gpt-handoff-ax-rich-checked.app` build passed, and its production helper passed the read-only origin/protocol probe. The probe’s Accessibility result applies to its CLI context only; no registration was changed and the candidate was not launched over the existing app. Independent reinspection reported no remaining concrete finding in this bounded change.
+
+Actual third-party composer rich state and attachment chips, Chrome-launched permission identity, AX revocation and primary file delivery remain open. AX reads/writes are separate operations; this narrows races but cannot guarantee an atomic insert against concurrent user editing.
 
 ## Previous worker's report
 

@@ -12,7 +12,7 @@ The reconstruction must satisfy **R1–R8 in [product-contract.md](product-contr
 - [x] Build candidate launcher/helper and verify real native framing/origin handshake; independent code/rendered-popup review.
 - [x] Exercise real Chrome-launched native messaging and selected-tab-close process exit in a disposable profile, with synthetic composer state.
 - [ ] Install in the owner's Chrome profile and verify actual popup/host permission flow.
-- [ ] Run `bash scripts/test-native-accessibility.sh` on an unlocked Mac with existing runner access; current run exits 2 before real AX assertions.
+- [x] Run `bash scripts/test-native-accessibility.sh` on the unlocked Mac: 34 real AX checks against owned synthetic windows, including rich-draft preservation and late selection/normalization failures. Actual client/permission checks remain separate.
 - [ ] Verify live selected synthetic-source capture and real native target insertion/readback, cancellation and failure modes.
 - [ ] Complete primary attachment-byte delivery and long-context target acceptance; Save Markdown alone does not close these gates.
 

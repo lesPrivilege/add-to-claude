@@ -1,11 +1,37 @@
 import AppKit
 
+final class FixtureTextView: NSTextView {
+    var armSelectionRace = false
+    var selectDuringValueRead = false
+    var selectionRaceTriggered = false
+    var normalizeInsertedText = false
+    override func setAccessibilitySelectedText(_ text: String?) {
+        super.setAccessibilitySelectedText(text)
+        if normalizeInsertedText { string = string.precomposedStringWithCanonicalMapping }
+    }
+    override func setAccessibilitySelectedTextRange(_ range: NSRange) {
+        super.setAccessibilitySelectedTextRange(range)
+        if armSelectionRace && range.length == 0 {
+            armSelectionRace = false
+            selectDuringValueRead = true
+        }
+    }
+    override func accessibilityValue() -> String? {
+        if selectDuringValueRead {
+            selectDuringValueRead = false
+            selectionRaceTriggered = true
+            super.setAccessibilitySelectedTextRange(NSRange(location: 0, length: 9))
+        }
+        return super.accessibilityValue()
+    }
+}
+
 // An isolated app controlled only through its private temporary FIFOs. No submit action or network code.
 final class AccessibilityFixture: NSObject, NSApplicationDelegate {
     var windows: [String: NSWindow] = [:]
-    var editors: [String: NSTextView] = [:]
+    var editors: [String: FixtureTextView] = [:]
     func editor(_ key: String) {
-        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 460, height: 240))
+        let view = FixtureTextView(frame: NSRect(x: 0, y: 0, width: 460, height: 240))
         view.isRichText = false
         view.setAccessibilityLabel("Synthetic composer " + key)
         view.string = "Synthetic draft " + key + "."
@@ -57,6 +83,15 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
         case "rename": window.title = "Changed synthetic window"
         case "close": window.close()
         case "draft": current.string = packet["text"] as? String ?? ""
+        case "selection-race": current.armSelectionRace = true
+        case "normalize-insertion": current.normalizeInsertedText = true
+        case "rich":
+            current.isRichText = true
+            current.textStorage?.addAttributes([.link: URL(string: "https://example.invalid/synthetic")!,
+                                               .font: NSFont.boldSystemFont(ofSize: 18)], range: NSRange(location: 0, length: 9))
+            let attachment = NSTextAttachment()
+            attachment.image = NSImage(size: NSSize(width: 12, height: 12))
+            current.textStorage?.append(NSAttributedString(attachment: attachment))
         case "code": current.setAccessibilityLabel("Source code editor")
         default: break
         }
@@ -65,7 +100,22 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
             window.makeFirstResponder(view)
             NSApp.activate(ignoringOtherApps: true)
         }
-        return ["ok": true, "drafts": editors.mapValues { $0.string }]
+        var drafts = editors.mapValues { $0.string }
+        for (key, view) in editors {
+            drafts["selectionRace" + key] = String(view.selectionRaceTriggered)
+            var details: [String] = []
+            if let storage = view.textStorage {
+                storage.enumerateAttributes(in: NSRange(location: 0, length: storage.length)) { attributes, range, _ in
+                    if let link = attributes[.link] { details.append("link:\(range):\(link)") }
+                    if attributes[.attachment] != nil { details.append("attachment:\(range)") }
+                    if let font = attributes[.font] as? NSFont, NSFontManager.shared.traits(of: font).contains(.boldFontMask) {
+                        details.append("bold:\(range)")
+                    }
+                }
+            }
+            drafts["rich" + key] = details.joined(separator: ";")
+        }
+        return ["ok": true, "drafts": drafts]
     }
 }
 

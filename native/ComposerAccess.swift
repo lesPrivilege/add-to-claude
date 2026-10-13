@@ -21,6 +21,25 @@ func axString(_ element: AXUIElement, _ name: String) -> String? {
     attribute(element, name) as? String
 }
 
+func sameTextUnits(_ actual: String?, _ expected: String) -> Bool {
+    guard let actual else { return false }
+    // Swift String equality accepts canonical normalization; AX offsets and exact receipts cannot.
+    return actual.utf16.elementsEqual(expected.utf16)
+}
+
+func axSettable(_ element: AXUIElement, _ name: String) -> Bool {
+    var settable: DarwinBoolean = false
+    return AXUIElementIsAttributeSettable(element, name as CFString, &settable) == .success && settable.boolValue
+}
+
+func selectedRange(_ element: AXUIElement) -> CFRange? {
+    guard let value = attribute(element, kAXSelectedTextRangeAttribute),
+          CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
+    var range = CFRange()
+    guard AXValueGetValue(value as! AXValue, .cfRange, &range) else { return nil }
+    return range
+}
+
 func same(_ lhs: AXUIElement?, _ rhs: AXUIElement) -> Bool {
     guard let lhs else { return false }
     return CFEqual(lhs, rhs)
@@ -88,8 +107,7 @@ func focusedComposer(_ choice: WindowChoice, requireFrontmost: Bool = true) -> A
           let field = axElement(app, kAXFocusedUIElementAttribute),
           same(axElement(field, kAXWindowAttribute), choice.window),
           axString(field, kAXRoleAttribute) == kAXTextAreaRole else { return nil }
-    var settable: DarwinBoolean = false
-    guard AXUIElementIsAttributeSettable(field, kAXValueAttribute as CFString, &settable) == .success, settable.boolValue else { return nil }
+    guard axSettable(field, kAXSelectedTextRangeAttribute), axSettable(field, kAXSelectedTextAttribute) else { return nil }
     let semantics = [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute, "AXIdentifier"].compactMap { axString(field, $0) }.joined(separator: " ").lowercased()
     // Fail closed for accessible names that explicitly identify a shell or code pane.
     guard !["terminal", "shell", "source editor", "code editor", "source code", "editor contents", "monaco"].contains(where: { semantics.contains($0) }) else { return nil }
@@ -113,13 +131,28 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             DispatchQueue.main.async {
                 guard valid, operationValid() else { completion("The source changed. Nothing was added.", false); return }
                 guard let current = focusedComposer(selected.choice), CFEqual(current, selected.editor),
-                      let old = axString(current, kAXValueAttribute), old.utf8.count + text.utf8.count + 2 <= maximumTextBytes else {
+                      let old = axString(current, kAXValueAttribute) else {
                     completion("The composer is no longer ready. Nothing was added; choose it again.", false); return
                 }
-                let combined = old.isEmpty ? text : old + "\n\n" + text
+                let suffix = old.isEmpty ? text : "\n\n" + text
+                guard old.utf8.count + suffix.utf8.count <= maximumTextBytes else {
+                    completion("The combined draft exceeds the native text limit. Use a context file.", false); return
+                }
+                let combined = old + suffix
+                // Never replace AXValue: doing so discards existing rich spans and attachment objects.
+                // AX text ranges use UTF-16 offsets, not Swift Character or UTF-8 counts.
+                var end = CFRange(location: old.utf16.count, length: 0)
                 guard operationValid() else { completion("The handoff expired or changed. Nothing was added.", false); return }
-                let result = AXUIElementSetAttributeValue(current, kAXValueAttribute as CFString, combined as CFString)
-                guard result == .success, axString(current, kAXValueAttribute) == combined else {
+                guard let position = AXValueCreate(.cfRange, &end),
+                      AXUIElementSetAttributeValue(current, kAXSelectedTextRangeAttribute as CFString, position) == .success,
+                      let focused = focusedComposer(selected.choice), CFEqual(focused, current),
+                      sameTextUnits(axString(current, kAXValueAttribute), old),
+                      let range = selectedRange(current), range.location == end.location, range.length == 0,
+                      operationValid() else {
+                    completion("The insertion point or draft changed. Nothing was added; choose the composer again.", false); return
+                }
+                let result = AXUIElementSetAttributeValue(current, kAXSelectedTextAttribute as CFString, suffix as CFString)
+                guard result == .success, sameTextUnits(axString(current, kAXValueAttribute), combined) else {
                     completion("Insertion could not be verified. Inspect the draft before retrying.", false); return
                 }
                 completion("Added and verified. Review the target draft; nothing was sent.", true)

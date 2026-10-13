@@ -1,5 +1,11 @@
 # Independent review
 
+## AX append and rich-draft review — 2026-10-13
+
+The implementation run reproduced rich link/bold/attachment loss from full AXValue replacement. The replacement uses AXSelectedText at a zero-length UTF-16 tail, retaining editor/window/source checks and refusing hosts without append support. The independent reviewer found a widened selection race when the range was checked before later AX reads; the final range read is now after focus and draft checks. A real fixture changes selection during the final value read and verifies no text or rich-object loss.
+
+The reviewer also found canonical Swift String equality incompatible with exact AX offsets/readback. Both comparisons now compare UTF-16 units; fixture assertions compare UTF-8 bytes independently, and an actual setter-normalization scenario must receive an uncertain-insertion result. Temporary copies with the earlier range ordering and canonical equality each failed their intended regression. The production source was left fixed. The owner-run suite passes 34 real AX checks; the reviewer inspected code and a pure Swift equality example, without operating apps. After reinspection, the reviewer reported no remaining concrete finding in this bounded change. Generic AX still lacks an atomic compare-and-insert transaction; the exercised rich fixture is not certification of every third-party composer.
+
 ## Synthetic-app Accessibility harness review — 2026-10-13
 
 The independent reviewer inspected the new AX harness, its exact generated app launch, private temporary FIFOs, PID-scoped handles and bounded owned-app cleanup. A concrete test-only race was found: concurrent FIFO readers could split a framed response when a delayed fixture mutation overlapped the next snapshot. The harness now serializes each complete write/read exchange and awaits the mutation before source validation and before returning from the append check. Final Swift typechecking passes. The reviewer reinspected that fix and reported no remaining concrete finding. The review did not run or operate the fixture.

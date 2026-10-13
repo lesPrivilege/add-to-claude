@@ -40,6 +40,10 @@ import ApplicationServices
         checks += 1
     }
     func pause() async { try? await Task.sleep(nanoseconds: 150_000_000) }
+    func exact(_ actual: String?, _ expected: String) -> Bool {
+        guard let actual else { return false }
+        return Array(actual.utf8) == Array(expected.utf8)
+    }
     func command(_ name: String, window: String = "A", focus: Bool = false, text: String = "") async -> [String: String] {
         await withCheckedContinuation { continuation in
             let input = self.input!, output = self.output!
@@ -120,13 +124,36 @@ import ApplicationServices
         var result = await append(selected)
         var drafts = await command("snapshot")
         check(result.1, "real AX insertion and exact readback")
-        check(drafts["A"] == "Synthetic draft A.\n\nOriginal **Markdown** 中文 ✓\n", "fixture independently confirms preserved draft and exact Unicode Markdown")
+        check(exact(drafts["A"], "Synthetic draft A.\n\nOriginal **Markdown** 中文 ✓\n"), "fixture independently confirms preserved draft and exact Unicode Markdown")
         check(drafts["B"] == "Synthetic draft B.", "same-title other window unchanged")
 
         selected = await select()
-        result = await append(selected, during: { _ = await self.command("draft", text: "Updated synthetic draft ✓.") })
+        let rich = await command("rich", focus: true)
+        check(rich["richA"]?.contains("attachment:") == true && rich["richA"]?.contains("link:") == true, "rich fixture contains real attachment and link")
+        result = await append(selected)
         drafts = await command("snapshot")
-        check(result.1 && drafts["A"] == "Updated synthetic draft ✓.\n\nOriginal **Markdown** 中文 ✓\n", "draft changed during preparation is preserved at write time")
+        check(result.1 && exact(drafts["A"], rich["A"]! + "\n\nOriginal **Markdown** 中文 ✓\n"), "rich draft text is appended exactly")
+        check(drafts["richA"] == rich["richA"], "existing attachment, link and bold span survive append")
+
+        selected = await select()
+        let racedRich = await command("rich", focus: true)
+        _ = await command("selection-race")
+        result = await append(selected)
+        drafts = await command("snapshot")
+        check(drafts["selectionRaceA"] == "true", "selection changes during final AXValue read")
+        check(!result.1 && drafts["A"] == racedRich["A"] && drafts["richA"] == racedRich["richA"], "late selected text is never replaced; rich draft unchanged")
+
+        selected = await select()
+        result = await append(selected, during: { _ = await self.command("draft", text: "Updated synthetic draft 🧪 e\u{301}.") })
+        drafts = await command("snapshot")
+        check(result.1 && exact(drafts["A"], "Updated synthetic draft 🧪 e\u{301}.\n\nOriginal **Markdown** 中文 ✓\n"), "latest draft and UTF-16 insertion offset preserve emoji and combining marks")
+
+        selected = await select()
+        _ = await command("normalize-insertion")
+        result = await append(selected, text: "e\u{301}")
+        drafts = await command("snapshot")
+        check(exact(drafts["A"], "Synthetic draft A.\n\né"), "fixture normalizes inserted text")
+        check(!result.1 && result.0.contains("Inspect the draft"), "normalization cannot receive an exact insertion receipt")
 
         selected = await select()
         result = await append(selected, text: String(repeating: "x", count: maximumTextBytes + 1))
