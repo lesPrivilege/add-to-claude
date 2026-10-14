@@ -173,15 +173,27 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             let after = axString(current, kAXValueAttribute)
             let range = selectedRange(current)
             appendLog.info("append check: old=\(old.utf16.count) blank=\(blank) setRange=\(setRange?.rawValue ?? -1) focused=\(stillFocused) valueAfter=\(after?.utf16.count ?? -1) unchanged=\(sameTextUnits(after, old)) range=\(range?.location ?? -1),\(range?.length ?? -1) wanted=\(end.location),\(end.length)")
-            guard setRange == .success, stillFocused, sameTextUnits(after, old),
-                  let range, range.location == end.location, range.length == end.length,
+            // Rich editors (ProseMirror in Claude, for one) end the draft with a paragraph marker the caret
+            // cannot pass. Inserting just before that final newline is the same end-of-draft position.
+            let units = Array(old.utf16)
+            let beforeFinalBreak = units.last == 10 && range.map { $0.location == units.count - 1 && $0.length == 0 } == true
+            guard setRange == .success, stillFocused, sameTextUnits(after, old), let range,
+                  (range.location == end.location && range.length == end.length) || beforeFinalBreak,
                   operationValid() else {
                 completion("The insertion point or draft changed. Nothing was added; choose the composer again.", false); return
             }
+            let head = String(utf16CodeUnits: Array(units[..<range.location]), count: range.location)
+            let tail = String(utf16CodeUnits: Array(units[(range.location + range.length)...]), count: units.count - range.location - range.length)
+            let expected = beforeFinalBreak ? (blank ? text : head + suffix) + tail : combined
             let result = AXUIElementSetAttributeValue(current, kAXSelectedTextAttribute as CFString, suffix as CFString)
             let written = axString(current, kAXValueAttribute)
-            appendLog.info("append write: result=\(result.rawValue) expected=\(combined.utf16.count) got=\(written?.utf16.count ?? -1) exact=\(sameTextUnits(written, combined))")
-            guard result == .success, sameTextUnits(written, combined) else {
+            let mismatch = written.map { Array($0.utf16) }.flatMap { got -> Int? in
+                let want = Array(expected.utf16)
+                return zip(got, want).enumerated().first { $0.element.0 != $0.element.1 }?.offset
+                    ?? (got.count == want.count ? nil : min(got.count, want.count))
+            }
+            appendLog.info("append write: result=\(result.rawValue) expected=\(expected.utf16.count) got=\(written?.utf16.count ?? -1) firstDifference=\(mismatch ?? -1) rich=\(beforeFinalBreak)")
+            guard result == .success, sameTextUnits(written, expected) else {
                 completion("Text may have been added but did not read back exactly. Check the draft before retrying.", false); return
             }
             completion("Added. Review the draft there; nothing was sent.", true)

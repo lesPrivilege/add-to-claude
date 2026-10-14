@@ -197,3 +197,36 @@ test('a paged load that has earlier pages unloaded is partial and says how to lo
     }),
   );
 });
+
+test('reasoning and memory entries are hidden, not reported as unsupported turns', () => {
+  const message = (id, role, content_type, parts) => ({
+    id,
+    author: { role },
+    status: 'finished_successfully',
+    end_turn: role === 'assistant' && content_type === 'text' ? true : undefined,
+    content: { content_type, parts },
+  });
+  const body = JSON.stringify({
+    conversation_id: 'reasoned',
+    title: 'Reasoned',
+    current_node: 'a',
+    page_info: { has_previous_page: false },
+    messages: [
+      message('u', 'user', 'text', ['Question']),
+      message('t', 'assistant', 'thoughts', []),
+      message('r', 'assistant', 'reasoning_recap', []),
+      message('m', 'assistant', 'model_editable_context', []),
+      message('a', 'assistant', 'text', ['Answer']),
+    ],
+  });
+  const model = importBrowserResponse(body, {
+    pageUrl: 'https://chatgpt.com/c/reasoned',
+    responseUrl: 'https://chatgpt.com/backend-api/conversations/reasoned?num_turns=40',
+    capturedAt: new Date().toISOString(),
+  });
+  assert.deepEqual(
+    model.turns.map((turn) => turn.markdown),
+    ['Question', 'Answer'],
+  );
+  assert.equal(model.verification.status, 'verified');
+});

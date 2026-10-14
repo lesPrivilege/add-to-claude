@@ -483,6 +483,14 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
               return `{${keys.length} ids → ${describe(value[keys[0]], depth + 1)}}`;
             return `{${keys.map((key) => `${key}:${describe(value[key], depth + 1)}`).join(',')}}`;
           };
+          try {
+            const counts = {};
+            for (const message of JSON.parse(text).messages ?? []) {
+              const key = `${message.author?.role}:${message.content?.content_type}:${message.recipient === 'all' || !message.recipient ? 'all' : 'tool'}:${message.channel ?? '-'}:${message.metadata?.is_visually_hidden_from_conversation ? 'hidden' : 'shown'}`;
+              counts[key] = (counts[key] ?? 0) + 1;
+            }
+            trace(`TYPES ${JSON.stringify(counts)}`, shape);
+          } catch {}
           let skeleton;
           try {
             skeleton = describe(JSON.parse(text));
