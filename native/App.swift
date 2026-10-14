@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item.button?.target = self
         item.button?.action = #selector(click)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        DispatchQueue.main.async { self.show() }
+        showWhenPlaced(attempts: 40)
     }
 
     @objc private func click() {
@@ -59,15 +59,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.isVisible ? hide() : show()
     }
 
+    /// At launch the menu bar has not placed the icon yet; wait for it (up to 2 s) so the panel opens under it.
+    private func showWhenPlaced(attempts: Int) {
+        if iconAnchor() != nil || attempts == 0 { return show() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.showWhenPlaced(attempts: attempts - 1) }
+    }
+
+    private func iconAnchor() -> NSPoint? {
+        guard let button = item.button, let window = button.window,
+              let screen = (window.screen ?? NSScreen.main)?.visibleFrame else { return nil }
+        let frame = window.convertToScreen(button.convert(button.bounds, to: nil))
+        // Before layout the icon's window sits at the origin; trust it only inside the menu bar.
+        return frame.minY >= screen.maxY - 4 ? NSPoint(x: frame.midX, y: screen.maxY) : nil
+    }
+
     private func show() {
         // Under the icon once it is on screen; at launch, before the menu bar lays it out, top centre.
         let screen = (item.button?.window?.screen ?? NSScreen.main ?? NSScreen.screens[0]).visibleFrame
-        var anchor = NSPoint(x: screen.midX, y: screen.maxY)
-        if let button = item.button, let window = button.window {
-            let frame = window.convertToScreen(button.convert(button.bounds, to: nil))
-            // Before layout the icon's window sits at the origin; trust it only inside the menu bar.
-            if frame.minY >= screen.maxY - 4 { anchor = NSPoint(x: frame.midX, y: screen.maxY) }
-        }
+        let anchor = iconAnchor() ?? NSPoint(x: screen.midX, y: screen.maxY)
         // Keep the handoff bar on screen when a size saved on a taller display is restored here.
         let height = min(panel.frame.height, anchor.y - 4 - screen.minY - 4)
         if height < panel.frame.height { panel.setFrame(NSRect(x: 0, y: 0, width: panel.frame.width, height: height), display: false) }

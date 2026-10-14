@@ -91,20 +91,24 @@ func validWindow(_ choice: WindowChoice) -> Bool {
     return (axString(choice.window, kAXTitleAttribute) ?? "Untitled window") == choice.title
 }
 
-/// The one text area in a window that reports keyboard focus. Bounded walk of the window's tree.
-func focusedTextArea(in window: AXUIElement) -> AXUIElement? {
-    var queue: [(AXUIElement, Int)] = [(window, 0)], visited = 0, found: [AXUIElement] = []
+/// The window's message box when the app reports no focused element: the text area marked focused,
+/// or else the only writable text area in the window. Ambiguity returns nil. Bounded walk.
+func windowTextArea(in window: AXUIElement) -> AXUIElement? {
+    var queue: [(AXUIElement, Int)] = [(window, 0)], visited = 0
+    var focused: [AXUIElement] = [], writable: [AXUIElement] = []
     while !queue.isEmpty && visited < 4000 {
         let (element, depth) = queue.removeFirst()
         visited += 1
-        if axString(element, kAXRoleAttribute) == kAXTextAreaRole, attribute(element, kAXFocusedAttribute) as? Bool == true {
-            found.append(element)
+        if axString(element, kAXRoleAttribute) == kAXTextAreaRole, axSettable(element, kAXSelectedTextAttribute) {
+            writable.append(element)
+            if attribute(element, kAXFocusedAttribute) as? Bool == true { focused.append(element) }
         }
         if depth < 60, let children = attribute(element, kAXChildrenAttribute) as? [AXUIElement] {
             queue.append(contentsOf: children.map { ($0, depth + 1) })
         }
     }
-    return found.count == 1 ? found[0] : nil
+    if focused.count == 1 { return focused[0] }
+    return focused.isEmpty && writable.count == 1 ? writable[0] : nil
 }
 
 /// The text area that has focus inside the chosen window, read without activating its app.
@@ -117,9 +121,9 @@ func inspectComposer(_ choice: WindowChoice) -> (field: AXUIElement?, problem: S
     let app = AXUIElementCreateApplication(choice.app.processIdentifier)
     guard same(axElement(app, kAXFocusedWindowAttribute), choice.window) else { return (nil, "another window of that app has focus") }
     // Electron apps (Claude, for one) report no focused element for the app while in the background,
-    // although the text area itself still says it has focus; look for it inside the window.
-    guard let field = axElement(app, kAXFocusedUIElementAttribute) ?? focusedTextArea(in: choice.window) else {
-        return (nil, "nothing in it has focus")
+    // and drop the text area's own focus mark once another app is used; look inside the chosen window.
+    guard let field = axElement(app, kAXFocusedUIElementAttribute) ?? windowTextArea(in: choice.window) else {
+        return (nil, "it has no single writable message box")
     }
     guard same(axElement(field, kAXWindowAttribute), choice.window) else { return (nil, "the focused element is in another window") }
     let role = axString(field, kAXRoleAttribute) ?? "no role"

@@ -430,3 +430,59 @@ test('the paged conversation load (live site, 2026-10) becomes a classic tree be
   );
   assert.equal(model.verification.status, 'verified');
 });
+
+test('pages loaded while scrolling up are merged into one complete conversation', async () => {
+  const h = harness();
+  const url = 'https://chatgpt.com/backend-api/conversations/a?num_turns=2';
+  const message = (id, role, text, time) => ({
+    id,
+    author: { role },
+    create_time: time,
+    status: 'finished_successfully',
+    end_turn: role === 'assistant' ? true : undefined,
+    content: { content_type: 'text', parts: [text] },
+  });
+  const latest = h.fetch(url);
+  h.reply(
+    0,
+    JSON.stringify({
+      conversation_id: 'a',
+      title: 'Long',
+      current_node: 'a2',
+      page_info: { has_previous_page: true, has_next_page: false },
+      messages: [
+        message('u2', 'user', 'Second question', 3),
+        message('a2', 'assistant', 'Second answer', 4),
+      ],
+    }),
+  );
+  await latest;
+  await tick();
+  await tick();
+  const first = h.messages.findLast((value) => value.kind === 'response');
+  assert.equal(importBrowserResponse(first.body, first).verification.status, 'partial');
+  const earlier = h.fetch(`${url}&cursor=older`);
+  h.reply(
+    1,
+    JSON.stringify({
+      conversation_id: 'a',
+      title: 'Long',
+      current_node: 'a1',
+      page_info: { has_previous_page: false, has_next_page: true },
+      messages: [
+        message('u1', 'user', 'First question', 1),
+        message('a1', 'assistant', 'First answer', 2),
+      ],
+    }),
+  );
+  await earlier;
+  await tick();
+  await tick();
+  const merged = h.messages.findLast((value) => value.kind === 'response');
+  const model = importBrowserResponse(merged.body, merged);
+  assert.deepEqual(
+    model.turns.map((turn) => turn.markdown),
+    ['First question', 'First answer', 'Second question', 'Second answer'],
+  );
+  assert.equal(model.verification.status, 'verified');
+});

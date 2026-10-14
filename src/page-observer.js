@@ -25,6 +25,26 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     snapshot = null;
   let lastLocation = location.href;
   const readers = new Set();
+  // The live site loads a long conversation a page at a time as the user scrolls up. Keep every page
+  // this document has loaded for one conversation, so scrolling to the top completes it.
+  let pages = { id: null, messages: new Map(), complete: false, tail: null };
+  const mergePage = (value) => {
+    if (!value || typeof value !== 'object' || !Array.isArray(value.messages)) return value;
+    const id = value.conversation_id ?? value.id;
+    if (pages.id !== id) pages = { id, messages: new Map(), complete: false, tail: null };
+    for (const message of value.messages)
+      if (message && typeof message.id === 'string') pages.messages.set(message.id, message);
+    if (value.page_info?.has_previous_page === false) pages.complete = true;
+    if (!pages.tail || value.page_info?.has_next_page !== true) pages.tail = value;
+    const messages = [...pages.messages.values()].sort(
+      (a, b) => (a.create_time ?? 0) - (b.create_time ?? 0),
+    );
+    return {
+      ...pages.tail,
+      messages,
+      page_info: { ...pages.tail.page_info, has_previous_page: !pages.complete },
+    };
+  };
   const encoder = new TextEncoder();
   const surface = () => {
     const url = new URL(location.href);
@@ -555,7 +575,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
           if (surface()?.id !== selected.id || sequence !== getSequence || associatedJob?.finished)
             return;
           try {
-            const conversation = toMappingConversation(JSON.parse(body));
+            const conversation = toMappingConversation(mergePage(JSON.parse(body)));
             body = JSON.stringify(conversation);
             if (
               (conversation.conversation_id ?? conversation.id) === selected.id &&
