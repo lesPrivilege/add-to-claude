@@ -550,49 +550,51 @@ function projectCode(code) {
 }
 
 /** Plain-text Markdown projection. Turn Markdown is preserved verbatim; render only through textContent/textarea, never as trusted HTML. */
+/**
+ * The hand-off text: each turn as `## Turn N — Role` with its original Markdown untouched, then that
+ * turn's references and files. Locators stay in HTML comments so they are kept but not rendered.
+ */
 export function projectMarkdown(input) {
   const model = validateConversation(input);
+  const comment = (text) => `<!-- ${headingText(text).replaceAll('--', '- -')} -->`;
+  const fileLine = (file) =>
+    `- ${labelText(file.name)} — ${file.status}${file.url ? ` · <${file.url}>` : ''}`;
+  const source = model.source.url ? `<${model.source.url}>` : headingText(model.source.locator);
   const lines = [
     `# ${headingText(model.source.title)}`,
     '',
-    model.source.url
-      ? `Source: <${model.source.url}>`
-      : `Source: ${headingText(model.source.locator)}`,
-    `Verification: ${model.verification.status}. Selected branch: ${headingText(model.branches.selectedLeaf)}.`,
+    `Source: ${source} · ${model.turns.length} turns · verification: ${model.verification.status}`,
+    comment(`selected branch: ${model.branches.selectedLeaf}`),
   ];
   if (model.branches.availableLeaves.length > 1)
     lines.push(
-      `Branch variants: ${model.branches.availableLeaves.length}. This projection contains the selected path only.`,
+      `Selected branch only; ${model.branches.availableLeaves.length} branch variants exist.`,
     );
   if (model.verification.issues.length) {
     lines.push('', '## Content checks', '');
     for (const issue of model.verification.issues) lines.push(`- ${headingText(issue.message)}`);
   }
+  const files = new Map(model.turns.map((turn) => [turn.id, []]));
+  const loose = [];
+  for (const file of model.attachments) (files.get(file.turnId) ?? loose).push(file);
   for (const [index, turn] of model.turns.entries()) {
     lines.push(
       '',
-      `## ${index + 1}. ${turn.role === 'user' ? 'User' : 'Assistant'}`,
-      '',
-      `Source locator: ${headingText(turn.sourceLocator)}`,
-      `Content: ${turn.contentFidelity}`,
-      '',
-      turn.code ? projectCode(turn.code) : turn.markdown,
+      `## Turn ${index + 1} — ${turn.role === 'user' ? 'User' : 'Assistant'}`,
+      comment(`source: ${turn.sourceLocator}`),
     );
+    if (turn.contentFidelity !== 'original-markdown')
+      lines.push(`_Content: ${headingText(turn.contentFidelity)}_`);
+    lines.push('', turn.code ? projectCode(turn.code) : turn.markdown);
     if (turn.citations.length) {
-      lines.push('', 'Sources:');
+      lines.push('', '### References', '');
       for (const citation of turn.citations)
         lines.push(`- [${labelText(citation.title)}](<${citation.url}>)`);
     }
+    if (files.get(turn.id).length)
+      lines.push('', '### Files', '', ...files.get(turn.id).map(fileLine));
   }
-  if (model.attachments.length) {
-    lines.push('', '## Attachments', '');
-    for (const attachment of model.attachments) {
-      lines.push(
-        `- ${labelText(attachment.name)} — ${attachment.status}${attachment.url ? ` · <${attachment.url}>` : ''}`,
-      );
-      lines.push(`  Source locator: ${headingText(attachment.sourceLocator)}`);
-    }
-  }
+  if (loose.length) lines.push('', '## Files', '', ...loose.map(fileLine));
   return `${lines.join('\n')}\n`;
 }
 

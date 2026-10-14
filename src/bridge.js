@@ -15,6 +15,13 @@ if (handler && window === top) {
       return;
     removeEventListener('message', adopt);
     event.ports[0].onmessage = ({ data: packet }) => {
+      if (packet?.kind === 'trace')
+        return handler.postMessage({
+          kind: 'trace',
+          page: String(packet.pageUrl),
+          method: String(packet.method),
+          path: String(packet.path),
+        });
       if (packet?.kind === 'changed' || packet?.kind === 'unavailable')
         return handler.postMessage({ kind: packet.kind, page: String(packet.pageUrl) });
       if (packet?.kind !== 'response') return;

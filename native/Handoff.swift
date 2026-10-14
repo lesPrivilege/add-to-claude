@@ -95,6 +95,11 @@ final class HandoffBar: NSViewController {
             row.widthAnchor.constraint(equalTo: column.widthAnchor, constant: -24).isActive = true
         }
         view = column
+        // The system announces Accessibility list changes; pick up a new grant without a restart.
+        DistributedNotificationCenter.default().addObserver(forName: NSNotification.Name("com.apple.accessibility.api"),
+                                                            object: nil, queue: .main) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self?.findWindows() }
+        }
         render()
     }
 
@@ -201,15 +206,16 @@ final class HandoffBar: NSViewController {
 
     @objc private func choose() {
         guard let id = picker.selectedItem?.representedObject as? String else { return }
-        composer = registry.composer(id)
-        if composer == nil { say("Click into that window's message box once, then choose it again.", glyph: "error") }
+        let (chosen, problem) = registry.composer(id)
+        composer = chosen
+        if chosen == nil { say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error") }
         else { say("") }
         render()
     }
 
     @objc private func allowAccess() {
         _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-        say("Turn on gpt-handoff in System Settings → Privacy & Security → Accessibility, then reopen this panel.")
+        say("Turn on gpt-handoff in System Settings → Privacy & Security → Accessibility. This bar updates by itself.")
     }
 
     // MARK: context

@@ -1,5 +1,9 @@
 import AppKit
+import OSLog
 import WebKit
+
+// TEMPORARY diagnostic: request shapes from the live page (ids redacted) go to the local system log.
+private let traceLog = Logger(subsystem: "io.lesprivilege.gpt-handoff", category: "trace")
 
 private let chatHosts: Set<String> = ["chatgpt.com", "chat.openai.com"]
 /// Hosts that sign-in may pass through. Anything else a link opens goes to the default browser.
@@ -114,6 +118,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                                     verification: body["verification"] as? String ?? "",
                                     issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) })
             set(prepared, .ready(prepared))
+        case "trace": traceLog.info("\(body["method"] as? String ?? "", privacy: .public) \(body["path"] as? String ?? "", privacy: .public)")
         case "changed": set(nil, .waiting)
         case "invalid": set(nil, .unavailable(safeLabel(body["message"] as? String ?? "", limit: 160)))
         case "unavailable": set(nil, .unavailable("This page did not expose its original messages."))

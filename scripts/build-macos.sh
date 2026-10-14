@@ -20,5 +20,13 @@ xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos14
   "$native/Main.swift" "$native/App.swift" "$native/Chat.swift" "$native/Handoff.swift" \
   "$native/Views.swift" "$native/Composer.swift" -o "$bundle/Contents/MacOS/gpt-handoff"
 plutil -lint "$bundle/Contents/Info.plist" >/dev/null
+# A stable local identity keeps the Accessibility grant across rebuilds; ad-hoc builds lose it each time.
+identity="${GPT_HANDOFF_SIGNING_IDENTITY:-gpt-handoff Local}"
+if security find-identity -p codesigning 2>/dev/null | grep -q "\"$identity\""; then
+  codesign --force --sign "$identity" --identifier io.lesprivilege.gpt-handoff "$bundle"
+  signed="signed with \"$identity\""
+else
+  signed="ad-hoc signed; Accessibility must be granted again after each rebuild"
+fi
 mv "$bundle" "$output"
-echo "Built $output (unsigned)."
+echo "Built $output ($signed)."

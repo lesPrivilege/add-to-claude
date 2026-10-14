@@ -318,7 +318,7 @@ test('structured code fences contain literal HTML and internal fence runs withou
   assert.equal(validated.verification.status, 'partial');
   assert.ok(
     projectMarkdown(validated).includes(
-      '`````html\n```\n<script>literal code</script>\n````\n`````\n\n## 2. Assistant',
+      '`````html\n```\n<script>literal code</script>\n````\n`````\n\n## Turn 2 — Assistant',
     ),
   );
   assert.throws(
@@ -723,8 +723,8 @@ test('plaintext projection preserves raw HTML and fenced code verbatim', () => {
   assert.ok(projection.includes('<script>alert(1)</script>'));
   assert.ok(projection.includes('```html\n<button>Example</button>\n```'));
   assert.ok(projection.includes('Inline `<em>literal</em>`.'));
-  assert.ok(projection.includes('Source locator: synthetic:demo/1'));
-  assert.ok(projection.includes('Verification: verified'));
+  assert.ok(projection.includes('<!-- source: synthetic:demo/1 -->'));
+  assert.ok(projection.includes('verification: verified'));
 });
 
 test('plaintext projection preserves unfinished source fences without inventing source content', () => {
@@ -732,7 +732,7 @@ test('plaintext projection preserves unfinished source fences without inventing 
   model.turns[0].markdown = '`unfinished <img src=x onerror=alert(1)>\n\n```js\nconst x = 1;';
   const projection = projectMarkdown(model);
   assert.ok(projection.includes(model.turns[0].markdown));
-  assert.ok(projection.includes('const x = 1;\n\n## 2. Assistant'));
+  assert.ok(projection.includes('const x = 1;\n\n## Turn 2 — Assistant'));
 });
 
 test('escaped inline markers and invalid fence info survive plaintext projection', () => {
@@ -753,4 +753,17 @@ test('Markdown link destinations, autolinks, blockquotes and literal entities re
   assert.ok(!output.includes(']( &lt;'));
   assert.ok(!output.includes('](&lt;'));
   assert.ok(!output.includes('&gt; A quotation'));
+});
+
+test('hand-off format: turns in order, original Markdown untouched, references and files under their turn', () => {
+  const model = demoConversation();
+  const projection = projectMarkdown(model);
+  const headings = [...projection.matchAll(/^## Turn (\d+) — (User|Assistant)$/gmu)];
+  assert.deepEqual(
+    headings.map((match) => [Number(match[1]), match[2]]),
+    model.turns.map((turn, index) => [index + 1, turn.role === 'user' ? 'User' : 'Assistant']),
+  );
+  for (const turn of model.turns)
+    if (!turn.code) assert.ok(projection.includes(`\n\n${turn.markdown}`));
+  assert.ok(!projection.includes('Source locator:'));
 });

@@ -91,18 +91,27 @@ func validWindow(_ choice: WindowChoice) -> Bool {
 }
 
 /// The text area that has focus inside the chosen window, read without activating its app.
-func focusedComposer(_ choice: WindowChoice) -> AXUIElement? {
-    guard AXIsProcessTrusted(), validWindow(choice) else { return nil }
+func focusedComposer(_ choice: WindowChoice) -> AXUIElement? { inspectComposer(choice).field }
+
+/// The focused text area, or why there is none, in words the bar can show.
+func inspectComposer(_ choice: WindowChoice) -> (field: AXUIElement?, problem: String) {
+    guard AXIsProcessTrusted() else { return (nil, "Accessibility is off") }
+    guard validWindow(choice) else { return (nil, "the window closed or changed") }
     let app = AXUIElementCreateApplication(choice.app.processIdentifier)
-    guard same(axElement(app, kAXFocusedWindowAttribute), choice.window),
-          let field = axElement(app, kAXFocusedUIElementAttribute),
-          same(axElement(field, kAXWindowAttribute), choice.window),
-          axString(field, kAXRoleAttribute) == kAXTextAreaRole else { return nil }
-    guard axSettable(field, kAXSelectedTextRangeAttribute), axSettable(field, kAXSelectedTextAttribute) else { return nil }
+    guard same(axElement(app, kAXFocusedWindowAttribute), choice.window) else { return (nil, "another window of that app has focus") }
+    guard let field = axElement(app, kAXFocusedUIElementAttribute) else { return (nil, "nothing in it has focus") }
+    guard same(axElement(field, kAXWindowAttribute), choice.window) else { return (nil, "the focused element is in another window") }
+    let role = axString(field, kAXRoleAttribute) ?? "no role"
+    guard role == kAXTextAreaRole else { return (nil, "the focused element is \(role), not a text area") }
+    guard axSettable(field, kAXSelectedTextRangeAttribute), axSettable(field, kAXSelectedTextAttribute) else {
+        return (nil, "its text area does not accept inserted text")
+    }
     let semantics = [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute, "AXIdentifier"].compactMap { axString(field, $0) }.joined(separator: " ").lowercased()
     // Fail closed for accessible names that explicitly identify a shell or code pane.
-    guard !["terminal", "shell", "source editor", "code editor", "source code", "editor contents", "monaco"].contains(where: { semantics.contains($0) }) else { return nil }
-    return field
+    guard !["terminal", "shell", "source editor", "code editor", "source code", "editor contents", "monaco"].contains(where: { semantics.contains($0) }) else {
+        return (nil, "it looks like a terminal or code editor")
+    }
+    return (field, "")
 }
 
 
@@ -178,6 +187,8 @@ final class ComposerRegistry {
         var found: [(String, WindowChoice)] = []
         for app in apps.prefix(80) {
             let axApp = AXUIElementCreateApplication(app.processIdentifier)
+            // Electron and Chromium apps expose their web text fields only when a client asks for it.
+            AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
             guard let windows = attribute(axApp, kAXWindowsAttribute) as? [AXUIElement] else { continue }
             for window in windows.prefix(30) where found.count < 128 {
                 if let choice = WindowChoice(app: app, window: window) { found.append((UUID().uuidString, choice)) }
@@ -203,9 +214,10 @@ final class ComposerRegistry {
         choices.first { $0.value.app.processIdentifier == composer.choice.app.processIdentifier && CFEqual($0.value.window, composer.choice.window) }?.key
     }
 
-    /// The window's focused text area, or nil when the user has not focused a writable composer there.
-    func composer(_ id: String) -> Composer? {
-        guard let choice = choices[id], let editor = focusedComposer(choice) else { return nil }
-        return Composer(choice: choice, editor: editor)
+    /// The window's focused text area, or why it cannot be used.
+    func composer(_ id: String) -> (composer: Composer?, problem: String) {
+        guard let choice = choices[id] else { return (nil, "the window list changed") }
+        let (field, problem) = inspectComposer(choice)
+        return (field.map { Composer(choice: choice, editor: $0) }, problem)
     }
 }

@@ -52,6 +52,23 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       port.postMessage(value);
     } catch {}
   };
+  // TEMPORARY diagnostic: request shapes only, ids redacted, to learn how the live page loads chats.
+  const trace = (method, url) =>
+    post({
+      kind: 'trace',
+      pageUrl: location.origin + location.pathname,
+      method,
+      path:
+        url.origin +
+        url.pathname.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}|[A-Za-z0-9_-]{20,}/giu, ':id') +
+        (url.search ? '?…' : ''),
+    });
+  addEventListener('DOMContentLoaded', () =>
+    trace(
+      `DOM mapping-in-html=${/"mapping"/u.test(document.documentElement.innerHTML)}`,
+      new URL(location.href),
+    ),
+  );
   const invalidate = (keepBase = false) => {
     generation++;
     for (const reader of readers) void reader.cancel().catch(() => {});
@@ -261,6 +278,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
         const socket = Reflect.construct(target, args, newTarget);
         try {
           const url = new URL(socket.url);
+          trace('WS', url);
           if (
             url.origin !== 'wss://ws.chatgpt.com' ||
             !/^\/p4\/ws\/user\/[^/]+$/u.test(url.pathname)
@@ -418,6 +436,8 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       );
       selected = surface();
       method = String(args[1]?.method ?? args[0]?.method ?? 'GET').toUpperCase();
+      if (requested.pathname.includes('/backend-api/') || requested.pathname.includes('conversation'))
+        trace(method, requested);
       if (
         selected &&
         method === 'POST' &&
