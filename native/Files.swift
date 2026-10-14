@@ -2,6 +2,9 @@ import AppKit
 import CryptoKit
 import WebKit
 
+/// Dialogs open above the floating chat panel instead of behind it.
+let aboveChatPanel = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
+
 /// Where downloaded conversation files go: a folder the user can change, one subfolder per conversation.
 enum FilesFolder {
     private static let key = "FilesFolder"
@@ -15,6 +18,7 @@ enum FilesFolder {
 
     static func choose() {
         let panel = NSOpenPanel()
+        panel.level = aboveChatPanel
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true

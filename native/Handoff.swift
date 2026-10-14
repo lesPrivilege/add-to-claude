@@ -382,6 +382,7 @@ final class HandoffBar: NSViewController {
     @objc private func saveMarkdown() {
         guard let prepared else { return }
         let panel = NSSavePanel()
+        panel.level = aboveChatPanel
         panel.nameFieldStringValue = safeLabel(prepared.title, limit: 60).replacingOccurrences(of: "/", with: "-") + ".md"
         panel.allowedContentTypes = [.init(filenameExtension: "md")!]
         panelOpen = true

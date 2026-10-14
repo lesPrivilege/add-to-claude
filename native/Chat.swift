@@ -173,17 +173,23 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                 : "\(linked) of \(total) files linked; the rest are references (download them from the Files list).")
     }
 
+    /// The page's link for a file: by its id, or by name, since generated files are referred to by
+    /// their sandbox path in the conversation but fetched by an internal file id.
+    private func link(for file: (id: String, name: String, turn: Int, line: String)) -> FileLink? {
+        fileLinks[file.id] ?? fileLinks.values.filter { $0.name == file.name }.max { $0.seen < $1.seen }
+    }
+
     private func fileRows() -> [FileRow] {
         (prepared?.attachments ?? []).map { file in
-            FileRow(id: file.id, name: file.name, turn: file.turn, saved: savedFile(file.name)?.path, linkReady: fileLinks[file.id] != nil)
+            FileRow(id: file.id, name: file.name, turn: file.turn, saved: savedFile(file.name)?.path, linkReady: link(for: file) != nil)
         }
     }
 
     private func downloadSelected(_ ids: [String], done: @escaping () -> Void) {
         guard let prepared else { return done() }
-        let files = prepared.attachments.filter { ids.contains($0.id) && fileLinks[$0.id] != nil }
+        let files = prepared.attachments.filter { ids.contains($0.id) && link(for: $0) != nil }
         let links = files.map { file in
-            let link = fileLinks[file.id]!
+            let link = link(for: file)!
             return FileLink(url: link.url, name: file.name, seen: link.seen)
         }
         fetcher.fetch(links, into: FilesFolder.folder(for: prepared.title)) { [weak self] outcomes in
@@ -283,6 +289,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
         let panel = NSOpenPanel()
+        panel.level = aboveChatPanel
         panel.allowsMultipleSelection = parameters.allowsMultipleSelection
         panel.canChooseDirectories = parameters.allowsDirectories
         panelOpen = true
