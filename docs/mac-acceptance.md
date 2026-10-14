@@ -1,5 +1,29 @@
 # Mac acceptance log
 
+## 2026-10-14 · Live round with the owner's account and Claude for Mac
+
+What works now, confirmed by the owner:
+
+- The panel opens under the menu-bar icon, keeps its own ChatGPT login across restarts, and keeps the page while hidden.
+- Old and new conversations project completely and in order. The live site loads a conversation from `GET /backend-api/conversations/<id>?num_turns=…` (flat `messages`, `current_node`, `page_info`) and older pages from `/conversations/<id>/messages?before=…`. Both are observed passively, converted to the classic tree and merged. Reasoning (`thoughts`, `reasoning_recap`), memory context and tool entries are hidden.
+- Preview, Copy and Save produce the hand-off format (`## Turn N — Role`, original Markdown, `### References`, per-turn `### Files`).
+- Add puts the conversation into an empty Claude prompt without activating Claude or sending.
+
+How Claude was reached, from the diagnostics:
+
+- Claude reports no app-level focused element; the composer is the window's single writable `AXTextArea` ("Prompt", tiptap/ProseMirror).
+- Its empty draft reads as one newline, and the caret cannot pass it.
+- It accepts `AXSelectedText` writes but never applies them. Setting `AXValue` on the empty prompt works within about 0.3 s, with a readback equal apart from collapsed blank lines.
+- The app remembers per bundle id that insertion is ignored and skips the 2 s wait next time.
+- A non-empty prompt uses Command-V posted to Claude's process only; Claude turns the pasted Markdown into formatting, so success is "the draft changed".
+
+Not working yet:
+
+- Attachment downloads. The page fetches `/backend-api/files/download/<id>` (`status, download_url, metadata, file_name, creation_time, no_auth_user_upload, mime_type, file_size_bytes`) when it shows a file, and the observer keeps that link. But the chat's own file card does nothing in the panel (no navigation, new window or download was logged), and the Files list did not offer the generated `topbar_attachment_test.md` as downloadable even after name matching.
+- Other target apps, non-empty Claude drafts, and panel stacking (the panel stays above other apps until the icon is clicked).
+
+Temporary diagnostics are still in the build (request shapes, message types, window text elements, append checks, navigation). Read them with `/usr/bin/log show --last 15m --info --predicate 'subsystem == "io.lesprivilege.gpt-handoff"'`. Remove them before release.
+
 ## 2026-10-14 · Embedded panel (supersedes the Chrome extension route below)
 
 The owner pasted a design note favouring an embedded web view. A throwaway login probe (a menu-bar panel with `WKWebView` and the default persistent store, user agent unchanged) then established:
