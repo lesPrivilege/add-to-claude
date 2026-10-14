@@ -153,8 +153,8 @@ final class HandoffBar: NSViewController {
         renderPicker(trusted: trusted)
         picker.isEnabled = !targets.isEmpty && !busy && !discovering
         refresh.isEnabled = !busy && !discovering
-        let name = composer.map { safeLabel($0.choice.app.localizedName ?? "Agent", limit: 24) }
-        add.title = name.map { "Add to \($0)" } ?? "Add"
+        add.title = "Add"
+        add.toolTip = composer.map { "Add to \(safeLabel($0.choice.app.localizedName ?? "app", limit: 40)) — \($0.choice.displayLabel(limit: 60))" }
         add.isEnabled = prepared.map { $0.markdown.utf8.count <= maximumTextBytes } == true && composer != nil && !busy
     }
 
@@ -202,6 +202,7 @@ final class HandoffBar: NSViewController {
                 self.targets = found.targets
                 self.discovering = false
                 if let composer = self.composer, self.registry.id(of: composer) == nil { self.composer = nil }
+                if self.composer == nil { self.restoreLastTarget() }
                 self.render()
             }
         }
@@ -211,12 +212,28 @@ final class HandoffBar: NSViewController {
         guard let id = picker.selectedItem?.representedObject as? String else { return }
         let (chosen, problem) = registry.composer(id)
         composer = chosen
+        if let chosen { remember(chosen) }
         if chosen == nil {
             say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error")
             if let choice = registry.choice(id) { DispatchQueue.global().async { logTextElements(choice) } }
         }
         else { say("") }
         render()
+    }
+
+    // The last window used, by app and window title, so the next session starts there if it is open.
+    private func remember(_ composer: Composer) {
+        UserDefaults.standard.set(["app": composer.choice.app.bundleIdentifier ?? "", "title": composer.choice.title],
+                                  forKey: "LastTarget")
+    }
+
+    private func restoreLastTarget() {
+        guard let last = UserDefaults.standard.dictionary(forKey: "LastTarget") as? [String: String],
+              let target = targets.first(where: { target in
+                  guard let choice = registry.choice(target.id) else { return false }
+                  return choice.app.bundleIdentifier == last["app"] && choice.title == last["title"]
+              }) else { return }
+        composer = registry.composer(target.id).composer
     }
 
     @objc private func allowAccess() {

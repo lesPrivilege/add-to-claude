@@ -154,25 +154,34 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
                   let old = axString(current, kAXValueAttribute) else {
                 completion("The composer is no longer ready. Nothing was added; choose it again.", false); return
             }
-            let suffix = old.isEmpty ? text : "\n\n" + text
+            // A blank draft (rich editors report an empty paragraph as "\n") has nothing to keep.
+            let blank = old.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let suffix = blank ? text : "\n\n" + text
             guard old.utf8.count + suffix.utf8.count <= maximumTextBytes else {
                 completion("The combined draft exceeds the native text limit. Use a context file.", false); return
             }
-            let combined = old + suffix
+            let combined = blank ? text : old + suffix
             // Never replace AXValue: doing so discards existing rich spans and attachment objects.
             // AX text ranges use UTF-16 offsets, not Swift Character or UTF-8 counts.
-            var end = CFRange(location: old.utf16.count, length: 0)
+            // A blank draft is replaced as a selection; otherwise the caret goes to the end.
+            var end = CFRange(location: blank ? 0 : old.utf16.count, length: blank ? old.utf16.count : 0)
             guard operationValid() else { completion("The handoff expired or changed. Nothing was added.", false); return }
-            guard let position = AXValueCreate(.cfRange, &end),
-                  AXUIElementSetAttributeValue(current, kAXSelectedTextRangeAttribute as CFString, position) == .success,
-                  let focused = focusedComposer(selected.choice), CFEqual(focused, current),
-                  sameTextUnits(axString(current, kAXValueAttribute), old),
-                  let range = selectedRange(current), range.location == end.location, range.length == 0,
+            let setRange = AXValueCreate(.cfRange, &end).map {
+                AXUIElementSetAttributeValue(current, kAXSelectedTextRangeAttribute as CFString, $0)
+            }
+            let stillFocused = focusedComposer(selected.choice).map { CFEqual($0, current) } ?? false
+            let after = axString(current, kAXValueAttribute)
+            let range = selectedRange(current)
+            appendLog.info("append check: old=\(old.utf16.count) blank=\(blank) setRange=\(setRange?.rawValue ?? -1) focused=\(stillFocused) valueAfter=\(after?.utf16.count ?? -1) unchanged=\(sameTextUnits(after, old)) range=\(range?.location ?? -1),\(range?.length ?? -1) wanted=\(end.location),\(end.length)")
+            guard setRange == .success, stillFocused, sameTextUnits(after, old),
+                  let range, range.location == end.location, range.length == end.length,
                   operationValid() else {
                 completion("The insertion point or draft changed. Nothing was added; choose the composer again.", false); return
             }
             let result = AXUIElementSetAttributeValue(current, kAXSelectedTextAttribute as CFString, suffix as CFString)
-            guard result == .success, sameTextUnits(axString(current, kAXValueAttribute), combined) else {
+            let written = axString(current, kAXValueAttribute)
+            appendLog.info("append write: result=\(result.rawValue) expected=\(combined.utf16.count) got=\(written?.utf16.count ?? -1) exact=\(sameTextUnits(written, combined))")
+            guard result == .success, sameTextUnits(written, combined) else {
                 completion("Text may have been added but did not read back exactly. Check the draft before retrying.", false); return
             }
             completion("Added. Review the draft there; nothing was sent.", true)
@@ -244,6 +253,9 @@ final class ComposerRegistry {
         return (field.map { Composer(choice: choice, editor: $0) }, problem)
     }
 }
+
+// TEMPORARY diagnostic: append checks by length and position only, never text.
+private let appendLog = Logger(subsystem: "io.lesprivilege.gpt-handoff", category: "ax")
 
 // TEMPORARY diagnostic: the editable text elements a rejected window exposes (labels and capabilities,
 // never their text), written to the local system log.

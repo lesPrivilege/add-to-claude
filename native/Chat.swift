@@ -117,6 +117,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                                     turns: body["turns"] as? Int ?? 0, files: body["files"] as? Int ?? 0,
                                     verification: body["verification"] as? String ?? "",
                                     issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) })
+            if !prepared.issues.isEmpty {
+                traceLog.info("partial: \(prepared.issues.joined(separator: " | "), privacy: .public)")
+            }
             set(prepared, .ready(prepared))
         case "trace": traceLog.info("\(body["method"] as? String ?? "", privacy: .public) \(body["path"] as? String ?? "", privacy: .public)")
         case "changed": set(nil, .waiting)
