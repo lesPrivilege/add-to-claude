@@ -8,7 +8,7 @@ native="$project_root/native"
 node "$project_root/scripts/build-webkit.js" "$work/webkit" >/dev/null
 xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \
   "$project_root/tests/native/WebKitTests.swift" "$native/Chat.swift" "$native/Handoff.swift" "$native/Views.swift" \
-  "$native/Composer.swift" -o "$work/webkit-tests"
+  "$native/Composer.swift" "$native/Files.swift" -o "$work/webkit-tests"
 "$work/webkit-tests" "$work/webkit"
 status=0
 bash "$project_root/scripts/test-native-accessibility.sh" || status=$?

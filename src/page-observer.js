@@ -456,7 +456,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
   };
   const originalFetch = window.fetch;
   window.fetch = function (...args) {
-    let requested, selected, method, readRequest, shape;
+    let requested, selected, method, readRequest, shape, fileLink;
     try {
       requested = new URL(
         typeof args[0] === 'string' || args[0] instanceof URL ? args[0] : args[0].url,
@@ -469,6 +469,12 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
         requested.pathname.includes('conversation')
       )
         trace(method, requested);
+      // The page asks for a short-lived link before it shows or saves a file. Keep that link so the
+      // app can download the same file through this session when the user adds the conversation.
+      const fileId = /^\/backend-api\/files\/download\/([A-Za-z0-9_-]{1,200})$/u.exec(
+        requested.pathname,
+      )?.[1];
+      if (fileId && requested.origin === location.origin && method === 'GET') fileLink = fileId;
       // TEMPORARY diagnostic: for conversation loads, the response shape (type, size, key names only).
       if (
         requested.origin === location.origin &&
@@ -490,6 +496,22 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       /* Observing must never prevent the website's request. */
     }
     const promise = Reflect.apply(originalFetch, this, args);
+    if (fileLink)
+      void promise
+        .then((response) => response.clone().json())
+        .then((value) => {
+          trace(`FILE keys=${Object.keys(value ?? {}).join(',')}`, requested);
+          const url = new URL(value?.download_url, location.origin);
+          if (url.protocol === 'https:')
+            post({
+              kind: 'file',
+              pageUrl: location.origin + location.pathname,
+              id: fileLink,
+              url: url.href,
+              name: typeof value.file_name === 'string' ? value.file_name : '',
+            });
+        })
+        .catch(() => {});
     if (shape)
       void promise
         .then(async (response) => {

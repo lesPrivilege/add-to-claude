@@ -1,5 +1,5 @@
 import { importBrowserResponse } from './chatgpt-response.js';
-import { projectMarkdown } from './model.js';
+import { projectFileLine, projectMarkdown } from './model.js';
 
 export const MAX_MARKDOWN = 16 * 1024 * 1024;
 
@@ -14,6 +14,12 @@ export function compile(packet) {
     title: model.source.title,
     turns: model.turns.length,
     files: model.attachments.length,
+    // File ids as the page uses them in /backend-api/files/download/<id>, with each file's line.
+    attachments: model.attachments.map((file) => ({
+      id: file.id.slice(file.id.indexOf(':') + 1),
+      name: file.name,
+      line: projectFileLine(file),
+    })),
     verification: model.verification.status,
     issues: model.verification.issues.slice(0, 5).map((issue) => issue.message),
   };

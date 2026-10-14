@@ -247,7 +247,7 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
         }
         waitForChange(field, old: old, attempts: 20) { written in
             appendLog.info("append fallback paste: got=\(written?.utf16.count ?? -1) landed=\(landed(written))")
-            guard landed(written) else {
+            guard let written, !sameTextUnits(written, old) else {
                 return completion("This app takes text only by pasting. The conversation is on the clipboard: click its message box and press ⌘V.", false)
             }
             board.clearContents()
@@ -256,7 +256,9 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
                 for (type, data) in pairs { item.setData(data, forType: type) }
                 return item
             })
-            completion("Added by pasting into the app. Review the draft there; nothing was sent.", true)
+            // Editors that turn pasted Markdown into formatting (Claude's does) cannot read back exactly.
+            completion(landed(written) ? "Added by pasting into the app. Review the draft there; nothing was sent."
+                       : "Pasted into the app, which reformatted the Markdown. Review the draft there; nothing was sent.", true)
         }
     }
     guard blank, axSettable(field, kAXValueAttribute) else { return paste() }

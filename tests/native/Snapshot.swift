@@ -7,10 +7,10 @@ import AppKit
         NSApp.appearance = NSAppearance(named: .aqua)
         let output = URL(fileURLWithPath: CommandLine.arguments[1])
         let ready = Prepared(revision: UUID(), page: "https://chatgpt.com/c/x", markdown: "# Synthetic", title: "Agent harness handoff design",
-                             turns: 128, files: 3, verification: "verified", issues: [])
+                             turns: 128, files: 3, verification: "verified", issues: [], attachments: [])
         let partial = Prepared(revision: UUID(), page: "https://chatgpt.com/c/y", markdown: "# Synthetic",
                                title: "Research notes with a very long conversation title that truncates", turns: 14, files: 1,
-                               verification: "partial", issues: ["report.pdf is a reference only."])
+                               verification: "partial", issues: ["report.pdf is a reference only."], attachments: [])
         let states: [(String, SourceState)] = [("waiting", .waiting), ("ready", .ready(ready)), ("partial", .ready(partial)),
                                                ("unavailable", .unavailable("This page did not expose its original messages."))]
         for (name, state) in states {

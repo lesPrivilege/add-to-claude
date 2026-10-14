@@ -32,6 +32,8 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     private var popups: [NSWindow] = []
     private(set) var panelOpen = false
     private(set) var prepared: Prepared?
+    private var fileLinks: [String: FileLink] = [:]
+    private lazy var fetcher = FileFetcher(web: web)
     private let scripts: URL?
     private let start: (WKWebView) -> Void
 
@@ -61,6 +63,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         urlObservation = web.observe(\.url, options: [.new]) { [weak self] view, _ in
             DispatchQueue.main.async { self?.pageMoved(to: view.url) }
         }
+        bar.withFiles = { [weak self] prepared, done in self?.download(prepared, done: done) }
         bar.isCurrent = { [weak self] candidate in
             guard let self, let prepared = self.prepared else { return false }
             return prepared.revision == candidate.revision && pageKey(self.web.url) == candidate.page
@@ -116,16 +119,51 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                                     title: safeLabel(body["title"] as? String ?? "ChatGPT conversation", limit: 120),
                                     turns: body["turns"] as? Int ?? 0, files: body["files"] as? Int ?? 0,
                                     verification: body["verification"] as? String ?? "",
-                                    issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) })
+                                    issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) },
+                                    attachments: (body["attachments"] as? [[String: Any]] ?? []).compactMap { file in
+                                        guard let id = file["id"] as? String, let line = file["line"] as? String else { return nil }
+                                        return (id, safeLabel(file["name"] as? String ?? "", limit: 200), line)
+                                    })
             if !prepared.issues.isEmpty {
                 traceLog.info("partial: \(prepared.issues.joined(separator: " | "), privacy: .public)")
             }
             set(prepared, .ready(prepared))
         case "trace": traceLog.info("\(body["method"] as? String ?? "", privacy: .public) \(body["path"] as? String ?? "", privacy: .public)")
+        case "file":
+            // A link the page itself requested for one of its files; only https on ChatGPT's own hosts.
+            guard let id = body["id"] as? String, let text = body["url"] as? String, let url = URL(string: text),
+                  url.scheme == "https", let host = url.host,
+                  chatHosts.contains(host) || host.hasSuffix(".oaiusercontent.com") else { return }
+            fileLinks[id] = FileLink(url: url, name: body["name"] as? String ?? "", seen: Date())
         case "changed": set(nil, .waiting)
         case "invalid": set(nil, .unavailable(safeLabel(body["message"] as? String ?? "", limit: 160)))
         case "unavailable": set(nil, .unavailable("This page did not expose its original messages."))
         default: break
+        }
+    }
+
+    // MARK: files
+
+    /// Downloads every file the page has a link for and points its Markdown line at the local copy.
+    private func download(_ prepared: Prepared, done: @escaping (String, String) -> Void) {
+        let known = prepared.attachments.filter { fileLinks[$0.id] != nil }
+        guard !known.isEmpty else {
+            return done(prepared.markdown, prepared.attachments.isEmpty ? "" : "Files were not downloaded: open each file once in the chat, then Add again.")
+        }
+        let links = known.map { file in
+            let link = fileLinks[file.id]!
+            return FileLink(url: link.url, name: link.name.isEmpty ? file.name : link.name, seen: link.seen)
+        }
+        fetcher.fetch(links, into: FilesFolder.folder(for: prepared.title)) { outcomes in
+            var markdown = prepared.markdown
+            for (file, outcome) in zip(known, outcomes) {
+                let line = outcome.path.map { "- \(file.name) — `\($0.path)` · sha256 \(outcome.sha256 ?? "")" }
+                    ?? "- \(file.name) — not downloaded: \(outcome.problem ?? "unknown error")"
+                markdown = markdown.replacingOccurrences(of: file.line, with: line)
+            }
+            let saved = outcomes.filter { $0.path != nil }.count
+            let missing = prepared.attachments.count - saved
+            done(markdown, missing == 0 ? "\(saved) file\(saved == 1 ? "" : "s") saved." : "\(saved) of \(prepared.attachments.count) files saved.")
         }
     }
 

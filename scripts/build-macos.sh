@@ -18,7 +18,7 @@ node "$project_root/scripts/build-webkit.js" "$bundle/Contents/Resources/webkit"
 native="$project_root/native"
 xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \
   "$native/Main.swift" "$native/App.swift" "$native/Chat.swift" "$native/Handoff.swift" \
-  "$native/Views.swift" "$native/Composer.swift" -o "$bundle/Contents/MacOS/gpt-handoff"
+  "$native/Views.swift" "$native/Composer.swift" "$native/Files.swift" -o "$bundle/Contents/MacOS/gpt-handoff"
 plutil -lint "$bundle/Contents/Info.plist" >/dev/null
 # A stable local identity keeps the Accessibility grant across rebuilds; ad-hoc builds lose it each time.
 identity="${GPT_HANDOFF_SIGNING_IDENTITY:-gpt-handoff Local}"

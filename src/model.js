@@ -556,11 +556,15 @@ function projectCode(code) {
  * The hand-off text: each turn as `## Turn N — Role` with its original Markdown untouched, then that
  * turn's references and files. Locators stay in HTML comments so they are kept but not rendered.
  */
+/** One file's line in the hand-off text; the app swaps it for the downloaded path when it has one. */
+export function projectFileLine(file) {
+  return `- ${labelText(file.name)} — ${file.status}${file.url ? ` · <${file.url}>` : ''}`;
+}
+
 export function projectMarkdown(input) {
   const model = validateConversation(input);
   const comment = (text) => `<!-- ${headingText(text).replaceAll('--', '- -')} -->`;
-  const fileLine = (file) =>
-    `- ${labelText(file.name)} — ${file.status}${file.url ? ` · <${file.url}>` : ''}`;
+  const fileLine = projectFileLine;
   const source = model.source.url ? `<${model.source.url}>` : headingText(model.source.locator);
   const lines = [
     `# ${headingText(model.source.title)}`,

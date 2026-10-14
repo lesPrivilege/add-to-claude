@@ -22,6 +22,14 @@ if (handler && window === top) {
           method: String(packet.method),
           path: String(packet.path),
         });
+      if (packet?.kind === 'file')
+        return handler.postMessage({
+          kind: 'file',
+          page: String(packet.pageUrl),
+          id: String(packet.id),
+          url: String(packet.url),
+          name: String(packet.name),
+        });
       if (packet?.kind === 'changed' || packet?.kind === 'unavailable')
         return handler.postMessage({ kind: packet.kind, page: String(packet.pageUrl) });
       if (packet?.kind !== 'response') return;

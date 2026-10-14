@@ -50,6 +50,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func click() {
         if NSApp.currentEvent?.type == .rightMouseUp {
             let menu = NSMenu()
+            let folder = menu.addItem(withTitle: "Files Folder…", action: #selector(chooseFilesFolder), keyEquivalent: "")
+            folder.target = self
+            folder.toolTip = FilesFolder.root.path
+            menu.addItem(.separator())
             menu.addItem(withTitle: "Quit gpt-handoff", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
             item.menu = menu
             item.button?.performClick(nil)
@@ -72,6 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Before layout the icon's window sits at the origin; trust it only inside the menu bar.
         return frame.minY >= screen.maxY - 4 ? NSPoint(x: frame.midX, y: screen.maxY) : nil
     }
+
+    @objc private func chooseFilesFolder() { FilesFolder.choose() }
 
     private func show() {
         // Under the icon once it is on screen; at launch, before the menu bar lays it out, top centre.

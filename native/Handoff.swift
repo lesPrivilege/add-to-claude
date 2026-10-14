@@ -11,6 +11,8 @@ struct Prepared {
     let files: Int
     let verification: String
     let issues: [String]
+    /// Each file the conversation refers to: the page's file id, its name and its line in the Markdown.
+    let attachments: [(id: String, name: String, line: String)]
 }
 
 enum SourceState {
@@ -23,6 +25,8 @@ enum SourceState {
 final class HandoffBar: NSViewController {
     /// Whether this exact preparation is still what the page shows. Checked again just before writing.
     var isCurrent: (Prepared) -> Bool = { _ in false }
+    /// Downloads the conversation's files and returns the Markdown with their lines pointing at them.
+    var withFiles: (Prepared, @escaping (String, String) -> Void) -> Void = { prepared, done in done(prepared.markdown, "") }
     private var source = SourceState.waiting
     private let registry = ComposerRegistry()
     private var targets: [Target] = []
@@ -295,18 +299,26 @@ final class HandoffBar: NSViewController {
         busy = true
         operation = UUID()
         let id = operation
-        say("Adding…", glyph: "waiting")
+        say(frozen.attachments.isEmpty ? "Adding…" : "Downloading files…", glyph: "waiting")
         render()
         let valid: () -> Bool = { [weak self] in
             guard let self, self.operation == id, let current = self.prepared else { return false }
             return current.revision == frozen.revision && self.isCurrent(frozen)
         }
-        appendToComposer(selected, text: frozen.markdown, operationValid: valid,
-                         revalidateSource: { reply in reply(valid()) }) { [weak self] message, success in
+        withFiles(frozen) { [weak self] text, filesNote in
             guard let self else { return }
-            self.busy = false
-            self.say(message, glyph: success ? "done" : "error", result: true)
-            self.render()
+            guard valid() else { return self.finish("The conversation changed. Nothing was added.", false) }
+            self.say("Adding…", glyph: "waiting")
+            appendToComposer(selected, text: text, operationValid: valid,
+                             revalidateSource: { reply in reply(valid()) }) { [weak self] message, success in
+                self?.finish(filesNote.isEmpty ? message : message + " " + filesNote, success)
+            }
         }
+    }
+
+    private func finish(_ message: String, _ success: Bool) {
+        busy = false
+        say(message, glyph: success ? "done" : "error", result: true)
+        render()
     }
 }
