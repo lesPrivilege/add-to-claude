@@ -1,9 +1,11 @@
 import AppKit
+import CryptoKit
 import OSLog
 import WebKit
 
 // TEMPORARY diagnostic: request shapes from the live page (ids redacted) go to the local system log.
 private let traceLog = Logger(subsystem: "io.lesprivilege.gpt-handoff", category: "trace")
+private let navLog = Logger(subsystem: "io.lesprivilege.gpt-handoff", category: "nav")
 
 private let chatHosts: Set<String> = ["chatgpt.com", "chat.openai.com"]
 /// Hosts that sign-in may pass through. Anything else a link opens goes to the default browser.
@@ -63,7 +65,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         urlObservation = web.observe(\.url, options: [.new]) { [weak self] view, _ in
             DispatchQueue.main.async { self?.pageMoved(to: view.url) }
         }
-        bar.withFiles = { [weak self] prepared, done in self?.download(prepared, done: done) }
+        bar.withFiles = { [weak self] prepared in self?.withFiles(prepared) ?? (prepared.markdown, "") }
+        bar.fileRows = { [weak self] in self?.fileRows() ?? [] }
+        bar.downloadFiles = { [weak self] ids, done in self?.downloadSelected(ids, done: done) ?? done() }
         bar.isCurrent = { [weak self] candidate in
             guard let self, let prepared = self.prepared else { return false }
             return prepared.revision == candidate.revision && pageKey(self.web.url) == candidate.page
@@ -122,7 +126,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                                     issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) },
                                     attachments: (body["attachments"] as? [[String: Any]] ?? []).compactMap { file in
                                         guard let id = file["id"] as? String, let line = file["line"] as? String else { return nil }
-                                        return (id, safeLabel(file["name"] as? String ?? "", limit: 200), line)
+                                        return (id, safeLabel(file["name"] as? String ?? "", limit: 200), file["turn"] as? Int ?? 0, line)
                                     })
             if !prepared.issues.isEmpty {
                 traceLog.info("partial: \(prepared.issues.joined(separator: " | "), privacy: .public)")
@@ -144,26 +148,53 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
 
     // MARK: files
 
-    /// Downloads every file the page has a link for and points its Markdown line at the local copy.
-    private func download(_ prepared: Prepared, done: @escaping (String, String) -> Void) {
-        let known = prepared.attachments.filter { fileLinks[$0.id] != nil }
-        guard !known.isEmpty else {
-            return done(prepared.markdown, prepared.attachments.isEmpty ? "" : "Files were not downloaded: open each file once in the chat, then Add again.")
+    /// Files saved for each conversation page, by file name: from the files list or the page's own download.
+    private var saved: [String: [String: (path: URL, sha256: String)]] = [:]
+
+    private func savedFile(_ name: String) -> (path: URL, sha256: String)? {
+        prepared.flatMap { saved[$0.page]?[name.lowercased()] }
+    }
+
+    private func record(_ path: URL, sha256: String, name: String) {
+        guard let page = prepared?.page ?? pageKey(web.url) else { return }
+        saved[page, default: [:]][name.lowercased()] = (path, sha256)
+    }
+
+    /// Each saved file's line points at its local copy; the rest stay references.
+    private func withFiles(_ prepared: Prepared) -> (String, String) {
+        var markdown = prepared.markdown, linked = 0
+        for file in prepared.attachments {
+            guard let copy = saved[prepared.page]?[file.name.lowercased()] else { continue }
+            markdown = markdown.replacingOccurrences(of: file.line, with: "- \(file.name) — `\(copy.path.path)` · sha256 \(copy.sha256)")
+            linked += 1
         }
-        let links = known.map { file in
+        let total = prepared.attachments.count
+        return (markdown, total == 0 ? "" : linked == total ? "\(linked) file\(linked == 1 ? "" : "s") linked."
+                : "\(linked) of \(total) files linked; the rest are references (download them from the Files list).")
+    }
+
+    private func fileRows() -> [FileRow] {
+        (prepared?.attachments ?? []).map { file in
+            FileRow(id: file.id, name: file.name, turn: file.turn, saved: savedFile(file.name)?.path, linkReady: fileLinks[file.id] != nil)
+        }
+    }
+
+    private func downloadSelected(_ ids: [String], done: @escaping () -> Void) {
+        guard let prepared else { return done() }
+        let files = prepared.attachments.filter { ids.contains($0.id) && fileLinks[$0.id] != nil }
+        let links = files.map { file in
             let link = fileLinks[file.id]!
-            return FileLink(url: link.url, name: link.name.isEmpty ? file.name : link.name, seen: link.seen)
+            return FileLink(url: link.url, name: file.name, seen: link.seen)
         }
-        fetcher.fetch(links, into: FilesFolder.folder(for: prepared.title)) { outcomes in
-            var markdown = prepared.markdown
-            for (file, outcome) in zip(known, outcomes) {
-                let line = outcome.path.map { "- \(file.name) — `\($0.path)` · sha256 \(outcome.sha256 ?? "")" }
-                    ?? "- \(file.name) — not downloaded: \(outcome.problem ?? "unknown error")"
-                markdown = markdown.replacingOccurrences(of: file.line, with: line)
+        fetcher.fetch(links, into: FilesFolder.folder(for: prepared.title)) { [weak self] outcomes in
+            guard let self else { return }
+            for (file, outcome) in zip(files, outcomes) {
+                if let path = outcome.path, let hash = outcome.sha256 { self.record(path, sha256: hash, name: file.name) }
             }
-            let saved = outcomes.filter { $0.path != nil }.count
-            let missing = prepared.attachments.count - saved
-            done(markdown, missing == 0 ? "\(saved) file\(saved == 1 ? "" : "s") saved." : "\(saved) of \(prepared.attachments.count) files saved.")
+            let failed = outcomes.compactMap(\.problem)
+            self.bar.filesChanged(failed.isEmpty ? "\(outcomes.count) file\(outcomes.count == 1 ? "" : "s") saved."
+                                  : "\(outcomes.count - failed.count) saved; \(failed.count) failed: \(failed[0]).")
+            done()
         }
     }
 
@@ -172,6 +203,8 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { return decisionHandler(.cancel) }
+        // TEMPORARY diagnostic: how the page's file clicks navigate (scheme, host, path shape only).
+        navLog.info("navigate \(url.scheme ?? "-", privacy: .public)://\(url.host ?? "", privacy: .public)\(url.path.replacingOccurrences(of: #"[A-Za-z0-9_-]{20,}"#, with: ":id", options: .regularExpression), privacy: .public) type=\(action.navigationType.rawValue) main=\(action.targetFrame?.isMainFrame ?? false) download=\(action.shouldPerformDownload)")
         if action.shouldPerformDownload { return decisionHandler(.download) }
         guard action.targetFrame?.isMainFrame != false else {
             return decisionHandler(["https", "about", "blob", "data"].contains(url.scheme ?? "") ? .allow : .cancel)
@@ -185,6 +218,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        navLog.info("response \(response.response.mimeType ?? "-", privacy: .public) show=\(response.canShowMIMEType) main=\(response.isForMainFrame)")
         decisionHandler(response.canShowMIMEType ? .allow : .download)
     }
 
@@ -212,6 +246,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = action.request.url else { return nil }
+        navLog.info("new window \(url.scheme ?? "-", privacy: .public)://\(url.host ?? "", privacy: .public)")
         guard url.scheme == "about" || (url.scheme == "https" && url.host.map(signInHosts.contains) == true) else {
             openExternally(url)
             return nil
@@ -260,14 +295,36 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { download.delegate = self }
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { download.delegate = self }
 
+    /// The page's own downloads go straight into the conversation's folder, and Add can then point at them.
+    private var pageDownloads: [ObjectIdentifier: (path: URL, name: String)] = [:]
+
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
                   completionHandler: @escaping (URL?) -> Void) {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = suggestedFilename
-        panelOpen = true
-        panel.begin { [weak self] result in
-            self?.panelOpen = false
-            completionHandler(result == .OK ? panel.url : nil)
+        let folder = FilesFolder.folder(for: prepared?.title ?? "ChatGPT")
+        guard (try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)) != nil else {
+            bar.filesChanged("The files folder is not writable. Choose another from the menu-bar icon.")
+            return completionHandler(nil)
         }
+        let name = safeLabel(suggestedFilename, limit: 120).replacingOccurrences(of: "/", with: "-")
+        var path = folder.appendingPathComponent(name.isEmpty ? "download" : name), index = 2
+        while FileManager.default.fileExists(atPath: path.path) {
+            path = folder.appendingPathComponent("\((name as NSString).deletingPathExtension) \(index)" + ((name as NSString).pathExtension.isEmpty ? "" : ".\((name as NSString).pathExtension)"))
+            index += 1
+        }
+        navLog.info("download to conversation folder: \(path.lastPathComponent, privacy: .public)")
+        pageDownloads[ObjectIdentifier(download)] = (path, suggestedFilename)
+        completionHandler(path)
+    }
+
+    func downloadDidFinish(_ download: WKDownload) {
+        guard let (path, name) = pageDownloads.removeValue(forKey: ObjectIdentifier(download)),
+              let data = try? Data(contentsOf: path, options: .mappedIfSafe) else { return }
+        record(path, sha256: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(), name: name)
+        bar.filesChanged("Saved \(path.lastPathComponent) to the files folder.")
+    }
+
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        guard pageDownloads.removeValue(forKey: ObjectIdentifier(download)) != nil else { return }
+        bar.filesChanged("The download failed. Try it again in the chat.")
     }
 }

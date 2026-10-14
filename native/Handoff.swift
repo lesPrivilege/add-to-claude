@@ -11,8 +11,8 @@ struct Prepared {
     let files: Int
     let verification: String
     let issues: [String]
-    /// Each file the conversation refers to: the page's file id, its name and its line in the Markdown.
-    let attachments: [(id: String, name: String, line: String)]
+    /// Each file the conversation refers to: the page's file id, its name, turn and line in the Markdown.
+    let attachments: [(id: String, name: String, turn: Int, line: String)]
 }
 
 enum SourceState {
@@ -21,12 +21,38 @@ enum SourceState {
     case unavailable(String)
 }
 
+struct FileRow {
+    let id: String
+    let name: String
+    let turn: Int
+    let saved: URL?
+    let linkReady: Bool
+}
+
+/// A push button that runs a closure; keeps small popover controls free of selector plumbing.
+final class ClosureButton: NSButton {
+    private var run: () -> Void = {}
+    convenience init(title: String, run: @escaping () -> Void) {
+        self.init(frame: .zero)
+        self.title = title
+        bezelStyle = .rounded
+        self.run = run
+        target = self
+        action = #selector(fire)
+    }
+    @objc private func fire() { run() }
+}
+
 /// The strip under the chat: what will be handed off, to which window, and Add.
 final class HandoffBar: NSViewController {
     /// Whether this exact preparation is still what the page shows. Checked again just before writing.
     var isCurrent: (Prepared) -> Bool = { _ in false }
-    /// Downloads the conversation's files and returns the Markdown with their lines pointing at them.
-    var withFiles: (Prepared, @escaping (String, String) -> Void) -> Void = { prepared, done in done(prepared.markdown, "") }
+    /// The Markdown with each saved file's line pointing at its local copy, and a note on how many.
+    var withFiles: (Prepared) -> (String, String) = { ($0.markdown, "") }
+    /// The files list: what the conversation refers to and what can be downloaded now.
+    var fileRows: () -> [FileRow] = { [] }
+    var downloadFiles: ([String], @escaping () -> Void) -> Void = { _, done in done() }
+    private var filesPopover: NSPopover?
     private var source = SourceState.waiting
     private let registry = ComposerRegistry()
     private var targets: [Target] = []
@@ -42,6 +68,13 @@ final class HandoffBar: NSViewController {
     private lazy var preview = iconButton("preview", "Preview context", #selector(showPreview), self)
     private lazy var save = iconButton("save", "Save Markdown…", #selector(saveMarkdown), self)
     private lazy var copy = iconButton("copy", "Copy conversation", #selector(copyMarkdown), self)
+    private lazy var filesButton: NSButton = {
+        let button = NSButton(title: "", image: glyph("attach") ?? NSImage(), target: self, action: #selector(showFiles))
+        button.bezelStyle = .accessoryBarAction
+        button.imagePosition = .imageLeading
+        button.toolTip = "Files in this conversation"
+        return button
+    }()
     private let picker = NSPopUpButton(frame: .zero, pullsDown: false)
     private let targetRow = NSStackView()
     private lazy var refresh = iconButton("refresh", "Find open windows", #selector(findWindows), self)
@@ -64,7 +97,7 @@ final class HandoffBar: NSViewController {
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 2
-        let sourceRow = NSStackView(views: [chatIcon, text, NSView(), preview, copy, save])
+        let sourceRow = NSStackView(views: [chatIcon, text, NSView(), filesButton, preview, copy, save])
         sourceRow.spacing = 8
 
         picker.setAccessibilityLabel("Composer window")
@@ -152,6 +185,9 @@ final class HandoffBar: NSViewController {
         preview.isHidden = prepared == nil
         save.isHidden = prepared == nil
         copy.isHidden = prepared == nil
+        filesButton.isHidden = (prepared?.attachments.isEmpty ?? true)
+        filesButton.title = "\(prepared?.attachments.count ?? 0)"
+        filesButton.setAccessibilityLabel("Files: \(prepared?.attachments.count ?? 0)")
 
         let trusted = AXIsProcessTrusted()
         access.isHidden = trusted
@@ -269,6 +305,73 @@ final class HandoffBar: NSViewController {
         popover.show(relativeTo: preview.bounds, of: preview, preferredEdge: .maxY)
     }
 
+    // MARK: files
+
+    @objc private func showFiles() {
+        filesPopover?.close()
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = filesList()
+        filesPopover = popover
+        popover.show(relativeTo: filesButton.bounds, of: filesButton, preferredEdge: .maxY)
+    }
+
+    /// One row per file: saved (with its path), downloadable now, or waiting for the chat to fetch it.
+    private func filesList() -> NSViewController {
+        let rows = fileRows()
+        var boxes: [(NSButton, String)] = []
+        let list = NSStackView()
+        list.orientation = .vertical
+        list.alignment = .leading
+        list.spacing = 6
+        for row in rows {
+            let box = NSButton(checkboxWithTitle: "\(row.name) · turn \(row.turn)", target: nil, action: nil)
+            box.isEnabled = row.saved == nil && row.linkReady
+            box.state = .off
+            box.lineBreakMode = .byTruncatingMiddle
+            let state = label(row.saved != nil ? "Saved" : row.linkReady ? "Ready to download" : "Open it in the chat first",
+                              size: 11, color: .secondaryLabelColor)
+            state.toolTip = row.saved?.path
+            let line = NSStackView(views: [box, NSView(), state])
+            line.widthAnchor.constraint(equalToConstant: 380).isActive = true
+            list.addArrangedSubview(line)
+            if box.isEnabled { boxes.append((box, row.id)) }
+        }
+        let scroll = NSScrollView()
+        scroll.documentView = list
+        scroll.hasVerticalScroller = rows.count > 10
+        scroll.drawsBackground = false
+        list.translatesAutoresizingMaskIntoConstraints = false
+        scroll.heightAnchor.constraint(equalToConstant: CGFloat(min(rows.count, 10)) * 26).isActive = true
+        scroll.widthAnchor.constraint(equalToConstant: 388).isActive = true
+        let note = label("Saved to \(FilesFolder.root.path)", size: 11, color: .secondaryLabelColor)
+        let downloadButton = ClosureButton(title: "Download Selected") { [weak self] in
+            let ids = boxes.filter { $0.0.state == .on }.map(\.1)
+            guard !ids.isEmpty else { return }
+            self?.say("Downloading \(ids.count) file\(ids.count == 1 ? "" : "s")…", glyph: "waiting")
+            self?.downloadFiles(ids) { self?.filesPopover?.close(); self?.render() }
+        }
+        downloadButton.isEnabled = !boxes.isEmpty
+        let showFolder = ClosureButton(title: "Show Folder") {
+            try? FileManager.default.createDirectory(at: FilesFolder.root, withIntermediateDirectories: true)
+            NSWorkspace.shared.open(FilesFolder.root)
+        }
+        let column = NSStackView(views: [label("Files in this conversation", size: 12, weight: .semibold), scroll, note,
+                                         NSStackView(views: [showFolder, NSView(), downloadButton])])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 8
+        column.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        let controller = NSViewController()
+        controller.view = column
+        return controller
+    }
+
+    func filesChanged(_ message: String?) {
+        if let message { say(message, glyph: "done", result: true) }
+        render()
+    }
+
     @objc private func copyMarkdown() {
         guard let prepared else { return }
         NSPasteboard.general.clearContents()
@@ -299,20 +402,16 @@ final class HandoffBar: NSViewController {
         busy = true
         operation = UUID()
         let id = operation
-        say(frozen.attachments.isEmpty ? "Adding…" : "Downloading files…", glyph: "waiting")
+        say("Adding…", glyph: "waiting")
         render()
         let valid: () -> Bool = { [weak self] in
             guard let self, self.operation == id, let current = self.prepared else { return false }
             return current.revision == frozen.revision && self.isCurrent(frozen)
         }
-        withFiles(frozen) { [weak self] text, filesNote in
-            guard let self else { return }
-            guard valid() else { return self.finish("The conversation changed. Nothing was added.", false) }
-            self.say("Adding…", glyph: "waiting")
-            appendToComposer(selected, text: text, operationValid: valid,
-                             revalidateSource: { reply in reply(valid()) }) { [weak self] message, success in
-                self?.finish(filesNote.isEmpty ? message : message + " " + filesNote, success)
-            }
+        let (text, filesNote) = withFiles(frozen)
+        appendToComposer(selected, text: text, operationValid: valid,
+                         revalidateSource: { reply in reply(valid()) }) { [weak self] message, success in
+            self?.finish(filesNote.isEmpty ? message : message + " " + filesNote, success)
         }
     }
 

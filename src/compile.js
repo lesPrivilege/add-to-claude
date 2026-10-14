@@ -7,6 +7,7 @@ export const MAX_MARKDOWN = 16 * 1024 * 1024;
 export function compile(packet) {
   const model = importBrowserResponse(packet.body, packet);
   const markdown = projectMarkdown(model);
+  const turnNumber = new Map(model.turns.map((turn, index) => [turn.id, index + 1]));
   if (new TextEncoder().encode(markdown).byteLength > MAX_MARKDOWN)
     throw new Error('This conversation exceeds the 16 MiB context limit.');
   return {
@@ -18,6 +19,7 @@ export function compile(packet) {
     attachments: model.attachments.map((file) => ({
       id: file.id.slice(file.id.indexOf(':') + 1),
       name: file.name,
+      turn: turnNumber.get(file.turnId) ?? 0,
       line: projectFileLine(file),
     })),
     verification: model.verification.status,
