@@ -37,6 +37,7 @@ final class HandoffBar: NSViewController {
     private let tag = Tag()
     private lazy var preview = iconButton("preview", "Preview context", #selector(showPreview), self)
     private lazy var save = iconButton("save", "Save Markdown…", #selector(saveMarkdown), self)
+    private lazy var copy = iconButton("copy", "Copy conversation", #selector(copyMarkdown), self)
     private let picker = NSPopUpButton(frame: .zero, pullsDown: false)
     private let targetRow = NSStackView()
     private lazy var refresh = iconButton("refresh", "Find open windows", #selector(findWindows), self)
@@ -59,7 +60,7 @@ final class HandoffBar: NSViewController {
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 2
-        let sourceRow = NSStackView(views: [chatIcon, text, NSView(), preview, save])
+        let sourceRow = NSStackView(views: [chatIcon, text, NSView(), preview, copy, save])
         sourceRow.spacing = 8
 
         picker.setAccessibilityLabel("Composer window")
@@ -146,6 +147,7 @@ final class HandoffBar: NSViewController {
         tag.isHidden = prepared == nil
         preview.isHidden = prepared == nil
         save.isHidden = prepared == nil
+        copy.isHidden = prepared == nil
 
         let trusted = AXIsProcessTrusted()
         access.isHidden = trusted
@@ -261,6 +263,13 @@ final class HandoffBar: NSViewController {
         popover.contentViewController = content
         popover.behavior = .transient
         popover.show(relativeTo: preview.bounds, of: preview, preferredEdge: .maxY)
+    }
+
+    @objc private func copyMarkdown() {
+        guard let prepared else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(prepared.markdown, forType: .string)
+        say("Copied. Click the target's message box and press ⌘V.", glyph: "done", result: true)
     }
 
     @objc private func saveMarkdown() {

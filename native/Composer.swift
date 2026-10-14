@@ -195,9 +195,75 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             }
             // Web-based editors (Chromium, Electron) apply the write asynchronously; wait for the draft to
             // change before reading it back, for up to two seconds.
-            confirmWrite(current, old: old, expected: expected, attempts: 20, rich: beforeFinalBreak, completion: completion)
+            confirmWrite(current, old: old, expected: expected, attempts: 20, rich: beforeFinalBreak) { message, success in
+                guard !success, message == ignoredMessage, operationValid() else { return completion(message, success) }
+                // Some web editors (Claude's ProseMirror prompt) take no AX text writes at all.
+                fallBack(selected, field: current, old: old, blank: blank, text: text, suffix: suffix, completion: completion)
+            }
         }
     }
+}
+
+private let ignoredMessage = "The app did not take the text. Nothing was added."
+
+/// Line breaks and blank lines as a rich editor keeps them: runs of newlines become one, ends trimmed.
+private func normalized(_ text: String) -> String {
+    text.replacingOccurrences(of: #"\n[\n\s]*"#, with: "\n", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// After an ignored AX write: set the whole value of an empty box, then paste with ⌘V sent to that app
+/// alone. The app is never activated and nothing is sent. Unconfirmed, the text stays on the clipboard.
+private func fallBack(_ selected: Composer, field: AXUIElement, old: String, blank: Bool, text: String, suffix: String,
+                      completion: @escaping (String, Bool) -> Void) {
+    let landed: (String?) -> Bool = { written in
+        guard let written, !sameTextUnits(written, old) else { return false }
+        return normalized(written) == normalized(blank ? text : old + suffix)
+    }
+    func paste() {
+        let board = NSPasteboard.general
+        let saved = board.pasteboardItems?.map { item in item.types.compactMap { type in item.data(forType: type).map { (type, $0) } } } ?? []
+        board.clearContents()
+        board.setString(blank ? text : suffix, forType: .string)
+        let source = CGEventSource(stateID: .hidSystemState)
+        for down in [true, false] {
+            let event = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: down) // V
+            event?.flags = .maskCommand
+            event?.postToPid(selected.choice.app.processIdentifier)
+        }
+        waitForChange(field, old: old, attempts: 20) { written in
+            appendLog.info("append fallback paste: got=\(written?.utf16.count ?? -1) landed=\(landed(written))")
+            guard landed(written) else {
+                return completion("This app takes text only by pasting. The conversation is on the clipboard: click its message box and press ⌘V.", false)
+            }
+            board.clearContents()
+            board.writeObjects(saved.map { pairs in
+                let item = NSPasteboardItem()
+                for (type, data) in pairs { item.setData(data, forType: type) }
+                return item
+            })
+            completion("Added by pasting into the app. Review the draft there; nothing was sent.", true)
+        }
+    }
+    guard blank, axSettable(field, kAXValueAttribute) else { return paste() }
+    // An empty box has no rich content to lose, so replacing its whole value is safe here.
+    let result = AXUIElementSetAttributeValue(field, kAXValueAttribute as CFString, text as CFString)
+    waitForChange(field, old: old, attempts: 10) { written in
+        appendLog.info("append fallback value: result=\(result.rawValue) got=\(written?.utf16.count ?? -1) landed=\(landed(written))")
+        if landed(written) { return completion("Added. Review the draft there; nothing was sent.", true) }
+        if let written, !sameTextUnits(written, old) {
+            return completion("Text was added but reads back differently. Check the draft before retrying.", false)
+        }
+        paste()
+    }
+}
+
+private func waitForChange(_ field: AXUIElement, old: String, attempts: Int, then: @escaping (String?) -> Void) {
+    let written = axString(field, kAXValueAttribute)
+    if sameTextUnits(written, old) && attempts > 0 {
+        return DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { waitForChange(field, old: old, attempts: attempts - 1, then: then) }
+    }
+    then(written)
 }
 
 private func confirmWrite(_ field: AXUIElement, old: String, expected: String, attempts: Int, rich: Bool,
@@ -216,7 +282,7 @@ private func confirmWrite(_ field: AXUIElement, old: String, expected: String, a
     }
     appendLog.info("append write: waited=\(20 - attempts) expected=\(expected.utf16.count) got=\(written?.utf16.count ?? -1) firstDifference=\(mismatch ?? -1) rich=\(rich)")
     if sameTextUnits(written, expected) { return completion("Added. Review the draft there; nothing was sent.", true) }
-    if sameTextUnits(written, old) { return completion("The app did not take the text. Nothing was added.", false) }
+    if sameTextUnits(written, old) { return completion(ignoredMessage, false) }
     completion("Text was added but reads back differently. Check the draft before retrying.", false)
 }
 
