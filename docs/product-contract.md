@@ -1,18 +1,13 @@
 # Handoff product contract
 
-The active goal is a small macOS status-bar utility that passes functional and real-machine acceptance and is ready for release. The implementation starts from `e60dc038be1a80c83ad339266c76ec8de38026ed`, on `codex/session-handoff`. A passing fixture suite alone is insufficient.
+The goal is a small macOS menu-bar utility that passes functional and real-machine acceptance and is ready to release. A passing fixture suite alone is not enough.
 
-The user's subsequent clarification makes the main surface an embedded ChatGPT chat inside the status-bar app. Add to Claude/Agent, target selection and preview belong in small outer-frame controls. Normal handoff must not open a separate browser, force a page refresh, flicker between windows or put an extra blocking overlay over the chat. This supersedes the earlier separate-Chrome-window suggestion in the reference conversation. WebKit uses the app's own login session; reusing Chrome cookies is not required or attempted.
+## Current design (owner decisions, 2026-10-13 to 2026-10-14)
 
-The [verbatim current-thread clarification](sources/current-thread-ux-2026-10-13.txt) is preserved separately. “bar 退出后” is interpreted in the context of the following messages as the status-bar app's opened chat surface, not a request to terminate ChatGPT.
-
-## Browser-session reuse clarification
-
-The owner subsequently reported Google login failure in the separate WebKit environment, asked to integrate the original browser and identified **Google Chrome** as the already-signed-in browser. The [verbatim clarification](sources/current-thread-browser-reuse-2026-10-13.txt) is retained separately. Supported reuse of that Chrome session now takes priority over requiring another WebKit login. Chat must still be the main surface, with small frame-level controls, no forced refresh or blocking handoff overlay; copying browser credentials is not the implementation path.
-
-Codex verified on this Mac that Chrome opens the signed-in ChatGPT homepage and that Chrome's existing **Open in ChatGPT** action opens an installed browser-owned ChatGPT app window without the normal address/tab bars, retaining login. Its observed bundle identity is `com.google.Chrome.app.naboeedjljbhciiecpeahakaafbhknkj`; it also exposes an extension entry point. No historical conversation was opened, extracted or sent during this check. The system default browser is Safari, which is not the user's confirmed source browser.
-
-The implemented primary path connects the status-bar launcher and a small privileged extension popup to that existing Chrome chat surface. The primary Chrome launcher, small extension popup, selected-document passive capture and exact-origin native messaging are now implemented for acceptance. Installation into the owner's profile and real native target insertion are **not yet accepted**; the installed primary-popup fixture now uses a real Chrome-launched native process with a synthetic composer backend, while the production AX helper is separately probed. The candidate launcher runs and opens the existing Chrome app; permission/setup acceptance is next. Preserve the working Chrome session while completing the adapter/controls. Previous WebKit results remain useful component evidence, not proof of the new Chrome integration. Real selected synthetic conversation capture, actual target insertion/files and release gates remain required.
+- **Source.** The ChatGPT conversation open in the owner's signed-in **Google Chrome**. Its session is reused through Chrome itself; browser credentials are never copied. The owner's [verbatim clarifications](sources/current-thread-browser-reuse-2026-10-13.txt) are kept in [docs/sources](sources/current-thread-ux-2026-10-13.txt).
+- **Surface.** One small status-bar popover. No handoff may open a browser, refresh the page, raise or switch windows, flicker, or put a blocking overlay over the chat. This replaces the earlier embedded-WebKit window and the extension popup.
+- **Target.** An exact window that is already open in another app. Text is appended into its composer in the background and read back to confirm. Nothing is sent.
+- **Scope.** The owner authorized a complete first-principles refactor. Paths that do not serve this design were removed: the local HTTP desk, the WebKit workspace, the DOM/scroll collector and the old popups.
 
 ## Source and interpretation
 
@@ -37,18 +32,9 @@ Assistant suggestions in that conversation are design candidates, not independen
 
 Original Markdown, source coverage, citation resolution, downloaded bytes and target insertion are separate facts. A selected branch can be accounted for without proving that the service exposed every hidden variant. A degraded DOM or manual-copy fallback is useful but does not close R1 or R4.
 
-## Implementation sequence and current gaps
+## Status
 
-1. Use original data loaded by the currently displayed embedded ChatGPT page, kept only in memory for that page. Add must not trigger a reload. The Chrome debugger adapter is an optional external-source path; its deliberate reload cannot become the embedded app's primary interaction.
-2. Join preparation, target selection and verification into small native outer-frame controls around the chat. Keep privileged target operations native and isolated from the website; retain model validation at every boundary. Use nonblocking inline status and explicit Add intent rather than an extra modal confirmation screen.
-3. Complete real target and attachment adapters, then exercise the whole selected-source → exact-existing-window path and failure recovery. Do not treat a controlled test composer as external-client certification.
-4. Complete interaction refinement, regression/independent review, packaging and real-machine acceptance. Mark release readiness only against R1–R8.
-
-At intake, original browser capture is absent, native UI is a disconnected menu, installed-extension tests use pregranted hosts, and no real client is certified. Prior-worker results remain in [Mac acceptance](mac-acceptance.md). Codex independently compiled/launched both native apps, inspected the real menu, started the bundled server and confirmed its exit on app quit; the full native/extension acceptance is still open. Accessibility grant and a synthetic logged-in test conversation have been requested from the user and have not yet been supplied.
-
-Current checkpoint (2026-10-13): passive selected GET and classic/v1 SSE response reconstruction now run in the embedded observer without refresh, including ongoing/new-chat identity, branch-aware uncertainty and shared hidden-message filtering. Native controls prepare snapshots automatically, allow Preview before Add, and recheck the source immediately before delayed insertion. Latest verification: 101 unit, 58 ordinary browser, 23 extension cases and seven native WebKit synthetic scenarios passed; unsigned native build passed. These do not close the goal. The owner explicitly deferred embedded login and requested remaining implementation/synthetic work. Still required: live original-source compatibility (including modern WebSocket/handoff delivery), native target insertion/file delivery, full native interaction checks and release signing. Explicit Save now downloads supported exposed files and exports full long context with byte/hash receipts; 30 export checks and eight native download scenarios pass, but its real UI/live-source/target-delivery acceptance remains open. A subsequent 24-check native Workspace suite validates preparation/gating and recovers from a reproduced compiler-module readiness race, with simulated target callbacks. No real client is certified and no release candidate has been accepted. This Mac reports no valid signing identities.
-
-The reported Praxis design cues are light appearance, system fonts, no shadows and an ink focus frame. The actual `Praxis/kit/design/marks` source has not been read here. No Praxis files or remote may be changed.
+See [support-matrix.md](support-matrix.md) and [release-checklist.md](release-checklist.md). R1 is covered for synthetic data only. R3 and R4 are implemented, but the background-insertion change still needs an Accessibility run and real-client checks. R2 is limited to file references; attachment bytes are not implemented. R8 is open.
 
 ## Reference evidence checked on 2026-10-12
 

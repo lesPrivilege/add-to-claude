@@ -1,23 +1,30 @@
 {
   "manifest_version": 3,
   "name": "gpt-handoff",
-  "version": "0.3.0",
-  "description": "Bring the selected ChatGPT conversation to your local composer, without sending it.",
+  "version": "0.4.0",
+  "description": "Lets the gpt-handoff menu-bar app read the ChatGPT conversation you are viewing. Nothing is sent.",
   "minimum_chrome_version": "116",
-  "permissions": ["activeTab", "scripting", "storage", "nativeMessaging"],
-  "optional_permissions": ["downloads"],
-  "optional_host_permissions": [
-    "https://chatgpt.com/*",
-    "https://chat.openai.com/*",
-    "http://127.0.0.1/*"
-  ],
+  "permissions": ["nativeMessaging"],
+  "host_permissions": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
   "background": {
     "service_worker": "worker.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["observer.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["source.js"],
+      "run_at": "document_start"
+    }
+  ],
   "action": {
-    "default_title": "gpt-handoff",
-    "default_popup": "chat.html"
+    "default_title": "gpt-handoff: use the menu-bar app"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'; base-uri 'none'"

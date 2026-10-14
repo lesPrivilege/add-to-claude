@@ -1,29 +1,22 @@
-import { mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
+import { mkdir, copyFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createEmbeddedSourceScript } from '../web/embedded-source.js';
 import { fileURLToPath } from 'node:url';
+import { createPageObserverScript } from '../src/page-observer.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const out = path.join(root, 'dist/extension');
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
-for (const name of (await readdir(path.join(root, 'extension'))).sort()) {
-  await writeFile(path.join(out, name), await readFile(path.join(root, 'extension', name)));
-}
+for (const name of await readdir(path.join(root, 'extension')))
+  await copyFile(path.join(root, 'extension', name), path.join(out, name));
+// The worker imports the shared model; the observer is one self-contained page script.
 for (const name of [
-  'capture.js',
-  'collect.js',
-  'page-scroll.js',
+  'handoff.js',
   'model.js',
   'import.js',
   'message-visibility.js',
   'chatgpt-response.js',
-  'original.js',
-]) {
-  await writeFile(path.join(out, name), await readFile(path.join(root, 'src', name)));
-}
-await writeFile(
-  path.join(out, 'chat-observer.js'),
-  createEmbeddedSourceScript({ bridgeEvent: 'GH_CHROME_SOURCE', maxBytes: 16 * 1024 * 1024 }),
-);
-process.stdout.write('Built dist/extension. Load this directory unpacked in Chrome.\n');
+])
+  await copyFile(path.join(root, 'src', name), path.join(out, name));
+await writeFile(path.join(out, 'observer.js'), createPageObserverScript());
+process.stdout.write('Built dist/extension.\n');

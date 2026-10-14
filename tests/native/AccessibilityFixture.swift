@@ -58,10 +58,10 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
             }
             defer { try? input.close(); try? output.close() }
             do {
-                while let packet = try NativeFrames.read(from: input) {
+                while let packet = try Frames.read(from: input) {
                     DispatchQueue.main.sync {
                         let response = self.receive(packet)
-                        try? NativeFrames.write(response, to: output)
+                        try? Frames.write(response, to: output)
                     }
                 }
             } catch {}
@@ -98,7 +98,7 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
         if packet["focus"] as? Bool == true, let view = editors[key] {
             window.makeKeyAndOrderFront(nil)
             window.makeFirstResponder(view)
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
         }
         var drafts = editors.mapValues { $0.string }
         for (key, view) in editors {

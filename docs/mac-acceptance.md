@@ -1,151 +1,40 @@
 # Mac acceptance log
 
-## Codex reconstruction checkpoint — 2026-10-13
+## 2026-10-14 · 0.4.0 menu-bar rebuild
 
-Synthetic data only, on macOS 27.0.1 arm64, Node 25.9.0, installed Google Chrome 154 and Chrome for Testing 149. The owner explicitly deferred embedded login and asked to continue implementation and synthetic tests. No Accessibility grant or real-client insertion is assumed.
+macOS 27.0.1 (arm64), Swift 6.3.3, Node 25.9.0, Chrome for Testing 149. Synthetic data only.
 
-| Check                          | Actual evidence                                                                                                                                                                                                                                                                                  |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Unit suite                     | 101/101 passed after streaming and independent-review repairs.                                                                                                                                                                                                                                   |
-| Ordinary browser suite         | 58/58 passed in one final run, including eight embedded observer scenarios and the served native compiler/dependency boundary.                                                                                                                                                                   |
-| Extension suite                | 23/23 passed: 13 API mocks and ten installed-extension cases. Hosts pregranted, popup opened programmatically, worker kept alive.                                                                                                                                                                |
-| Native WebKit synthetic runner | Seven scenarios passed through actual WKWebView/WKScriptMessageHandler: selected GET, SSE with Request/Response cloning, exact Markdown/Unicode, incomplete transport, historical uncertainty, unchanged draft/no extra requests, navigation invalidation. `bash scripts/test-native-source.sh`. |
-| Native source/build            | Swift typecheck and unsigned arm64 app build passed. Runtime target explicitly macOS 13.                                                                                                                                                                                                         |
-| Native workspace controls      | 24 subsequent native controller/WebKit checks cover automatic preparation, readiness, delayed source-validity and recovery. Target callbacks are synthetic; real insertion and rendered interaction remain open.                                                                                 |
+- `npm test` passed 90/90, and `npm run test:browser` passed 14/14.
+- `npm run test:chrome` passed in real Chrome for Testing with the built extension and the real compiled relay. The app was replaced by a stand-in built on the real `ChromeLink`. It recorded:
+  - the state;
+  - the exact Markdown and its hash;
+  - the final check turning false after in-page navigation;
+  - reconnection after the stand-in app was restarted;
+  - "none" after the tab closed.
 
-The first WebKit runner attempts failed because its navigation policy rejected loadHTMLString's base URL, then because evaluateJavaScript returned an unsupported Promise. These were test-runner repairs, not passing evidence. The final runner blocks subsequent navigation, replaces fetch with synthetic responses and uses a nonpersistent data store. It does not contact ChatGPT or another app.
+  The page made only its own two requests.
 
-The stream observer watches only selected GET and normal conversation POST responses already initiated by the website. It reconstructs classic messages and v1 deltas without refresh, preserves request/reply provenance, and retains unresolved completion evidence across subsequent exchanges and branch changes. An authoritative later GET or supported continuation can repair the relevant evidence. WebSocket/handoff reconstruction remains unsupported and explicitly partial; public protocol references do not establish live-account compatibility.
+- `npm run test:native` passed 21 link checks against the real relay. The Accessibility checks reported NOT RUN, because the shell used here has no Accessibility access.
+- `scripts/build-macos.sh` builds `gpt-handoff.app` with `gpt-handoff-host`, the icons and the extension, without warnings.
+- Popover snapshots of the real view controller were reviewed in the disconnected, waiting, ready and partial states (light appearance).
 
-Earlier in this chat Codex built and launched both native apps, inspected the old status menu with composer access denied, started the bundled Node child and verified Quit removed both processes. The embedded reconstruction was separately launched and visually inspected: the signed-out ChatGPT homepage rendered in Handoff with small outer-frame controls and no separate browser. The latest rebuilt app was also launched and inspected through CUA: signed-out ChatGPT rendered in the same window, Preview/Add were disabled without a source/target, the target menu showed Enable composer access, and Escape dismissed that menu back to the chat composer. This does not exercise a prepared source or positive native insertion. Login, current native keyboard/focus/appearance, real target insertion, downloads/file delivery and signing remain open.
+An independent review (Opus) of this rebuild found eight defects, and all were fixed with tests:
 
-The pre-streaming app and its owned server were stopped for rebuilding; its bundle was preserved as `dist/gpt-handoff-before-streaming.app`. A CUA attempt to inspect that older running app timed out; the rebuilt app subsequently opened and rendered successfully. The original package/bundle remains untouched. See [product contract](product-contract.md) for R1–R8 and [independent review](independent-review.md) for reviewed defects. No release readiness is claimed.
+- a data race on the window list;
+- the relay not checking which process serves the socket;
+- two Chrome relays displacing each other;
+- a superseded response becoming ready;
+- a frame-size exit;
+- the replay URL check;
+- an accept-loop spin;
+- a second app copy silently taking the socket.
 
-## Native file/export checkpoint — 2026-10-13
+UX fixes from the same review: the status line now clears for a new conversation, Return no longer triggers Add, the picker no longer rebuilds while open, and focus is handed back after Save. The two new link checks were confirmed to fail without their fixes.
 
-The owner's current login attempt reached Google's passkey challenge and showed a Bluetooth/device-proximity failure. CUA selected the provider's existing **Try another way** action and confirmed that a password sign-in option was offered. No credential was entered, no account setting changed, and no browser cookie/cache was copied. Authentication remains unverified. WKWebView uses Handoff's own persistent website data store; Chrome/Safari cookies are not shared with it. No auth URL, challenge token or account identifier is recorded here.
-
-The new **Save…** outer-frame control is implemented for a prepared current source. It asks for an export folder only after the explicit action, downloads supported exposed HTTPS files through that webview's ordinary `startDownload` API, and saves full `context.md`, original `conversation.json`, actual file bytes and a SHA-256 receipt manifest. Missing/expired/unsupported files remain unresolved. It never changes Add's completeness decision or calls a saved file attached/inserted. Native file insertion into a real target remains unfinished.
-
-Validation: `bash scripts/test-native-files.sh` passed **30 exporter checks** and **eight native WKWebView download scenarios**, including exact Unicode bytes, same-name files with distinct ownership, stale redirect callbacks, login HTML/type refusal, chunked oversize, size mismatch, interruption, cancellation and source-change cleanup. Export checks cover >2 MiB text without truncation, unsafe/NFD filenames, hashes, source mismatch, missing files and cancellation around staging/publication. The fixture uses a loopback HTTP server and an injected URL-eligibility function; production eligibility requires HTTPS. WebKit emitted `sandbox_extension_issue_file failed` diagnostics in the unbundled runner, but the observed files/bytes and cleanup assertions passed. This does not establish live signed-in file-download compatibility.
-
-Swift typecheck and a separate unsigned app build passed. `dist/gpt-handoff-files-reviewed.app` is the latest file/export checkpoint; it was **not launched**, preserving the owner's active login in `dist/gpt-handoff.app` (streaming checkpoint). The actual Save chooser, positive export from that running native UI, cancellation responsiveness and real-client attachment reception still require runtime acceptance. The build script accepts an optional absolute output `.app` path so a candidate can be built without replacing a running app.
-
-## Workspace runtime checkpoint — 2026-10-13
-
-`bash scripts/test-native-workspace.sh` passed **24 checks** through the production Workspace controller, real AppKit controls, the actual source observer and the real local compiler in separate WKWebViews. Synthetic source data and a nonpersistent website store are injected; the fixture has no external network/account and uses an ephemeral loopback server. It checks initial disabled controls, automatic Preview/Save without a target, target-dependent Add, immutable exact text, suppression of duplicate/automatic Add, source change during a pending callback, partial/long-context gating, successful-callback selection clearing, compiler recovery without source refetch and an older delayed compiler result arriving after a newer source.
-
-The test reproduced a genuine recovery failure: `window.handoffCore.compile` was undefined after the core navigation's `didFinish`. WebKit had finished navigation before evaluating the module. The repaired app waits for a local-core readiness signal and verifies the current document's compiler function, with origin, loading and navigation-generation guards. The previously failing recovery now passes. The test invokes the compiler-stop notification directly; it does **not** kill a WebKit process. Target insertion is an injected callback, **not Accessibility/real-client acceptance**. No fixture window is presented, so these checks do not certify rendered layout, keyboard navigation, VoiceOver or the Save chooser.
-
-The focused served-core browser regression and the unsigned candidate build passed after this fix. `dist/gpt-handoff-workspace-reviewed.app` is the new candidate and was not launched; the owner's login process remains untouched. `security find-identity -v -p codesigning` reported **0 valid identities** on this Mac. Distribution signing/notarization remains unresolved; no signing identity or credential was created.
-
-## Chrome-session and passive socket checkpoint — 2026-10-13
-
-The owner confirmed Google Chrome as the signed-in browser. CUA navigated only to ChatGPT's home page in that current Chrome profile and observed it already signed in. Chrome's existing **Cast, save, and share → Open in ChatGPT** action then opened an installed Chrome-owned app (`com.google.Chrome.app.naboeedjljbhciiecpeahakaafbhknkj`) with the same login, no ordinary address/tab bars, and an extension menu. No historical conversation was opened/extracted and no message was sent. No credentials, profile data, policies or permissions were changed. This proves a usable browser-owned chat surface exists, not that Handoff controls or source/target adapters are connected to it. That integration is now the next required implementation, replacing the expectation that the owner log in again in WebKit.
-
-Passive socket parsing/observation was independently reviewed and checked with synthetic data: **110/110 unit tests**, **64/64 ordinary browser cases**, and the existing seven native WebKit observer scenarios passed. The browser set includes six new routed-socket/auth scenarios; Playwright supplies socket frames, so this is not real ChatGPT transport acceptance. Known wrapper/topic shapes are parsed; early missed frames, conflicting turn IDs, replay/unsupported frames and premature unsubscribe reject capture. Normal terminal unsubscribe retires observation without erasing the partial snapshot. No observer traffic is added and auth-provider documents retain their original APIs.
-
-Socket provenance remains **partial / unverified-replay**, even after terminal data or a forged serialized verification claim. These public examples do not establish gap-free replay semantics. A later website-owned authoritative GET can replace socket uncertainty. This path is not considered R1 complete. The installed-extension suite's latest complete result remains 23/23 from the prior checkpoint; the socket path is currently in the passive observer, not the production extension UI.
-
-## Chrome/native integration candidate — 2026-10-13
-
-The implementation now uses the existing Chrome ChatGPT app as the primary surface. A real candidate was built at `dist/gpt-handoff-chrome.app`. CUA launch of the windowless status-bar app timed out while waiting for an AX window, but process inspection confirmed the exact candidate executable was running and the foreground application became the existing Chrome ChatGPT app. No WebKit login window or loopback server is launched on this normal path. Hide/reopen/menu/quit interaction remains to be exercised through the actual status item.
-
-The app bundles a stable-ID primary extension and a native-messaging helper. The primary manifest has `activeTab`, `scripting`, `storage`, `nativeMessaging`, optional host/download grants, and **no debugger**. The worker activates capture only for one explicitly selected top-level tab/document. The popup holds privileged target controls; page messages carry data only. Add is frozen before asynchronous validation, and the host asks for a single-use revision/hash permit immediately before its shared AX append/readback boundary. Old-source receipt ordering and late-target completion regressions were repaired during review.
-
-| Check                         | Result and scope                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`                    | 116/116 passed, including six worker/source/native-transport protocol cases.                                                                                                                                                                                                                                                                                               |
-| `npm run test:e2e`            | 64/64 passed on installed Google Chrome 154.                                                                                                                                                                                                                                                                                                                               |
-| `npm run test:extension`      | 23/23 passed: 13 API mocks and ten installed **legacy** cases. That fixture explicitly adds debugger and switches to the old popup; production does neither.                                                                                                                                                                                                               |
-| `npm run test:chrome`         | One integrated installed-extension scenario passed: enable selected document, capture normal GET without reload/extra request, preview exact Unicode Markdown, choose a synthetic native target, final source check, append-preserve fixture draft, and reopen the popup to recover Last handoff. Native transport is mocked; Chrome popup/source/scripting APIs are real. |
-| `scripts/test-native-host.sh` | 16 actual framing/protocol checks with a synthetic composer backend: opaque targets, matching one-use permits, mismatch, expiry, cancellation, disconnect, exact UTF-8, bounded malformed framing, no transcript/draft echo.                                                                                                                                               |
-| Native candidate build        | Swift/AppKit/AX host and launcher compiled; both bundle plists valid; extension public key matches host origin.                                                                                                                                                                                                                                                            |
-| Built helper `--check`        | Real executable accepts its pinned origin and replies to a framed ping. The **CLI launch context** reported Accessibility true. This is not evidence of Chrome-launched permission or insertion. No registration was changed.                                                                                                                                              |
-| Independent review            | Source and `artifacts/12-chrome-handoff-popup.png` inspected; no remaining concrete defect reported. Review did not execute real native insertion.                                                                                                                                                                                                                         |
-
-The initial popup reopen test failed because the debugger-attached action popup had not actually closed. The fixture now explicitly closes that popup, waits for its target to disappear, and reopens it. The final scenario passes; this was not an owner-profile interaction.
-
-The old development app and its owned Node process were stopped to free the fixed legacy test port. Chrome's account/session remains browser-owned. The new candidate is running as a status-bar launcher. **Owner-profile extension installation and native-host registration have not occurred.** Normal permission prompts, owner-profile Chrome → production AX-helper connection, synthetic live-account capture, real target readback/failure cases, primary file attachment delivery and signing remain open. The prior native file exporter remains available only through legacy WebKit tooling; primary Save Markdown exports text/references and never claims attachment delivery.
-
-## Real Chrome/native transport follow-up — 2026-10-13
-
-After the candidate checkpoint above, `npm run test:chrome` passed its one installed-popup scenario using a **real Chrome-launched native process**, replacing the earlier mocked transport. Chrome for Testing uses a disposable user-data directory and a native-host manifest inside that directory. The helper compiles production `NativeHostProtocol.swift`, `NativeHostOrigin.swift` and the extracted `NativeHostRuntime.swift`, with an in-memory synthetic composer backend. It does not compile or invoke the Accessibility backend.
-
-The passing path covers selected synthetic GET capture without reload or extra requests, popup Preview/target selection, real native messaging pipes, final source permit, preserved draft plus Unicode/Markdown, Last handoff after popup reopening, and helper termination after selected-tab closure (termination journal plus PID exit). Site access remains pregranted and popup opening programmatic. No owner-profile extension installation, registration or grant occurred.
-
-The unsigned candidate `dist/gpt-handoff-chrome-transport-checked.app` built successfully. `scripts/install-native-host.py --check` passed the production executable's pinned-origin/framed-ping check without registration; its CLI-context Accessibility result does not establish Chrome-launched access. This candidate was not launched in place of the existing launcher. The independent reviewer found no concrete runtime-refactor or fixture-isolation defect; review did not rerun the scenario.
-
-Real ChatGPT protocol compatibility, owner-profile setup, real client insertion/readback and attachment delivery remain open. The isolated native-host lookup basis is recorded in [research](research.md#isolated-chrome-native-host-fixture).
-
-## Initial real Accessibility fixture — locked-desktop attempt
-
-`bash scripts/test-native-accessibility.sh` now builds production `ComposerAccess.swift` against an isolated AppKit fixture. The runner starts only its generated app bundle through Launch Services, uses private mode-0600 FIFOs under its temporary directory for fixture setup and independent draft readback, and derives AX handles only from that owned app's PID. It does not discover or mutate user apps, install a browser extension, change permissions, or send keyboard input. It contains no submit action or network code.
-
-Planned assertions exercise real AX append/readback, exact Unicode/Markdown and existing draft preservation, preservation of a draft edited while preparation is pending, same-title window isolation, oversized text rejection, changed focus/editor/title, read-only fields, source denial, cancellation, code-editor semantics and closed-window rejection. These assertions are **not passing evidence yet**. Initial direct-process launch lacked a Launch Services identity; the fixture now uses normal app launch. Subsequent selection attempts could not acquire foreground focus. CUA independently reported that the Mac was locked and automatic unlock failed.
-
-The latest run compiled successfully and exited **2 / NOT RUN** with an explicit desktop/focus prerequisite message; no production focus guard was relaxed. The owned fixture process exited and its temporary artifacts were removed. No Accessibility prompt was requested. After the owner unlocks the Mac, rerun this script while the desktop is available; without existing runner Accessibility access it also exits 2 instead of changing permissions. This is a synthetic-app check even when it passes: real client compatibility, rich-draft/attachment preservation, permission revocation and Chrome-launched helper identity still require separate acceptance.
-
-## Unlocked Accessibility acceptance and rich-draft repair — 2026-10-13
-
-After the owner confirmed unlock, CUA again listed native apps and the production-AX synthetic fixture passed its original **24 checks**. These cover actual AX insertion/readback and failure boundaries in the owned test app, not permission revocation or third-party clients.
-
-An added rich-draft scenario then failed: writing the complete combined string through `AXValue` erased the existing link, bold span and attachment object, while plain-text readback still reported success. Production now appends only the suffix through `AXSelectedText` at a verified zero-length tail range. Hosts without writable selected-text/range support are rejected; there is no whole-value replacement fallback. Range offsets use UTF-16, and the draft/focus/permit checks remain in place.
-
-Independent review identified two further defects in that change: checking the tail before later AX reads could allow a new user selection to be replaced; Swift canonical string equality could falsely certify normalized text. The range is now checked after focus/value reads immediately before mutation, and draft/readback equality compares exact UTF-16 units. Real fixture callbacks change the selection during the final value read and normalize text during the insertion setter. Temporary copies with the earlier range order or canonical equality each reproduced their expected regression failure; fixed repository source was retained.
-
-The final scoped run passed **34 real AX checks**, including independently read-back text bytes and rich objects, an updated draft with emoji/combining marks, untouched same-title windows, oversize/read-only/replaced/renamed/closed/code-editor rejection, source denial, cancellation, late-selection rejection and normalization uncertainty. Fixture processes and temporary data are cleaned up. No owner-profile Chrome installation or new permission grant occurred.
-
-The final unsigned `dist/gpt-handoff-ax-rich-checked.app` build passed, and its production helper passed the read-only origin/protocol probe. The probe’s Accessibility result applies to its CLI context only; no registration was changed and the candidate was not launched over the existing app. Independent reinspection reported no remaining concrete finding in this bounded change.
-
-Actual third-party composer rich state and attachment chips, Chrome-launched permission identity, AX revocation and primary file delivery remain open. AX reads/writes are separate operations; this narrows races but cannot guarantee an atomic insert against concurrent user editing.
-
-## Previous worker's report
-
-2026-10-12 · macOS 27.0.1 (arm64) · Xcode SDK 26.5 / Swift 6.3.3 · Node 25.9.0 · Google Chrome 154.0.8037.98 · Chrome for Testing 149.0.7827.55 · synthetic data only.
-
-This is the first run outside the Linux VM. It is partial: the functional real-machine pass (status-bar menu, Accessibility append, real toolbar capture) is being continued separately. Fixture results below are not real-client evidence.
-
-## Executed here
-
-| Check                                                                                                   | Result                                                                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test` (Node 25.9)                                                                                  | 54/54 passed.                                                                                                                                                          |
-| `npm run test:e2e` against installed Google Chrome 154, headless                                        | 49/49 passed in one run.                                                                                                                                               |
-| `npm run test:extension`, API-mocked harness                                                            | 13/13 passed.                                                                                                                                                          |
-| Installed-extension lifecycle, headed Chrome for Testing 149, real extension APIs and real action popup | 7/7 passed after repairing the test harness (below). Host permissions are pregranted in the fixture manifest and the popup is opened with `chrome.action.openPopup()`. |
-| `scripts/build-macos.sh`, `native/build-test-composer.sh`                                               | Both compile and launch after the deployment-target fix (below). One deprecation warning: `activateIgnoringOtherApps`.                                                 |
-| Status item                                                                                             | The `text.badge.plus` item appears in the menu bar and highlights on click. Menu contents were **not** inspected.                                                      |
-| Native test composer                                                                                    | Both fixture windows open and render.                                                                                                                                  |
-
-## Defects found and fixed
-
-- **Native builds could not launch.** `MACOSX_DEPLOYMENT_TARGET=13.0 xcrun swiftc` produced binaries with `minos 28.0` on this toolchain, and `open` failed with LaunchServices error -10825 on macOS 27. Both scripts now pass `-target <arch>-apple-macos13.0` explicitly; `vtool` reports `minos 13.0`.
-- **Node 25 was refused.** The `<25` cap in `package.json` and the build script had no technical basis; the full unit and browser suites pass on 25.9. The requirement is now Node 24 or newer.
-- **The installed-extension lifecycle suite had never run and could not pass.** Playwright does not surface the action popup as a `Page`, so every case timed out waiting for one; one case used `import()` inside a service worker, which the platform forbids. The suite now drives the real popup through its own DevTools target, requires `EXTENSION_CHROMIUM_PATH`, and gained real collection, cancel and popup-close cases. Branded Chrome 137+ ignores `--load-extension`, so this suite needs Chromium or Chrome for Testing.
-
-No product defect in `src/`, `extension/` or `web/` was found by these runs.
-
-## Still unverified
-
-- Real toolbar click on the production manifest: `activeTab` grant, optional host and downloads permission prompts, denial and revocation. `openPopup()` plus pregranted hosts does not exercise them.
-- Capture and collection against live authenticated ChatGPT markup and its real virtualized scrolling. All selectors are so far proven only against synthetic fixtures. The service-terms question in `research.md` is separate and remains the owner's call.
-- Service-worker suspension. The lifecycle suite keeps the worker alive on purpose.
-- Extension loaded unpacked into the owner's everyday Google Chrome profile.
-- Download assistance through the real `chrome.downloads` grant.
-- Every status-bar menu action: open ChatGPT, open desk and bundled server start, occupied port, quit terminating the child.
-- Accessibility: denial, grant, revocation, window discovery, window selection, confirmed append with exact readback into the native test composer, wrong focus, read-only or replaced editor, changed title, clipboard change during confirmation.
-- Any real client composer (Claude, Codex, Cursor and the others are labels only).
-- VoiceOver, keyboard-only menu use, dark appearance, Reduce Motion.
-- Signing, hardened runtime, notarization, Gatekeeper.
+Earlier runs (0.3.0 and Codex's 34 Accessibility checks on the Codex branch) covered the previous design and are in git history. The append logic they exercised is unchanged except that it no longer activates the target or waits 0.35 s; that change still needs an Accessibility run.
 
 ## Notes for whoever continues
 
-- The menu-bar app is an accessory (`LSUIElement`) process. Screen-control tools that filter by app allowlist may not list it, and its menu is then invisible in filtered screenshots.
-- Run the lifecycle suite with `EXTENSION_CHROMIUM_PATH='<Chrome for Testing binary>' npm run test:extension`. It opens a visible browser window.
-
-## Foundation review follow-up
-
-A separate read-only reviewer identified four defects: a draft created during Chrome debugger setup could be reloaded; an older selected GET could overwrite a newer snapshot; a failed old response could clear a newer conversation; and preview text survived source navigation. Three new executable regressions first failed for those exact behaviors, then passed after fixes. The native fix validates source identity before mutation and clears/dismisses preview during URL/navigation/process invalidation. The reviewer inspected the fixes and found those four findings addressed. Native preview behavior is still awaiting runtime acceptance.
-
-After these repairs, the full unit suite passed **71/71**, the focused observer/original regressions passed **11/11**, and the five embedded-observer browser cases passed again using an isolated headless configuration that did not interrupt the running native app. Latest Swift source passed typechecking. The visually inspected running app predates the review repairs and is being left open for the owner to log in; rebuild/relaunch and full final-state suites remain required.
+- The app is an accessory process (`LSUIElement`). Screen tools that filter by app allowlist may not show its popover.
+- An unsigned rebuild changes the code signature, so macOS may ask for Accessibility again.
+- Run the Chrome test with `EXTENSION_CHROMIUM_PATH='<Chrome for Testing binary>'`. It opens a visible window.

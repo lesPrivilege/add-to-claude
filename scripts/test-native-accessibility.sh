@@ -17,14 +17,14 @@ cat > "$fixture_bundle/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>io.lesprivilege.gpt-handoff-ax-fixture</string>
 <key>CFBundleName</key><string>Synthetic composer</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>LSMinimumSystemVersion</key><string>13.0</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
 </dict></plist>
 PLIST
-xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos13.0" -framework AppKit \
-  "$project_root/native/NativeHostProtocol.swift" "$project_root/tests/native/AccessibilityFixture.swift" \
+xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library -framework AppKit \
+  "$project_root/native/Link.swift" "$project_root/tests/native/AccessibilityFixture.swift" \
   -o "$fixture_bundle/Contents/MacOS/Fixture"
-xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos13.0" -framework AppKit -framework ApplicationServices \
-  "$project_root/native/ComposerAccess.swift" "$project_root/tests/native/AccessibilityTests.swift" "$project_root/native/NativeHostProtocol.swift" \
+xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library -framework AppKit -framework ApplicationServices \
+  "$project_root/native/Composer.swift" "$project_root/tests/native/AccessibilityTests.swift" "$project_root/native/Link.swift" \
   -o "$fixture_root/accessibility-tests"
 mkfifo -m 600 "$fixture_root/requests" "$fixture_root/responses"
 "$fixture_root/accessibility-tests" "$fixture_bundle" "$fixture_root"

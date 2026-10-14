@@ -49,8 +49,8 @@ import ApplicationServices
             let input = self.input!, output = self.output!
             io.async {
                 do {
-                    try NativeFrames.write(["command": name, "window": window, "focus": focus, "text": text], to: input)
-                    guard let result = try NativeFrames.read(from: output),
+                    try Frames.write(["command": name, "window": window, "focus": focus, "text": text], to: input)
+                    guard let result = try Frames.read(from: output),
                           result["ok"] as? Bool == true, let drafts = result["drafts"] as? [String: String] else {
                         DispatchQueue.main.async { self.end(1, "Fixture pipe failed") }; return
                     }
@@ -61,7 +61,7 @@ import ApplicationServices
     }
     func select() async -> Composer {
         _ = await command("reset", focus: true)
-        _ = fixture.activate(options: [.activateIgnoringOtherApps])
+        _ = fixture.activate()
         for _ in 0..<20 {
             if NSWorkspace.shared.frontmostApplication?.processIdentifier == fixture.processIdentifier { break }
             await pause()
@@ -82,6 +82,10 @@ import ApplicationServices
     }
     func append(_ selected: Composer, text: String = "Original **Markdown** 中文 ✓\n", valid: @escaping () -> Bool = { true }, source: Bool = true,
                 during: (() async -> Void)? = nil) async -> (String, Bool) {
+        // The target must not need to be frontmost: put this runner in front first.
+        NSApp.activate()
+        for _ in 0..<20 where NSWorkspace.shared.frontmostApplication?.processIdentifier == fixture.processIdentifier { await pause() }
+        check(NSWorkspace.shared.frontmostApplication?.processIdentifier != fixture.processIdentifier, "target app is in the background before append")
         let mutation = during.map { action in Task { await action() } }
         let result: (String, Bool) = await withCheckedContinuation { continuation in
             appendToComposer(selected, text: text, operationValid: valid, revalidateSource: { reply in
@@ -124,6 +128,7 @@ import ApplicationServices
         var result = await append(selected)
         var drafts = await command("snapshot")
         check(result.1, "real AX insertion and exact readback")
+        check(NSWorkspace.shared.frontmostApplication?.processIdentifier != fixture.processIdentifier, "append never activates the target app")
         check(exact(drafts["A"], "Synthetic draft A.\n\nOriginal **Markdown** 中文 ✓\n"), "fixture independently confirms preserved draft and exact Unicode Markdown")
         check(drafts["B"] == "Synthetic draft B.", "same-title other window unchanged")
 
@@ -153,7 +158,7 @@ import ApplicationServices
         result = await append(selected, text: "e\u{301}")
         drafts = await command("snapshot")
         check(exact(drafts["A"], "Synthetic draft A.\n\né"), "fixture normalizes inserted text")
-        check(!result.1 && result.0.contains("Inspect the draft"), "normalization cannot receive an exact insertion receipt")
+        check(!result.1 && result.0.contains("Check the draft"), "normalization cannot receive an exact insertion receipt")
 
         selected = await select()
         result = await append(selected, text: String(repeating: "x", count: maximumTextBytes + 1))
