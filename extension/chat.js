@@ -11,18 +11,37 @@ const request = async (type, values = {}) => {
 function status(text) {
   $('status').textContent = text;
 }
+function showVerification(value) {
+  const tag = $('verify');
+  tag.hidden = !value;
+  if (!value) return;
+  const verified = value === 'verified';
+  const glyph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  glyph.classList.add('g');
+  glyph.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', verified ? '#g-done' : '#g-unverified');
+  glyph.append(use);
+  tag.classList.toggle('dash', !verified);
+  tag.replaceChildren(glyph, value[0].toUpperCase() + value.slice(1));
+}
+function showPreview(open) {
+  $('preview-area').hidden = !open;
+  $('preview').setAttribute('aria-pressed', String(open));
+}
 function render(state) {
   $('enable').hidden = state.enabled;
   $('source').textContent = state.ready
-    ? `${state.turns} turns · ${state.files} file references · ${state.verification.status}`
-    : 'Open a conversation normally to prepare its original messages.';
+    ? `${state.turns} turns · ${state.files} file refs`
+    : 'Open a conversation to prepare it.';
+  showVerification(state.ready && state.verification.status);
   $('help').hidden = state.enabled;
   $('preview').disabled = !state.ready || busy;
   $('save').disabled = !state.ready || busy;
   $('add').disabled = !state.canAdd || busy;
-  $('add').textContent = state.target ? `Add to ${state.target.name}` : 'Add to Agent';
+  $('add-label').textContent = state.target ? `Add to ${state.target.name}` : 'Add to Agent';
   if (lastRevision !== state.revision) {
-    $('preview-area').hidden = true;
+    showPreview(false);
     $('text').value = '';
     lastRevision = state.revision;
   }
@@ -38,6 +57,7 @@ async function refresh() {
   } catch (error) {
     $('enable').hidden = false;
     $('source').textContent = error.message;
+    showVerification(null);
     $('add').disabled = true;
     $('preview').disabled = true;
     $('save').disabled = true;
@@ -46,6 +66,7 @@ async function refresh() {
 async function run(action) {
   if (busy) return;
   busy = true;
+  document.body.ariaBusy = 'true';
   for (const id of ['enable', 'targets', 'target', 'access', 'preview', 'save', 'add'])
     $(id).disabled = true;
   try {
@@ -54,6 +75,7 @@ async function run(action) {
     status(error.message);
   } finally {
     busy = false;
+    document.body.ariaBusy = 'false';
     for (const id of ['enable', 'targets', 'target', 'access']) $(id).disabled = false;
     $('cancel').hidden = true;
     await refresh();
@@ -75,14 +97,13 @@ $('targets').addEventListener(
       const response = await request('chatTargets');
       $('access').hidden = response.trusted;
       $('target').replaceChildren(
-        new Option('Choose a window…', ''),
+        new Option('Choose composer…', ''),
         ...(response.targets ?? []).map((row) => new Option(`${row.app} — ${row.window}`, row.id)),
       );
-      $('target-label').hidden = !response.targets?.length;
       status(
         response.trusted
-          ? 'Focus the intended composer once, then select its exact window.'
-          : 'Enable Handoff in System Settings → Accessibility, then choose the composer again.',
+          ? 'Focus the composer once, then pick its window.'
+          : 'Allow Accessibility, then find windows again.',
       );
     }),
 );
@@ -90,7 +111,7 @@ $('target').addEventListener('change', () => {
   if ($('target').value)
     void run(async () => {
       render(await request('chatSelect', { targetId: $('target').value }));
-      status('Composer selected. Your existing draft will be preserved.');
+      status('Composer selected. Its draft is kept.');
     });
 });
 $('access').addEventListener(
@@ -101,16 +122,15 @@ $('access').addEventListener(
       status('Finish the Accessibility grant in System Settings, then choose the composer.');
     }),
 );
-$('preview').addEventListener(
-  'click',
-  () =>
-    void run(async () => {
-      const response = await request('chatPreview');
-      render(response);
-      $('text').value = response.markdown;
-      $('preview-area').hidden = false;
-    }),
-);
+$('preview').addEventListener('click', () => {
+  if (!$('preview-area').hidden) return showPreview(false);
+  void run(async () => {
+    const response = await request('chatPreview');
+    render(response);
+    $('text').value = response.markdown;
+    showPreview(true);
+  });
+});
 $('save').addEventListener(
   'click',
   () =>

@@ -1,119 +1,298 @@
+/* Praxis marks tokens: light only, system fonts, flat, ink focus frame. */
 :root {
-  font:
-    13px/1.45 -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
-  color: #20201d;
-  background: #fafaf7;
+  --paper: #ffffff;
+  --wash: #f2f5f9;
+  --rule: #d6dde6;
+  --rule-strong: #74828f;
+  --ink: #15202b;
+  --ink-2: #3d4a58;
+  --ink-3: #5d6a78;
+  --accent: #1b58cf;
+  --radius: 6px;
+  --target: 36px;
+  --t-feedback: 120ms;
+  --t-pulse: 1600ms;
   color-scheme: light;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-feedback: 0ms;
+  }
 }
 * {
   box-sizing: border-box;
 }
-body {
-  width: 330px;
-  margin: 0;
+[hidden] {
+  display: none !important;
 }
+/* Chrome's default extension stylesheet sets body font to system-ui at 75%. */
+body {
+  width: 340px;
+  margin: 0;
+  font:
+    14px/1.35 -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+.sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.g {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.g .dot {
+  fill: currentColor;
+  stroke: none;
+}
+.lead {
+  color: var(--ink-3);
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid #d9d9d1;
-}
-header span {
-  font-size: 11px;
-  color: #63635c;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--rule);
 }
 main {
-  padding: 12px 14px;
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px 14px;
 }
 p {
-  margin: 0 0 10px;
+  margin: 0;
 }
-#help,
-details {
-  font-size: 11px;
-  color: #63635c;
+.note {
+  font-size: 13px;
+  color: var(--ink-3);
 }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 1px 8px 1px 5px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+.tag .g {
+  width: 16px;
+  height: 16px;
+}
+.tag.dash {
+  border-style: dashed;
+}
+
 button,
 select,
 textarea {
   font: inherit;
-  border: 1px solid #c9c9c0;
-  background: #fff;
   color: inherit;
-  border-radius: 5px;
 }
-button {
-  padding: 6px 10px;
+.btn,
+.icon,
+select {
+  min-height: var(--target);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  transition: background var(--t-feedback) linear;
+}
+.btn,
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   cursor: pointer;
 }
-button:disabled {
-  opacity: 0.45;
+.btn {
+  padding: 4px 14px;
+}
+.icon {
+  width: var(--target);
+  padding: 0;
+  flex: none;
+}
+.btn:hover:not(:disabled),
+.icon:hover:not(:disabled),
+select:hover:not(:disabled) {
+  background: var(--wash);
+}
+.icon[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn:disabled,
+.icon:disabled,
+select:disabled {
+  color: var(--ink-3);
+  border-color: var(--rule);
+  border-style: dashed;
+  background: var(--paper);
   cursor: default;
 }
-button:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-a:focus-visible,
-summary:focus-visible {
-  outline: 2px solid #20201d;
-  outline-offset: 2px;
-}
-#add,
-#enable,
-#access {
+.wide {
   width: 100%;
-  margin: 8px 0;
 }
-#add {
-  background: #20201d;
-  color: #fff;
-  border-color: #20201d;
+.primary {
+  flex: 1;
+  min-height: 40px;
+  font-weight: 600;
+  border: 1.5px solid var(--ink);
 }
-.row {
+.primary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source {
   display: flex;
+  align-items: center;
   gap: 8px;
-  justify-content: space-between;
-  margin: 8px 0;
+}
+.source .grow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+#source {
+  overflow-wrap: anywhere;
+}
+
+.target,
+.act {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.target {
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
 }
 select {
   width: 100%;
-  padding: 6px;
-  margin-top: 4px;
-}
-label {
-  display: block;
-  font-size: 12px;
-}
-textarea {
-  width: 100%;
-  height: 170px;
-  margin: 6px 0;
-  resize: vertical;
-  font:
-    11px/1.5 ui-monospace,
-    monospace;
-  padding: 8px;
-}
-#status {
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-details {
-  margin-top: 10px;
-}
-summary {
+  padding: 4px 8px;
   cursor: pointer;
 }
+
+textarea {
+  display: block;
+  width: 100%;
+  height: 180px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--wash);
+  font:
+    12px/1.5 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+}
+
+.status {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 20px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.status:has(#status:empty) {
+  display: none;
+}
+#status {
+  overflow-wrap: anywhere;
+  padding-top: 1px;
+}
+.busy {
+  display: none;
+  width: 18px;
+  height: 18px;
+}
+body[aria-busy='true'] .busy {
+  display: block;
+  animation: pulse var(--t-pulse) ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[aria-busy='true'] .busy {
+    animation: none;
+  }
+}
+
+details {
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+summary {
+  display: grid;
+  grid-template-columns: 1.5em 1fr;
+  align-items: center;
+  min-height: var(--target);
+  list-style: none;
+  cursor: pointer;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+summary::before {
+  content: '+';
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+details[open] summary::before {
+  content: '−';
+}
 details p {
-  margin-top: 8px;
+  margin-bottom: 6px;
+  padding-left: 1.5em;
 }
-a {
-  color: inherit;
-}
-[hidden] {
-  display: none !important;
+details a {
+  display: inline-block;
+  padding-left: 1.5em;
+  color: var(--ink-2);
 }
