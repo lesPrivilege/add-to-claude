@@ -1,6 +1,7 @@
 /** Original data from the selected page's own response. No requests or credentials. */
 import { importConversation } from './import.js';
 import { LIMITS, validateConversation } from './model.js';
+import { toMappingConversation } from './paged-conversation.js';
 
 const encoder = new TextEncoder();
 const hosts = new Set(['chatgpt.com', 'chat.openai.com']);
@@ -37,8 +38,14 @@ export function isSelectedResponse(value, pageUrl) {
   try {
     const expected = originalSource(pageUrl);
     const url = new URL(value);
-    // No related endpoints, pagination, child frames, auth responses or other conversations.
-    return url.href === expected.responseUrl;
+    // The classic endpoint exactly, or the paged one for the same conversation (its query is
+    // only page size and flags). No related endpoints, child frames, auth or other conversations.
+    return (
+      url.href === expected.responseUrl ||
+      (url.origin + url.pathname ===
+        expected.responseUrl.replace('/conversation/', '/conversations/') &&
+        !url.hash)
+    );
   } catch {
     return false;
   }
@@ -77,6 +84,7 @@ export function importBrowserResponse(body, { pageUrl, responseUrl, capturedAt, 
       throw new TypeError('The observed stream has no valid coverage evidence.');
     raw = stream.conversation;
   }
+  raw = toMappingConversation(raw);
   if (
     !raw ||
     Array.isArray(raw) ||
@@ -126,6 +134,15 @@ export function importBrowserResponse(body, { pageUrl, responseUrl, capturedAt, 
       message:
         'The page reports more conversation data. This response is not the complete selected branch.',
       sourceLocator: 'response',
+    });
+  }
+  if (raw.page_info?.has_previous_page === true) {
+    model.verification.status = 'partial';
+    model.verification.issues.push({
+      code: 'earlier-turns-unloaded',
+      message:
+        'Earlier turns were not loaded by the page. Scroll to the top of the conversation, then Add again.',
+      sourceLocator: 'response.page_info',
     });
   }
   if (stream?.coverage === 'partial-history') {

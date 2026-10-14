@@ -116,7 +116,9 @@ export function validateConversation(data) {
       pageId !== source.id ||
       !['GET', 'POST'].includes(responseMethod) ||
       (responseMethod === 'GET' &&
-        response.url !== `${page.origin}/backend-api/conversation/${source.id}`) ||
+        response.url !== `${page.origin}/backend-api/conversation/${source.id}` &&
+        String(response.url).split('?')[0] !==
+          `${page.origin}/backend-api/conversations/${source.id}`) ||
       (responseMethod === 'POST' &&
         ![
           `${page.origin}/backend-api/conversation`,

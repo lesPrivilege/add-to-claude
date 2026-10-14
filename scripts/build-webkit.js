@@ -7,7 +7,15 @@ import { createPageObserverScript } from '../src/page-observer.js';
 // the compiler plus bridge for the app's content world. Each module keeps its own scope.
 const root = fileURLToPath(new URL('../', import.meta.url));
 const out = path.resolve(process.argv[2] ?? path.join(root, 'dist/webkit'));
-const order = ['message-visibility', 'model', 'import', 'chatgpt-response', 'compile', 'bridge'];
+const order = [
+  'message-visibility',
+  'model',
+  'import',
+  'paged-conversation',
+  'chatgpt-response',
+  'compile',
+  'bridge',
+];
 
 export async function bundle() {
   const parts = [];

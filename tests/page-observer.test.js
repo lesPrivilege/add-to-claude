@@ -78,6 +78,7 @@ function harness(initialURL = page, { socketSupport = false } = {}) {
     socket: () => new window.WebSocket('wss://ws.chatgpt.com/p4/ws/user/synthetic'),
     navigate: (url) => history.pushState({}, '', url),
     request: (id) => window.fetch(endpoint(id)).then((response) => response.text()),
+    fetch: (url) => window.fetch(url).then((response) => response.text()),
     post: (request) =>
       window
         .fetch('https://chatgpt.com/backend-api/f/conversation', {
@@ -385,4 +386,47 @@ test('known early selected-topic frames reject later socket reconstruction inste
     false,
   );
   assert.equal(socket.sent.length, 1);
+});
+
+test('the paged conversation load (live site, 2026-10) becomes a classic tree before publishing', async () => {
+  const h = harness();
+  const url =
+    'https://chatgpt.com/backend-api/conversations/a?num_turns=40&include_has_versions=true';
+  const loaded = h.fetch(url);
+  const page = {
+    conversation_id: 'a',
+    title: 'Paged',
+    current_node: 'm2',
+    page_info: { has_previous_page: false, has_next_page: false },
+    messages: [
+      {
+        id: 'm1',
+        author: { role: 'user' },
+        status: 'finished_successfully',
+        content: { content_type: 'text', parts: ['Question'] },
+      },
+      {
+        id: 'm2',
+        author: { role: 'assistant' },
+        status: 'finished_successfully',
+        end_turn: true,
+        content: { content_type: 'text', parts: ['Answer **md**'] },
+      },
+    ],
+  };
+  h.reply(0, JSON.stringify(page));
+  assert.equal(await loaded, JSON.stringify(page)); // The website's own response is untouched.
+  await tick();
+  await tick();
+  const packet = h.messages.findLast((message) => message.kind === 'response');
+  assert.equal(packet.responseUrl, url);
+  const model = importBrowserResponse(packet.body, packet);
+  assert.deepEqual(
+    model.turns.map((turn) => [turn.role, turn.markdown]),
+    [
+      ['user', 'Question'],
+      ['assistant', 'Answer **md**'],
+    ],
+  );
+  assert.equal(model.verification.status, 'verified');
 });

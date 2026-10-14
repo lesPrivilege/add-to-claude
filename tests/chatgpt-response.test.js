@@ -158,3 +158,42 @@ test('serialized browser evidence cannot silently change source identity or lose
     assert.throws(() => validateConversation(model), /response|Response/u);
   }
 });
+
+test('a paged load that has earlier pages unloaded is partial and says how to load them', () => {
+  const body = JSON.stringify({
+    conversation_id: 'paged',
+    title: 'Paged',
+    current_node: 'm2',
+    page_info: { has_previous_page: true, has_next_page: false },
+    messages: [
+      {
+        id: 'm1',
+        author: { role: 'user' },
+        status: 'finished_successfully',
+        content: { content_type: 'text', parts: ['Later question'] },
+      },
+      {
+        id: 'm2',
+        author: { role: 'assistant' },
+        status: 'finished_successfully',
+        end_turn: true,
+        content: { content_type: 'text', parts: ['Later answer'] },
+      },
+    ],
+  });
+  const model = importBrowserResponse(body, {
+    pageUrl: 'https://chatgpt.com/c/paged',
+    responseUrl: 'https://chatgpt.com/backend-api/conversations/paged?num_turns=40',
+    capturedAt: new Date().toISOString(),
+  });
+  assert.equal(model.turns.length, 2);
+  assert.equal(model.verification.status, 'partial');
+  assert.ok(model.verification.issues.some((issue) => issue.code === 'earlier-turns-unloaded'));
+  assert.throws(() =>
+    importBrowserResponse(body, {
+      pageUrl: 'https://chatgpt.com/c/paged',
+      responseUrl: 'https://chatgpt.com/backend-api/conversations/other?num_turns=40',
+      capturedAt: new Date().toISOString(),
+    }),
+  );
+});

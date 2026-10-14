@@ -1,8 +1,9 @@
-import { createChatGPTSocketTurn } from '../src/chatgpt-socket.js';
-import { isInternalMessage } from '../src/message-visibility.js';
-import { createEventStreamDecoder } from '../src/event-stream.js';
-import { createChatGPTStream } from '../src/chatgpt-stream.js';
-import { mergeConversationStream } from '../src/stream-conversation.js';
+import { createChatGPTSocketTurn } from './chatgpt-socket.js';
+import { isInternalMessage } from './message-visibility.js';
+import { createEventStreamDecoder } from './event-stream.js';
+import { createChatGPTStream } from './chatgpt-stream.js';
+import { mergeConversationStream } from './stream-conversation.js';
+import { toMappingConversation } from './paged-conversation.js';
 
 /** Observe only data the current ChatGPT page loads itself. Never fetch or refresh.
  * Packets go to the app's isolated-world bridge over a private MessagePort. The port is handed over
@@ -428,7 +429,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
   };
   const originalFetch = window.fetch;
   window.fetch = function (...args) {
-    let requested, selected, method, readRequest;
+    let requested, selected, method, readRequest, shape;
     try {
       requested = new URL(
         typeof args[0] === 'string' || args[0] instanceof URL ? args[0] : args[0].url,
@@ -441,6 +442,13 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
         requested.pathname.includes('conversation')
       )
         trace(method, requested);
+      // TEMPORARY diagnostic: for conversation loads, the response shape (type, size, key names only).
+      if (
+        requested.origin === location.origin &&
+        /conversation|^\/c\/|\.data$/u.test(requested.pathname) &&
+        !requested.pathname.includes('/stream_status')
+      )
+        shape = requested;
       if (
         selected &&
         method === 'POST' &&
@@ -455,6 +463,38 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       /* Observing must never prevent the website's request. */
     }
     const promise = Reflect.apply(originalFetch, this, args);
+    if (shape)
+      void promise
+        .then(async (response) => {
+          const type = response.headers.get('content-type') ?? '';
+          if (type.includes('event-stream'))
+            return trace(`SHAPE ${method} ${response.status} ${type}`, shape);
+          const text = await response.clone().text();
+          // Type skeleton only: key names, types and sizes, never values. Id-keyed maps collapse to one entry.
+          const describe = (value, depth = 0) => {
+            if (value === null) return 'null';
+            if (Array.isArray(value))
+              return `[${value.length}${value.length && depth < 5 ? ' × ' + describe(value[0], depth + 1) : ''}]`;
+            if (typeof value !== 'object')
+              return typeof value === 'string' ? 's' : (typeof value)[0];
+            const keys = Object.keys(value);
+            if (depth >= 5) return `{${keys.length}}`;
+            if (keys.length > 8 && keys.every((key) => /[0-9a-f-]{12,}|^client-created/u.test(key)))
+              return `{${keys.length} ids → ${describe(value[keys[0]], depth + 1)}}`;
+            return `{${keys.map((key) => `${key}:${describe(value[key], depth + 1)}`).join(',')}}`;
+          };
+          let skeleton;
+          try {
+            skeleton = describe(JSON.parse(text));
+          } catch {
+            skeleton = 'not JSON';
+          }
+          const params = [...shape.searchParams.keys()].join('&');
+          const head = `SHAPE ${method} ${response.status} ${type.split(';')[0]} ${text.length}b params=${params}`;
+          for (let start = 0, part = 0; start < skeleton.length && part < 12; start += 700, part++)
+            trace(`${head} #${part} ${skeleton.slice(start, start + 700)}`, shape);
+        })
+        .catch(() => {});
     if (!selected || !requested) return promise;
     if (readRequest) {
       // Register the clone before the website can consume its original response.
@@ -473,7 +513,11 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       void captureStream(observed, readRequest(active.version), selected, requested, active);
       return promise;
     }
-    if (method !== 'GET' || !selected.id || requested.href !== selected.responseUrl) return promise;
+    const conversationLoad = (url) =>
+      url === selected.responseUrl ||
+      (url.split('?')[0] === selected.responseUrl.replace('/conversation/', '/conversations/') &&
+        !url.includes('#'));
+    if (method !== 'GET' || !selected.id || !conversationLoad(requested.href)) return promise;
     // The website can hydrate a new conversation while its answer is streaming.
     // Keep that stream alive and use the GET as its base, never as a final answer.
     const associatedJob = job && !job.finished && job.boundId === selected.id ? job : null;
@@ -485,7 +529,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
         if (
           version !== generation ||
           sequence !== getSequence ||
-          response.url !== selected.responseUrl ||
+          !conversationLoad(response.url) ||
           response.status !== 200
         )
           return;
@@ -499,11 +543,12 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
           )
             return;
           parts.push(decoder.decode());
-          const body = parts.join('');
+          let body = parts.join('');
           if (surface()?.id !== selected.id || sequence !== getSequence || associatedJob?.finished)
             return;
           try {
-            const conversation = JSON.parse(body);
+            const conversation = toMappingConversation(JSON.parse(body));
+            body = JSON.stringify(conversation);
             if (
               (conversation.conversation_id ?? conversation.id) === selected.id &&
               conversation.mapping
@@ -519,7 +564,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
               id: selected.id,
               body,
               method: 'GET',
-              responseUrl: selected.responseUrl,
+              responseUrl: response.url,
               capturedAt: new Date().toISOString(),
             });
         } catch {
@@ -571,5 +616,5 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
 
 /** The extension and browser tests install this same self-contained observer bundle. */
 export function createPageObserverScript(options = {}) {
-  return `(() => {\nconst isInternalMessage = ${isInternalMessage.toString()};\nconst createEventStreamDecoder = ${createEventStreamDecoder.toString()};\nconst createChatGPTStream = ${createChatGPTStream.toString()};\nconst createChatGPTSocketTurn = ${createChatGPTSocketTurn.toString()};\nconst mergeConversationStream = ${mergeConversationStream.toString()};\n(${installPageObserver.toString()})(${JSON.stringify(options)});\n})();\n`;
+  return `(() => {\nconst isInternalMessage = ${isInternalMessage.toString()};\nconst createEventStreamDecoder = ${createEventStreamDecoder.toString()};\nconst createChatGPTStream = ${createChatGPTStream.toString()};\nconst createChatGPTSocketTurn = ${createChatGPTSocketTurn.toString()};\nconst mergeConversationStream = ${mergeConversationStream.toString()};\nconst toMappingConversation = ${toMappingConversation.toString()};\n(${installPageObserver.toString()})(${JSON.stringify(options)});\n})();\n`;
 }

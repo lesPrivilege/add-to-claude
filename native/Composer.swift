@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import OSLog
 
 let maximumTextBytes = 2 * 1024 * 1024
 let accessibilityTimeout: Float = 0.15
@@ -90,6 +91,22 @@ func validWindow(_ choice: WindowChoice) -> Bool {
     return (axString(choice.window, kAXTitleAttribute) ?? "Untitled window") == choice.title
 }
 
+/// The one text area in a window that reports keyboard focus. Bounded walk of the window's tree.
+func focusedTextArea(in window: AXUIElement) -> AXUIElement? {
+    var queue: [(AXUIElement, Int)] = [(window, 0)], visited = 0, found: [AXUIElement] = []
+    while !queue.isEmpty && visited < 4000 {
+        let (element, depth) = queue.removeFirst()
+        visited += 1
+        if axString(element, kAXRoleAttribute) == kAXTextAreaRole, attribute(element, kAXFocusedAttribute) as? Bool == true {
+            found.append(element)
+        }
+        if depth < 60, let children = attribute(element, kAXChildrenAttribute) as? [AXUIElement] {
+            queue.append(contentsOf: children.map { ($0, depth + 1) })
+        }
+    }
+    return found.count == 1 ? found[0] : nil
+}
+
 /// The text area that has focus inside the chosen window, read without activating its app.
 func focusedComposer(_ choice: WindowChoice) -> AXUIElement? { inspectComposer(choice).field }
 
@@ -99,7 +116,11 @@ func inspectComposer(_ choice: WindowChoice) -> (field: AXUIElement?, problem: S
     guard validWindow(choice) else { return (nil, "the window closed or changed") }
     let app = AXUIElementCreateApplication(choice.app.processIdentifier)
     guard same(axElement(app, kAXFocusedWindowAttribute), choice.window) else { return (nil, "another window of that app has focus") }
-    guard let field = axElement(app, kAXFocusedUIElementAttribute) else { return (nil, "nothing in it has focus") }
+    // Electron apps (Claude, for one) report no focused element for the app while in the background,
+    // although the text area itself still says it has focus; look for it inside the window.
+    guard let field = axElement(app, kAXFocusedUIElementAttribute) ?? focusedTextArea(in: choice.window) else {
+        return (nil, "nothing in it has focus")
+    }
     guard same(axElement(field, kAXWindowAttribute), choice.window) else { return (nil, "the focused element is in another window") }
     let role = axString(field, kAXRoleAttribute) ?? "no role"
     guard role == kAXTextAreaRole else { return (nil, "the focused element is \(role), not a text area") }
@@ -214,10 +235,36 @@ final class ComposerRegistry {
         choices.first { $0.value.app.processIdentifier == composer.choice.app.processIdentifier && CFEqual($0.value.window, composer.choice.window) }?.key
     }
 
+    func choice(_ id: String) -> WindowChoice? { choices[id] }
+
     /// The window's focused text area, or why it cannot be used.
     func composer(_ id: String) -> (composer: Composer?, problem: String) {
         guard let choice = choices[id] else { return (nil, "the window list changed") }
         let (field, problem) = inspectComposer(choice)
         return (field.map { Composer(choice: choice, editor: $0) }, problem)
     }
+}
+
+// TEMPORARY diagnostic: the editable text elements a rejected window exposes (labels and capabilities,
+// never their text), written to the local system log.
+func logTextElements(_ choice: WindowChoice) {
+    let log = Logger(subsystem: "io.lesprivilege.gpt-handoff", category: "ax")
+    let app = AXUIElementCreateApplication(choice.app.processIdentifier)
+    let focused = axElement(app, kAXFocusedUIElementAttribute)
+    log.info("window \(safeLabel(choice.app.localizedName ?? "?"), privacy: .public): app focused element role=\(focused.flatMap { axString($0, kAXRoleAttribute) } ?? "none", privacy: .public)")
+    var queue: [(AXUIElement, Int)] = [(choice.window, 0)], visited = 0
+    while !queue.isEmpty && visited < 4000 {
+        let (element, depth) = queue.removeFirst()
+        visited += 1
+        let role = axString(element, kAXRoleAttribute) ?? ""
+        if ["AXTextArea", "AXTextField", "AXComboBox"].contains(role) || attribute(element, "AXEditableAncestor") != nil && role == "AXGroup" {
+            let label = [kAXDescriptionAttribute, kAXTitleAttribute, kAXPlaceholderValueAttribute, kAXSubroleAttribute, "AXDOMClassList"]
+                .compactMap { name in attribute(element, name).map { "\(name)=\(safeLabel(String(describing: $0), limit: 60))" } }.joined(separator: " ")
+            log.info("depth \(depth) \(role, privacy: .public) \(label, privacy: .public) focused=\(attribute(element, kAXFocusedAttribute) as? Bool ?? false) setText=\(axSettable(element, kAXSelectedTextAttribute)) setRange=\(axSettable(element, kAXSelectedTextRangeAttribute)) setValue=\(axSettable(element, kAXValueAttribute)) same=\(focused.map { CFEqual($0, element) } ?? false)")
+        }
+        if depth < 40, let children = attribute(element, kAXChildrenAttribute) as? [AXUIElement] {
+            queue.append(contentsOf: children.map { ($0, depth + 1) })
+        }
+    }
+    log.info("scanned \(visited) elements")
 }

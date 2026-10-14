@@ -46,6 +46,7 @@ final class HandoffBar: NSViewController {
     private let statusText = label(size: 11, color: .secondaryLabelColor)
     private let statusRow = NSStackView()
     private var pickerSignature = ""
+    private var statusIsResult = false
 
     override func loadView() {
         let chatIcon = NSImageView(image: glyph("chat") ?? NSImage())
@@ -108,7 +109,8 @@ final class HandoffBar: NSViewController {
     func show(_ state: SourceState) {
         let before = prepared?.revision
         source = state
-        if prepared?.revision != before && !busy { say("") }
+        // An Add or Save result belongs to the conversation it was about; target problems stay.
+        if prepared?.revision != before && !busy && statusIsResult { say("") }
         render()
     }
 
@@ -178,7 +180,8 @@ final class HandoffBar: NSViewController {
         else { picker.selectItem(at: 0) }
     }
 
-    private func say(_ text: String, glyph name: String? = nil) {
+    private func say(_ text: String, glyph name: String? = nil, result: Bool = false) {
+        statusIsResult = result
         statusText.stringValue = text
         statusGlyph.image = name.flatMap { glyph($0, size: 14) }
         statusGlyph.isHidden = name == nil
@@ -208,7 +211,10 @@ final class HandoffBar: NSViewController {
         guard let id = picker.selectedItem?.representedObject as? String else { return }
         let (chosen, problem) = registry.composer(id)
         composer = chosen
-        if chosen == nil { say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error") }
+        if chosen == nil {
+            say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error")
+            if let choice = registry.choice(id) { DispatchQueue.global().async { logTextElements(choice) } }
+        }
         else { say("") }
         render()
     }
@@ -251,7 +257,7 @@ final class HandoffBar: NSViewController {
             guard response == .OK, let url = panel.url else { return }
             do {
                 try Data(prepared.markdown.utf8).write(to: url, options: .atomic)
-                self?.say("Saved \(url.lastPathComponent).", glyph: "done")
+                self?.say("Saved \(url.lastPathComponent).", glyph: "done", result: true)
             } catch { self?.say("Could not save there. Choose another folder.", glyph: "error") }
         }
     }
@@ -273,7 +279,7 @@ final class HandoffBar: NSViewController {
                          revalidateSource: { reply in reply(valid()) }) { [weak self] message, success in
             guard let self else { return }
             self.busy = false
-            self.say(message, glyph: success ? "done" : "error")
+            self.say(message, glyph: success ? "done" : "error", result: true)
             self.render()
         }
     }
