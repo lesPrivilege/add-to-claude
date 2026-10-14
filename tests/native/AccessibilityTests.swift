@@ -61,7 +61,10 @@ import ApplicationServices
     }
     func select() async -> Composer {
         _ = await command("reset", focus: true)
-        _ = fixture.activate()
+        // Under cooperative activation only a LaunchServices open can bring a yielded app back to front.
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        _ = try? await NSWorkspace.shared.openApplication(at: fixture.bundleURL!, configuration: configuration)
         for _ in 0..<20 {
             if NSWorkspace.shared.frontmostApplication?.processIdentifier == fixture.processIdentifier { break }
             await pause()
@@ -82,8 +85,9 @@ import ApplicationServices
     }
     func append(_ selected: Composer, text: String = "Original **Markdown** 中文 ✓\n", valid: @escaping () -> Bool = { true }, source: Bool = true,
                 during: (() async -> Void)? = nil) async -> (String, Bool) {
-        // The target must not need to be frontmost: put this runner in front first.
-        NSApp.activate()
+        // The target must not need to be frontmost. Apps cannot take focus on macOS 14+, so the
+        // synthetic app yields it to Finder, leaving its windows visible.
+        _ = await command("deactivate")
         for _ in 0..<20 where NSWorkspace.shared.frontmostApplication?.processIdentifier == fixture.processIdentifier { await pause() }
         check(NSWorkspace.shared.frontmostApplication?.processIdentifier != fixture.processIdentifier, "target app is in the background before append")
         let mutation = during.map { action in Task { await action() } }

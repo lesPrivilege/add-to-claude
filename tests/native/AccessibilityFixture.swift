@@ -93,6 +93,12 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
             attachment.image = NSImage(size: NSSize(width: 12, height: 12))
             current.textStorage?.append(NSAttributedString(attachment: attachment))
         case "code": current.setAccessibilityLabel("Source code editor")
+        case "deactivate":
+            // NSApp.deactivate() is a no-op under cooperative activation; hand focus to Finder instead.
+            if let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first {
+                NSApp.yieldActivation(to: finder)
+                finder.activate()
+            }
         default: break
         }
         if packet["focus"] as? Bool == true, let view = editors[key] {

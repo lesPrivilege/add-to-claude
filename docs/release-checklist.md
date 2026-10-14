@@ -8,7 +8,7 @@
 
 ## Required before release
 
-- [ ] Run `npm run test:native` from a terminal with Accessibility access. All Accessibility checks must pass, including "append never activates the target app".
+- [x] `npm run test:native` from a terminal with Accessibility access: 21 link checks and 49 Accessibility checks pass, including "append never activates the target app".
 - [ ] Owner's Mac:
   - Set up Chrome from the popover and load the extension.
   - Open a synthetic ChatGPT conversation and check that the popover shows it.
