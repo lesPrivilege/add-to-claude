@@ -436,7 +436,10 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       );
       selected = surface();
       method = String(args[1]?.method ?? args[0]?.method ?? 'GET').toUpperCase();
-      if (requested.pathname.includes('/backend-api/') || requested.pathname.includes('conversation'))
+      if (
+        requested.pathname.includes('/backend-api/') ||
+        requested.pathname.includes('conversation')
+      )
         trace(method, requested);
       if (
         selected &&
