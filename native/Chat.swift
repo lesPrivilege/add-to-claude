@@ -7,6 +7,12 @@ private let signInHosts: Set<String> = ["chatgpt.com", "chat.openai.com", "auth.
                                         "accounts.google.com", "appleid.apple.com", "login.microsoftonline.com",
                                         "login.live.com"]
 
+/// The chat root (new chat), where a conversation URL is assigned only after the first reply starts.
+private func isChatRoot(_ url: URL?) -> Bool {
+    guard pageKey(url) != nil, let path = url?.path else { return false }
+    return path == "/" || path.range(of: #"^/g/[A-Za-z0-9_-]+/?$"#, options: .regularExpression) != nil
+}
+
 func pageKey(_ url: URL?) -> String? {
     guard let url, url.scheme == "https", let host = url.host, chatHosts.contains(host),
           url.user == nil, url.password == nil else { return nil }
@@ -15,7 +21,7 @@ func pageKey(_ url: URL?) -> String? {
 
 /// ChatGPT in the app's own persistent WebKit session, with the handoff bar beneath it.
 /// The page observer runs in the page world; the compiler and bridge run in an isolated content world.
-final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, NSWindowDelegate {
     let bar = HandoffBar()
     private var web: WKWebView!
     private var urlObservation: NSKeyValueObservation?
@@ -39,8 +45,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         configuration.websiteDataStore = .default()
         let scripts = configuration.userContentController
         if let observer = script("observer"), let bridge = script("bridge") {
-            scripts.addUserScript(WKUserScript(source: observer, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+            // The bridge listens before the observer offers its private port.
             scripts.addUserScript(WKUserScript(source: bridge, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .defaultClient))
+            scripts.addUserScript(WKUserScript(source: observer, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
             scripts.add(self, contentWorld: .defaultClient, name: "handoff")
         }
         web = WKWebView(frame: NSRect(x: 0, y: 0, width: 480, height: 640), configuration: configuration)
@@ -87,7 +94,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.world == .defaultClient, message.frameInfo.isMainFrame,
+        guard message.webView === web, message.world == .defaultClient, message.frameInfo.isMainFrame,
               message.frameInfo.securityOrigin.protocol == "https",
               chatHosts.contains(message.frameInfo.securityOrigin.host),
               let body = message.body as? [String: Any], let kind = body["kind"] as? String,
@@ -95,7 +102,8 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
               page.hasPrefix("https://\(message.frameInfo.securityOrigin.host)/") else { return }
         switch kind {
         case "ready":
-            guard let markdown = body["markdown"] as? String else { return }
+            // A late answer for a conversation the panel has already left is not the one on screen.
+            guard let markdown = body["markdown"] as? String, page == pageKey(web.url) || isChatRoot(web.url) else { return }
             let prepared = Prepared(revision: UUID(), page: page, markdown: markdown,
                                     title: safeLabel(body["title"] as? String ?? "ChatGPT conversation", limit: 120),
                                     turns: body["turns"] as? Int ?? 0, files: body["files"] as? Int ?? 0,
@@ -115,12 +123,14 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { return decisionHandler(.cancel) }
         if action.shouldPerformDownload { return decisionHandler(.download) }
-        let followedLink = action.navigationType == .linkActivated && action.targetFrame?.isMainFrame != false
-        if url.scheme == "https", let host = url.host, !signInHosts.contains(host), followedLink {
-            NSWorkspace.shared.open(url)
-            return decisionHandler(.cancel)
+        guard action.targetFrame?.isMainFrame != false else {
+            return decisionHandler(["https", "about", "blob", "data"].contains(url.scheme ?? "") ? .allow : .cancel)
         }
-        decisionHandler(["https", "about", "blob", "data"].contains(url.scheme ?? "") ? .allow : .cancel)
+        // Top-level pages stay on ChatGPT and its sign-in hosts; anything else is the user's browser's job.
+        if url.scheme == "https", let host = url.host, signInHosts.contains(host) { return decisionHandler(.allow) }
+        if url.scheme == "about" && webView !== web { return decisionHandler(.allow) }
+        openExternally(url)
+        decisionHandler(.cancel)
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
@@ -132,16 +142,28 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         if webView === web { set(nil, .waiting) }
     }
 
+    private var lastCrash = Date.distantPast
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        if webView === web { set(nil, .unavailable("The page stopped. It is reloading.")); web.reload() }
+        guard webView === web else { return }
+        // Reload once; a page that keeps crashing waits for the user instead of looping.
+        if Date().timeIntervalSince(lastCrash) > 60 {
+            set(nil, .unavailable("The page stopped. It is reloading."))
+            web.reload()
+        } else { set(nil, .unavailable("The page stopped again. Quit and reopen gpt-handoff.")) }
+        lastCrash = Date()
+    }
+
+    /// Only web links leave the app, and only to the default browser. Other schemes are dropped.
+    private func openExternally(_ url: URL) {
+        if url.scheme == "https" || url.scheme == "http" { NSWorkspace.shared.open(url) }
     }
 
     // Sign-in may open a popup; it keeps this session. Other new windows open in the default browser.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = action.request.url else { return nil }
-        guard url.scheme == "about" || url.host.map(signInHosts.contains) == true else {
-            NSWorkspace.shared.open(url)
+        guard url.scheme == "about" || (url.scheme == "https" && url.host.map(signInHosts.contains) == true) else {
+            openExternally(url)
             return nil
         }
         let popup = WKWebView(frame: NSRect(x: 0, y: 0, width: 520, height: 680), configuration: configuration)
@@ -153,9 +175,14 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         window.isReleasedWhenClosed = false
         window.center()
         window.level = .floating
+        window.delegate = self
         popups.append(window)
         window.makeKeyAndOrderFront(nil)
         return popup
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        popups.removeAll { $0 === notification.object as? NSWindow }
     }
 
     func webViewDidClose(_ webView: WKWebView) {

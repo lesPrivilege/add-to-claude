@@ -2,8 +2,9 @@ import AppKit
 
 /// A panel that can take keyboard focus for the chat without being a document window.
 final class ChatPanel: NSPanel {
+    var onEscape: () -> Void = {}
     override var canBecomeKey: Bool { true }
-    override func cancelOperation(_ sender: Any?) { orderOut(nil) }
+    override func cancelOperation(_ sender: Any?) { onEscape() }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -20,13 +21,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             panel.standardWindowButton(button)?.isHidden = true
         }
         panel.isFloatingPanel = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.onEscape = { [weak self] in self?.hide() }
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.minSize = NSSize(width: 380, height: 480)
         panel.contentViewController = chat
         panel.setContentSize(NSSize(width: 480, height: 760))
-        panel.setFrameAutosaveName("ChatPanel")
+        panel.setFrameAutosaveName("ChatPanel") // Only the size persists; show() always places it under the icon.
         panel.delegate = self
+        NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) {
+            [weak self] _ in
+            // The user went to another app, even if one of our own popovers or panels had focus last.
+            guard let self, self.panel.isVisible, !self.chat.keepsPanelOpen else { return }
+            self.panel.orderOut(nil)
+        }
 
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = glyph("add", size: 18)
@@ -53,6 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func show() {
         if let button = item.button, let frame = button.window?.convertToScreen(button.frame),
            let screen = button.window?.screen?.visibleFrame {
+            // Keep the handoff bar on screen when a size saved on a taller display is restored here.
+            let height = min(panel.frame.height, frame.minY - 4 - screen.minY - 4)
+            if height < panel.frame.height { panel.setContentSize(NSSize(width: panel.frame.width, height: height)) }
             let x = min(max(frame.midX - panel.frame.width / 2, screen.minX + 8), screen.maxX - panel.frame.width - 8)
             panel.setFrameTopLeftPoint(NSPoint(x: x, y: frame.minY - 4))
         }
@@ -62,7 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     /// Hiding never destroys the page: a reply keeps streaming and the conversation stays prepared.
-    private func hide() {
+    func hide() {
         panel.orderOut(nil)
         NSApp.hide(nil)
     }

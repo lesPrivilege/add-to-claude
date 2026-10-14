@@ -17,7 +17,11 @@ function harness(initialURL = page, { socketSupport = false } = {}) {
     },
   };
   const window = {
-    postMessage: (data) => messages.push(JSON.parse(JSON.stringify(data.packet))),
+    postMessage: (data, _origin, ports) => {
+      if (data.type === 'gpt-handoff/port')
+        ports[0].onmessage = ({ data: packet }) =>
+          messages.push(JSON.parse(JSON.stringify(packet)));
+    },
     fetch(url, init) {
       return new Promise((resolve) => requests.push({ url, init, resolve }));
     },
@@ -55,6 +59,14 @@ function harness(initialURL = page, { socketSupport = false } = {}) {
     TextDecoder,
     TextEncoder,
     structuredClone,
+    // Synchronous stand-in for the private port, so tests observe packets in posting order.
+    MessageChannel: class {
+      constructor() {
+        const port2 = {};
+        this.port2 = port2;
+        this.port1 = { postMessage: (value) => port2.onmessage?.({ data: value }) };
+      }
+    },
     setTimeout,
     clearTimeout,
     addEventListener() {},

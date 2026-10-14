@@ -22,7 +22,8 @@ export async function bundle() {
         (_, imports, from) => `const {${imports}} = modules['${from}'];`,
       )
       .replace(/^export (?=(?:async )?(?:function|const|let|class) )/gmu, '');
-    if (/^\s*(?:import|export)\b/mu.test(body)) throw new Error(`Unbundled syntax in ${name}.js`);
+    if (/^\s*(?:import|export)\b/mu.test(body) || /^const \{[^}]*\bas\b/mu.test(body))
+      throw new Error(`Unbundled syntax in ${name}.js`);
     parts.push(`modules['${name}'] = (() => {\n${body}\nreturn { ${names.join(', ')} };\n})();`);
   }
   return `(() => {\nconst modules = {};\n${parts.join('\n')}\n})();\n`;

@@ -24,7 +24,7 @@ Fidelity rules are engineering requirements, not claims about an undocumented Ch
 - Keep streaming or unfinished content visibly incomplete. Require a fresh import/capture after it settles; do not silently call the current prefix complete.
 - Keep inaccessible artifact locators and an unavailable status. [OpenAI's download troubleshooting guide](https://help.openai.com/en/articles/7996703-troubleshooting-chatgpt-error-messages) says generated files can expire quickly. Ask the user to reopen/regenerate the source artifact and download it normally; do not retry with harvested credentials.
 
-The extension is supplied as a technical, user-invoked local reader, with no live authenticated collection performed in this VM. That implementation does not resolve the consumer-terms restriction above. Production adoption requires a permitted account/service path; the documented export or explicitly pasted content remains the bounded alternative. This is separate from the technical tests and must remain a release condition.
+The app observes only the conversation data its own ChatGPT page loads, when the user opens it; no live authenticated collection is performed by the tests. That implementation does not resolve the consumer-terms restriction above. Production adoption requires a permitted account/service path; the documented export or explicitly pasted content remains the bounded alternative. This is separate from the technical tests and must remain a release condition.
 
 ## Browser boundary
 

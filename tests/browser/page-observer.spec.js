@@ -16,9 +16,9 @@ async function setup(page, { maxBytes, initialURL = pageURL } = {}) {
     content: `
     window.receivedSource = [];
     const websitePostMessage = window.postMessage;
-    window.postMessage = function (data, origin) {
-      if (data?.type === 'gpt-handoff/source') return window.receivedSource.push(data.packet);
-      return websitePostMessage.call(this, data, origin);
+    window.postMessage = function (data, origin, ports) {
+      if (data?.type !== 'gpt-handoff/port') return websitePostMessage.call(this, data, origin, ports);
+      ports[0].onmessage = (event) => window.receivedSource.push(event.data);
     };
     ${createPageObserverScript({ maxBytes })}
   `,

@@ -11,7 +11,17 @@ The owner pasted a design note favouring an embedded web view. A throwaway login
 The Chrome extension, the native-messaging relay and the socket link were therefore removed. The app now owns the WebKit view: the observer runs in the page world, and the compiler and bridge run in WebKit's isolated `defaultClient` world.
 
 - `npm test` passed 83/83, and `npm run test:browser` passed 14/14.
-- The WebKit half of `npm run test:native` passed 22 checks against the real `ChatController` in a real `WKWebView`.
+- The WebKit half of `npm run test:native` passed 19 checks against the real `ChatController` in a real `WKWebView`. The page's own (stubbed) fetch fed the real observer, and page-forged packets were ignored.
+- A second independent review (Opus) found that page scripts could forge a conversation through the shared `postMessage` channel. The observer now hands the bridge a private `MessagePort` at document start; the forging check was confirmed to fail without the fix. The same review's other fixes:
+  - handler messages from popups are ignored;
+  - top-level navigation is limited to ChatGPT and the sign-in hosts;
+  - non-web schemes are no longer opened externally;
+  - the panel hides when the app loses focus and is clamped on screen;
+  - Escape hands focus back;
+  - closed popups are released;
+  - downloads are quarantined;
+  - crash reloads are capped;
+  - stale responses are dropped.
 - The Accessibility append is unchanged from the owner's 49-check run below.
 - Handoff bar snapshots were reviewed in four states.
 

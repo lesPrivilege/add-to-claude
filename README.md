@@ -9,7 +9,8 @@ It replaces copying each turn by hand, joining them, switching windows and pasti
 - **The panel.** Click the menu-bar icon and ChatGPT opens in a panel under it. It is the full website in an embedded WebKit view with its own persistent login: you sign in once, and the login survives restarts. Clicking elsewhere only hides the panel, so a reply keeps streaming and the page stays where it was. Uploads, downloads and sign-in popups work in the panel; other links open in your default browser.
 - **The handoff bar.** Under the chat, a thin bar shows the open conversation (turns, files, Verified or Partial), a picker of open windows, and **Add**.
   - A page observer watches only the conversation data the page loads by itself. It makes no extra requests and never reloads.
-  - A compiler in an isolated script world turns that data into Markdown: each turn in order, with its role, the original Markdown, source locators and file references. The page cannot reach that world or the app.
+  - A compiler in an isolated script world turns that data into Markdown: each turn in order, with its role, the original Markdown, source locators and file references.
+  - The observer hands the compiler a private channel before any page script runs. Page scripts therefore cannot post into it, cannot see the compiler, and cannot reach the app. The app still trusts chatgpt.com itself: "Verified" means the data is internally consistent, not that it is authentic.
 - **Add.** Add writes the Markdown at the end of the chosen window's message box through Accessibility, in the background, and reads it back to confirm. Nothing is raised, activated, pasted or typed, and your existing draft, formatting and attachments are kept.
 
 Nothing is stored apart from WebKit's own login data. The prepared conversation lives in memory only. File references are not file contents.

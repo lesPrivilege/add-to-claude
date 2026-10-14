@@ -44,22 +44,28 @@ const packet = {
 
 async function run() {
   const posted = [];
-  let listener;
+  const listeners = new Set();
   const context = vm.createContext({ TextEncoder, URL });
   context.webkit = { messageHandlers: { handoff: { postMessage: (value) => posted.push(value) } } };
-  context.addEventListener = (type, fn) => type === 'message' && (listener = fn);
+  context.addEventListener = (type, fn) => type === 'message' && listeners.add(fn);
+  context.removeEventListener = (type, fn) => listeners.delete(fn);
   context.location = { origin: 'https://chatgpt.com' };
   vm.runInContext('globalThis.window = globalThis; globalThis.top = globalThis;', context);
   vm.runInContext(await bundle(), context);
   const self = vm.runInContext('window', context);
-  const send = (data, source = self, origin = 'https://chatgpt.com') =>
-    listener({ source, origin, data });
-  return { posted, send };
+  const event = (data, ports = [], source = self, origin = 'https://chatgpt.com') =>
+    [...listeners].forEach((fn) => fn({ source, origin, data, ports }));
+  // What the observer does at document start: offer one private port.
+  const port = {};
+  const offer = (target = port) => event({ type: 'gpt-handoff/port' }, [target]);
+  const send = (packet, through = port) => through.onmessage?.({ data: packet });
+  return { posted, event, offer, send };
 }
 
 test('the bundled bridge posts exactly what the compiler module produces', async () => {
-  const { posted, send } = await run();
-  send({ type: 'gpt-handoff/source', packet });
+  const { posted, offer, send } = await run();
+  offer();
+  send(packet);
   assert.equal(posted.length, 1);
   const { kind, page, ...rest } = posted[0];
   assert.equal(kind, 'ready');
@@ -73,13 +79,18 @@ test('the bundled bridge posts exactly what the compiler module produces', async
   assert.equal(rest.verification, 'verified');
 });
 
-test('changes, failures and foreign messages are reported or ignored', async () => {
-  const { posted, send } = await run();
-  send({ type: 'gpt-handoff/source', packet: { kind: 'changed', pageUrl: packet.pageUrl } });
-  send({ type: 'gpt-handoff/source', packet: { ...packet, body: '{' } });
-  send({ type: 'gpt-handoff/source', packet }, {}); // another window
-  send({ type: 'gpt-handoff/source', packet }, undefined, 'https://example.com');
-  send({ type: 'other', packet });
+test('only the first port is used; page-posted packets and foreign or later ports are ignored', async () => {
+  const { posted, event, offer, send } = await run();
+  event({ type: 'gpt-handoff/source', packet }); // A page script posting a packet directly.
+  event({ type: 'gpt-handoff/port' }, [{}], {}); // A port from another window.
+  event({ type: 'gpt-handoff/port' }, [{}], undefined, 'https://example.com');
+  offer(); // The observer's port, offered first at document start.
+  const later = {};
+  offer(later); // A page script offering its own port afterwards.
+  send(packet, later);
+  assert.equal(posted.length, 0);
+  send({ kind: 'changed', pageUrl: packet.pageUrl });
+  send({ ...packet, body: '{' });
   assert.deepEqual(
     posted.map((value) => value.kind),
     ['changed', 'invalid'],

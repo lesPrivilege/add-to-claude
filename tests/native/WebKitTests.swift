@@ -26,19 +26,40 @@ import WebKit
 
     static let conversation = #"{"conversation_id":"one","title":"Synthetic chat","current_node":"a","mapping":{"root":{"parent":null,"children":["u"],"message":null},"u":{"parent":"root","children":["a"],"message":{"id":"u","author":{"role":"user"},"status":"finished_successfully","content":{"content_type":"text","parts":["Synthetic question."]}}},"a":{"parent":"u","children":[],"message":{"id":"a","author":{"role":"assistant"},"status":"finished_successfully","end_turn":true,"content":{"content_type":"text","parts":["Original **Markdown** 中文 ✓\n"]}}}}}"#
 
-    static func post(_ web: WKWebView, kind: String, page: String = "https://chatgpt.com/c/one") {
-        let body = (try! JSONSerialization.data(withJSONObject: [conversation], options: .fragmentsAllowed))
-        let literal = String(data: body, encoding: .utf8)!.dropFirst().dropLast()
+    static func forge(_ web: WKWebView) {
+        let literal = String(data: try! JSONSerialization.data(withJSONObject: [conversation], options: .fragmentsAllowed), encoding: .utf8)!
+        let packet = "{ kind: 'response', pageUrl: location.origin + location.pathname, responseUrl: location.origin + '/backend-api/conversation/one', capturedAt: new Date().toISOString(), method: 'GET', body: \(literal.dropFirst().dropLast()) }"
         _ = evaluate(web, """
-            window.postMessage({ type: 'gpt-handoff/source', packet: { kind: '\(kind)', pageUrl: '\(page)',
-              responseUrl: 'https://chatgpt.com/backend-api/conversation/one', capturedAt: new Date().toISOString(),
-              method: 'GET', body: \(literal) } }, location.origin); true
+            window.postMessage({ type: 'gpt-handoff/source', packet: \(packet) }, location.origin);
+            const channel = new MessageChannel();
+            window.postMessage({ type: 'gpt-handoff/port' }, location.origin, [channel.port2]);
+            channel.port1.postMessage(\(packet)); true
             """)
     }
 
     static func main() {
         _ = NSApplication.shared
-        let scripts = URL(fileURLWithPath: CommandLine.arguments[1])
+        // The real observer and bridge, with the page's fetch stubbed in front of the observer so it
+        // sees a synthetic conversation response without any network request.
+        let built = URL(fileURLWithPath: CommandLine.arguments[1])
+        let scripts = FileManager.default.temporaryDirectory.appendingPathComponent("gh-webkit-\(UUID().uuidString)")
+        try! FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scripts) }
+        let stub = """
+            (() => {
+              const body = \(String(data: try! JSONSerialization.data(withJSONObject: [conversation], options: .fragmentsAllowed), encoding: .utf8)!.dropFirst().dropLast());
+              window.fetch = async (input) => {
+                const response = new Response(body, { status: 200, headers: { 'content-type': 'application/json' } });
+                Object.defineProperty(response, 'url', { value: new URL(typeof input === 'string' ? input : input.url, location.href).href });
+                return response;
+              };
+            })();
+
+            """
+        try! (stub + String(contentsOf: built.appendingPathComponent("observer.js"), encoding: .utf8))
+            .write(to: scripts.appendingPathComponent("observer.js"), atomically: true, encoding: .utf8)
+        try! FileManager.default.copyItem(at: built.appendingPathComponent("bridge.js"), to: scripts.appendingPathComponent("bridge.js"))
+
         var webView: WKWebView?
         let chat = ChatController(scripts: scripts) { web in
             webView = web
@@ -56,8 +77,12 @@ import WebKit
         check(evaluate(web, "typeof window.webkit?.messageHandlers?.handoff", in: .defaultClient) as? String == "object",
               "the isolated bridge can")
 
-        post(web, kind: "response")
-        pump(until: { chat.prepared != nil }, "observed response becomes a prepared conversation")
+        forge(web)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+        check(chat.prepared == nil, "packets posted by page scripts, directly or on their own port, are ignored")
+
+        _ = evaluate(web, "fetch('/backend-api/conversation/one').then((r) => r.text()); true")
+        pump(until: { chat.prepared != nil }, "the page's own response becomes a prepared conversation")
         let prepared = chat.prepared!
         check(prepared.page == "https://chatgpt.com/c/one" && prepared.turns == 2 && prepared.verification == "verified",
               "prepared summary")
@@ -66,20 +91,13 @@ import WebKit
                  < prepared.markdown.range(of: "Original **Markdown**")!.lowerBound, "exact Markdown in order")
         check(chat.bar.isCurrent(prepared), "preparation is current")
 
-        post(web, kind: "changed")
-        pump(until: { chat.prepared == nil }, "a page change revokes the preparation")
-        check(!chat.bar.isCurrent(prepared), "revoked preparation is no longer current")
-
-        post(web, kind: "response")
-        pump(until: { chat.prepared != nil }, "prepared again")
-        let again = chat.prepared!
         _ = evaluate(web, "history.pushState(null, '', '/c/another'); true")
         pump(until: { chat.prepared == nil }, "navigating to another conversation revokes it")
-        check(!chat.bar.isCurrent(again), "old preparation is not current on the new page")
+        check(!chat.bar.isCurrent(prepared), "old preparation is not current on the new page")
 
-        post(web, kind: "response", page: "https://example.com/c/one")
+        _ = evaluate(web, "fetch('/backend-api/conversation/one').then((r) => r.text()); true")
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
-        check(chat.prepared == nil, "a packet naming another origin is dropped")
+        check(chat.prepared == nil, "a response for a conversation no longer shown is not prepared")
 
         print("PASS: \(checks) WebKit checks in a real WKWebView")
         exit(0)

@@ -163,7 +163,7 @@ struct Discovery {
     fileprivate let choices: [String: WindowChoice]
 }
 
-/// Live windows of regular apps, re-read each time the popover opens. Ids are valid until the next discovery.
+/// Live windows of regular apps, re-read each time the panel opens. Ids are valid until the next discovery.
 final class ComposerRegistry {
     private var choices: [String: WindowChoice] = [:]
 

@@ -5,7 +5,8 @@ import { createChatGPTStream } from '../src/chatgpt-stream.js';
 import { mergeConversationStream } from '../src/stream-conversation.js';
 
 /** Observe only data the current ChatGPT page loads itself. Never fetch or refresh.
- * Packets go to the extension's isolated-world bridge in this same document. */
+ * Packets go to the app's isolated-world bridge over a private MessagePort. The port is handed over
+ * once at document start, before any page script runs, so page scripts cannot post into it. */
 export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
   const documentURL = new URL(location.href);
   if (
@@ -43,9 +44,12 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       responseUrl: id ? `${url.origin}/backend-api/conversation/${id}` : null,
     };
   };
+  const channel = new MessageChannel();
+  window.postMessage({ type: 'gpt-handoff/port' }, location.origin, [channel.port2]);
+  const port = channel.port1;
   const post = (value) => {
     try {
-      window.postMessage({ type: 'gpt-handoff/source', packet: value }, location.origin);
+      port.postMessage(value);
     } catch {}
   };
   const invalidate = (keepBase = false) => {
