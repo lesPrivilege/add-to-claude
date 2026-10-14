@@ -461,13 +461,13 @@ test('pages loaded while scrolling up are merged into one complete conversation'
   await tick();
   const first = h.messages.findLast((value) => value.kind === 'response');
   assert.equal(importBrowserResponse(first.body, first).verification.status, 'partial');
-  const earlier = h.fetch(`${url}&cursor=older`);
+  // The live site's older-page endpoint: messages and page_info only, no id or title.
+  const earlier = h.fetch(
+    'https://chatgpt.com/backend-api/conversations/a/messages?before=cursor&num_turns=2',
+  );
   h.reply(
     1,
     JSON.stringify({
-      conversation_id: 'a',
-      title: 'Long',
-      current_node: 'a1',
       page_info: { has_previous_page: false, has_next_page: true },
       messages: [
         message('u1', 'user', 'First question', 1),
@@ -479,6 +479,7 @@ test('pages loaded while scrolling up are merged into one complete conversation'
   await tick();
   await tick();
   const merged = h.messages.findLast((value) => value.kind === 'response');
+  assert.equal(merged.responseUrl, url); // Evidence stays the conversation load, not the older page.
   const model = importBrowserResponse(merged.body, merged);
   assert.deepEqual(
     model.turns.map((turn) => turn.markdown),

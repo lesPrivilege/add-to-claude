@@ -190,19 +190,34 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             let tail = String(utf16CodeUnits: Array(units[(range.location + range.length)...]), count: units.count - range.location - range.length)
             let expected = beforeFinalBreak ? (blank ? text : head + suffix) + tail : combined
             let result = AXUIElementSetAttributeValue(current, kAXSelectedTextAttribute as CFString, suffix as CFString)
-            let written = axString(current, kAXValueAttribute)
-            let mismatch = written.map { Array($0.utf16) }.flatMap { got -> Int? in
-                let want = Array(expected.utf16)
-                return zip(got, want).enumerated().first { $0.element.0 != $0.element.1 }?.offset
-                    ?? (got.count == want.count ? nil : min(got.count, want.count))
+            guard result == .success else {
+                completion("The app refused the text. Nothing was added.", false); return
             }
-            appendLog.info("append write: result=\(result.rawValue) expected=\(expected.utf16.count) got=\(written?.utf16.count ?? -1) firstDifference=\(mismatch ?? -1) rich=\(beforeFinalBreak)")
-            guard result == .success, sameTextUnits(written, expected) else {
-                completion("Text may have been added but did not read back exactly. Check the draft before retrying.", false); return
-            }
-            completion("Added. Review the draft there; nothing was sent.", true)
+            // Web-based editors (Chromium, Electron) apply the write asynchronously; wait for the draft to
+            // change before reading it back, for up to two seconds.
+            confirmWrite(current, old: old, expected: expected, attempts: 20, rich: beforeFinalBreak, completion: completion)
         }
     }
+}
+
+private func confirmWrite(_ field: AXUIElement, old: String, expected: String, attempts: Int, rich: Bool,
+                          completion: @escaping (String, Bool) -> Void) {
+    let written = axString(field, kAXValueAttribute)
+    if sameTextUnits(written, old) && attempts > 0 {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            confirmWrite(field, old: old, expected: expected, attempts: attempts - 1, rich: rich, completion: completion)
+        }
+        return
+    }
+    let mismatch = written.map { Array($0.utf16) }.flatMap { got -> Int? in
+        let want = Array(expected.utf16)
+        return zip(got, want).enumerated().first { $0.element.0 != $0.element.1 }?.offset
+            ?? (got.count == want.count ? nil : min(got.count, want.count))
+    }
+    appendLog.info("append write: waited=\(20 - attempts) expected=\(expected.utf16.count) got=\(written?.utf16.count ?? -1) firstDifference=\(mismatch ?? -1) rich=\(rich)")
+    if sameTextUnits(written, expected) { return completion("Added. Review the draft there; nothing was sent.", true) }
+    if sameTextUnits(written, old) { return completion("The app did not take the text. Nothing was added.", false) }
+    completion("Text was added but reads back differently. Check the draft before retrying.", false)
 }
 
 struct Target {

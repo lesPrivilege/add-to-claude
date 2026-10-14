@@ -27,15 +27,22 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
   const readers = new Set();
   // The live site loads a long conversation a page at a time as the user scrolls up. Keep every page
   // this document has loaded for one conversation, so scrolling to the top completes it.
-  let pages = { id: null, messages: new Map(), complete: false, tail: null };
-  const mergePage = (value) => {
+  // Older pages come from `/conversations/<id>/messages?before=…` with messages and page_info only;
+  // they join the conversation already loaded from `/conversations/<id>` and keep that URL as evidence.
+  let pages = { id: null, messages: new Map(), complete: false, tail: null, url: null };
+  const mergePage = (value, selectedId, url) => {
     if (!value || typeof value !== 'object' || !Array.isArray(value.messages)) return value;
     const id = value.conversation_id ?? value.id;
-    if (pages.id !== id) pages = { id, messages: new Map(), complete: false, tail: null };
+    if (id === undefined && (pages.id !== selectedId || !pages.tail)) return value;
+    if (id !== undefined && pages.id !== id)
+      pages = { id, messages: new Map(), complete: false, tail: null, url: null };
+    if (id !== undefined && (!pages.tail || value.page_info?.has_next_page !== true)) {
+      pages.tail = value;
+      pages.url = url;
+    }
     for (const message of value.messages)
       if (message && typeof message.id === 'string') pages.messages.set(message.id, message);
     if (value.page_info?.has_previous_page === false) pages.complete = true;
-    if (!pages.tail || value.page_info?.has_next_page !== true) pages.tail = value;
     const messages = [...pages.messages.values()].sort(
       (a, b) => (a.create_time ?? 0) - (b.create_time ?? 0),
     );
@@ -543,7 +550,10 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     }
     const conversationLoad = (url) =>
       url === selected.responseUrl ||
-      (url.split('?')[0] === selected.responseUrl.replace('/conversation/', '/conversations/') &&
+      ([
+        selected.responseUrl.replace('/conversation/', '/conversations/'),
+        selected.responseUrl.replace('/conversation/', '/conversations/') + '/messages',
+      ].includes(url.split('?')[0]) &&
         !url.includes('#'));
     if (method !== 'GET' || !selected.id || !conversationLoad(requested.href)) return promise;
     // The website can hydrate a new conversation while its answer is streaming.
@@ -575,7 +585,9 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
           if (surface()?.id !== selected.id || sequence !== getSequence || associatedJob?.finished)
             return;
           try {
-            const conversation = toMappingConversation(mergePage(JSON.parse(body)));
+            const conversation = toMappingConversation(
+              mergePage(JSON.parse(body), selected.id, response.url),
+            );
             body = JSON.stringify(conversation);
             if (
               (conversation.conversation_id ?? conversation.id) === selected.id &&
@@ -592,7 +604,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
               id: selected.id,
               body,
               method: 'GET',
-              responseUrl: response.url,
+              responseUrl: pages.id === selected.id && pages.url ? pages.url : response.url,
               capturedAt: new Date().toISOString(),
             });
         } catch {
