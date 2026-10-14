@@ -4,10 +4,11 @@ The goal is a small macOS menu-bar utility that passes functional and real-machi
 
 ## Current design (owner decisions, 2026-10-13 to 2026-10-14)
 
-- **Source.** The ChatGPT conversation open in the owner's signed-in **Google Chrome**. Its session is reused through Chrome itself; browser credentials are never copied. The owner's [verbatim clarifications](sources/current-thread-browser-reuse-2026-10-13.txt) are kept in [docs/sources](sources/current-thread-ux-2026-10-13.txt).
-- **Surface.** One small status-bar popover. No handoff may open a browser, refresh the page, raise or switch windows, flicker, or put a blocking overlay over the chat. This replaces the earlier embedded-WebKit window and the extension popup.
+- **Surface.** A menu-bar panel that is the ChatGPT website itself, in the app's own persistent WebKit session, with a thin handoff bar beneath it. Hiding never destroys the page. No handoff may open a browser, refresh the page, raise or switch windows, flicker, or put a blocking overlay over the chat.
+- **Session.** The owner signs in once inside the panel. Their sign-in method was confirmed to work in the embedded view, survive restart and send messages (login probe, 2026-10-14). That result superseded the Chrome-session route and its extension, which were removed. Browser credentials are never copied.
 - **Target.** An exact window that is already open in another app. Text is appended into its composer in the background and read back to confirm. Nothing is sent.
-- **Scope.** The owner authorized a complete first-principles refactor. Paths that do not serve this design were removed: the local HTTP desk, the WebKit workspace, the DOM/scroll collector and the old popups.
+- **Memory only.** No session journal or conversation archive. Only WebKit's own login data persists.
+- **Scope.** The owner authorized a complete first-principles refactor. Earlier paths were removed: the local HTTP desk, the DOM/scroll collector, the popups, and the Chrome extension with its relay.
 
 ## Source and interpretation
 

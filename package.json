@@ -3,18 +3,17 @@
   "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "Menu-bar handoff of the ChatGPT conversation you are viewing in Chrome into an open composer, without sending.",
+  "description": "Menu-bar ChatGPT panel that adds the open conversation to an existing composer window, without sending.",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
     "test": "node --test tests/*.test.js",
     "test:browser": "playwright test",
-    "build:extension": "node scripts/build-extension.js",
-    "test:chrome": "npm run build:extension && playwright test --config playwright.chrome.config.js",
+    "build:webkit": "node scripts/build-webkit.js",
     "test:native": "bash scripts/test-native.sh",
     "build:macos": "bash scripts/build-macos.sh",
-    "check": "npm test && npm run test:browser && npm run test:chrome && npm run test:native",
+    "check": "npm test && npm run test:browser && npm run test:native",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

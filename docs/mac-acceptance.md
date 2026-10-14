@@ -1,6 +1,21 @@
 # Mac acceptance log
 
-## 2026-10-14 · 0.4.0 menu-bar rebuild
+## 2026-10-14 · Embedded panel (supersedes the Chrome extension route below)
+
+The owner pasted a design note favouring an embedded web view. A throwaway login probe (a menu-bar panel with `WKWebView` and the default persistent store, user agent unchanged) then established:
+
+- The owner can sign in to ChatGPT inside it.
+- They stay signed in after a restart.
+- Messages send normally.
+
+The Chrome extension, the native-messaging relay and the socket link were therefore removed. The app now owns the WebKit view: the observer runs in the page world, and the compiler and bridge run in WebKit's isolated `defaultClient` world.
+
+- `npm test` passed 83/83, and `npm run test:browser` passed 14/14.
+- The WebKit half of `npm run test:native` passed 22 checks against the real `ChatController` in a real `WKWebView`.
+- The Accessibility append is unchanged from the owner's 49-check run below.
+- Handoff bar snapshots were reviewed in four states.
+
+## 2026-10-14 · Chrome extension route (removed)
 
 macOS 27.0.1 (arm64), Swift 6.3.3, Node 25.9.0, Chrome for Testing 149. Synthetic data only.
 

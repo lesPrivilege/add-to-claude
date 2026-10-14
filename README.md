@@ -1,22 +1,22 @@
 # gpt-handoff
 
-A macOS menu-bar utility that adds the ChatGPT conversation you are viewing in Chrome to a message box that is already open in another app, for example Claude. It never sends anything: the text lands in that app's draft and you decide what to do with it.
+A macOS menu-bar ChatGPT panel with one extra button. **Add** puts the conversation you have open into the message box of a window that is already open in another app, for example Claude. It never sends anything: the text lands in that app's draft and you decide what to do with it.
 
 It replaces copying each turn by hand, joining them, switching windows and pasting.
 
 ## How it works
 
-1. **Chrome extension.** On chatgpt.com it observes the conversation data the page loads by itself. It makes no extra requests and never reloads the page. It follows the ChatGPT tab you last looked at and keeps only that tab's prepared Markdown, in memory.
-2. **Relay.** Chrome starts the bundled `gpt-handoff-host` through native messaging. The relay only copies frames between Chrome and the running app, over a private socket in your temporary folder.
-3. **Menu-bar app.** Click the icon to open a small popover. It shows the current conversation (turns, files, Verified or Partial), lets you pick an open window, and has one **Add** button. Add asks the extension for the exact text, writes it at the end of that window's message box through Accessibility, and reads it back to confirm.
+- **The panel.** Click the menu-bar icon and ChatGPT opens in a panel under it. It is the full website in an embedded WebKit view with its own persistent login: you sign in once, and the login survives restarts. Clicking elsewhere only hides the panel, so a reply keeps streaming and the page stays where it was. Uploads, downloads and sign-in popups work in the panel; other links open in your default browser.
+- **The handoff bar.** Under the chat, a thin bar shows the open conversation (turns, files, Verified or Partial), a picker of open windows, and **Add**.
+  - A page observer watches only the conversation data the page loads by itself. It makes no extra requests and never reloads.
+  - A compiler in an isolated script world turns that data into Markdown: each turn in order, with its role, the original Markdown, source locators and file references. The page cannot reach that world or the app.
+- **Add.** Add writes the Markdown at the end of the chosen window's message box through Accessibility, in the background, and reads it back to confirm. Nothing is raised, activated, pasted or typed, and your existing draft, formatting and attachments are kept.
 
-Nothing is raised, activated, pasted or typed. The target window stays where it is, and your existing draft, formatting and attachments are kept. The popover hands focus back when it closes.
-
-The Markdown keeps each turn in order with its role, the original Markdown, source locators and file references. File references are not file contents.
+Nothing is stored apart from WebKit's own login data. The prepared conversation lives in memory only. File references are not file contents.
 
 ## Build and set up
 
-You need macOS 14 or later, the Xcode command-line tools, Node.js 24 or later, and Google Chrome.
+You need macOS 14 or later, the Xcode command-line tools, and Node.js 24 or later.
 
 ```bash
 npm ci
@@ -26,12 +26,14 @@ npm ci
 bash scripts/build-macos.sh
 ```
 
-1. Open `dist/gpt-handoff.app`. Its icon appears in the menu bar.
-2. In the popover, choose **Set up Chrome…**. This registers the relay with Chrome and shows the extension folder. In Chrome, open `chrome://extensions`, turn on Developer mode, choose **Load unpacked**, and pick that folder.
-3. Reload any ChatGPT tab that was already open.
-4. Choose **Allow Accessibility…** and turn on gpt-handoff in System Settings. A rebuilt unsigned app may need this again.
+```bash
+open dist/gpt-handoff.app
+```
 
-To use it, click into the target app's message box once so that box has focus. Then open the popover, choose that window and click **Add**.
+1. Sign in to ChatGPT in the panel.
+2. Choose **Allow Accessibility…** in the bar, and turn on gpt-handoff in System Settings. A rebuilt unsigned app may need this again.
+
+To use it, click into the target app's message box once, so that box has focus. Then choose that window in the bar and click **Add**.
 
 ## Tests
 
@@ -44,16 +46,11 @@ CHROMIUM_PATH='<Chrome for Testing binary>' npm run test:browser
 ```
 
 ```bash
-EXTENSION_CHROMIUM_PATH='<Chrome for Testing binary>' npm run test:chrome
-```
-
-```bash
 npm run test:native
 ```
 
-- `npm test` runs the model, adapters, page observer and extension logic.
+- `npm test` runs the model, adapters, compiler, page observer and the bundled bridge.
 - `test:browser` runs the page observer in a real browser.
-- `test:chrome` loads the built extension into Chrome for Testing with the real compiled relay. The app is replaced by a socket stand-in. Branded Chrome ignores `--load-extension`.
-- `test:native` checks the relay and app link, then runs the real Accessibility checks against a synthetic app. The Accessibility part reports NOT RUN unless the terminal has Accessibility access.
+- `test:native` runs the real chat controller in a real `WKWebView`, then the real Accessibility checks against a synthetic app. The Accessibility part reports NOT RUN unless the terminal has Accessibility access.
 
 [docs/support-matrix.md](docs/support-matrix.md) records what has actually been verified and what has not.

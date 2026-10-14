@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds an unsigned local gpt-handoff.app: menu-bar app, Chrome relay, icons and the unpacked extension.
+# Builds an unsigned local gpt-handoff.app: the menu-bar chat panel, its WebKit scripts and icons.
 set -euo pipefail
 [[ "$(uname -s)" == "Darwin" ]] || { echo 'macOS with the Xcode command-line tools is required.' >&2; exit 1; }
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,17 +14,11 @@ bundle="$work/gpt-handoff.app"
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
 cp "$project_root/native/Info.plist" "$bundle/Contents/Info.plist"
 cp -R "$project_root/native/icons" "$bundle/Contents/Resources/icons"
-node "$project_root/scripts/build-extension.js"
-cp -R "$project_root/dist/extension" "$bundle/Contents/Resources/extension"
-
-target="$(uname -m)-apple-macos14.0"
+node "$project_root/scripts/build-webkit.js" "$bundle/Contents/Resources/webkit"
 native="$project_root/native"
-xcrun --sdk macosx swiftc -O -swift-version 5 -target "$target" -parse-as-library \
-  "$native/Main.swift" "$native/App.swift" "$native/Composer.swift" "$native/Link.swift" "$native/NativeHostOrigin.swift" \
-  -o "$bundle/Contents/MacOS/gpt-handoff"
-xcrun --sdk macosx swiftc -O -swift-version 5 -target "$target" -parse-as-library \
-  "$native/Relay.swift" "$native/Link.swift" "$native/NativeHostOrigin.swift" \
-  -o "$bundle/Contents/MacOS/gpt-handoff-host"
+xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \
+  "$native/Main.swift" "$native/App.swift" "$native/Chat.swift" "$native/Handoff.swift" \
+  "$native/Views.swift" "$native/Composer.swift" -o "$bundle/Contents/MacOS/gpt-handoff"
 plutil -lint "$bundle/Contents/Info.plist" >/dev/null
 mv "$bundle" "$output"
 echo "Built $output (unsigned)."

@@ -21,10 +21,10 @@ cat > "$fixture_bundle/Contents/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library -framework AppKit \
-  "$project_root/native/Link.swift" "$project_root/tests/native/AccessibilityFixture.swift" \
+  "$project_root/tests/native/Frames.swift" "$project_root/tests/native/AccessibilityFixture.swift" \
   -o "$fixture_bundle/Contents/MacOS/Fixture"
 xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library -framework AppKit -framework ApplicationServices \
-  "$project_root/native/Composer.swift" "$project_root/tests/native/AccessibilityTests.swift" "$project_root/native/Link.swift" \
+  "$project_root/native/Composer.swift" "$project_root/tests/native/AccessibilityTests.swift" "$project_root/tests/native/Frames.swift" \
   -o "$fixture_root/accessibility-tests"
 mkfifo -m 600 "$fixture_root/requests" "$fixture_root/responses"
 "$fixture_root/accessibility-tests" "$fixture_bundle" "$fixture_root"
