@@ -67,6 +67,10 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         column.spacing = 0
         for view in [web!, bar.view] { view.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true }
         web.setContentHuggingPriority(.defaultLow, for: .vertical)
+        // A web view has no natural size; without these the window shrinks to the bar's size.
+        web.widthAnchor.constraint(greaterThanOrEqualToConstant: 360).isActive = true
+        web.heightAnchor.constraint(greaterThanOrEqualToConstant: 360).isActive = true
+        preferredContentSize = NSSize(width: 480, height: 760)
         view = column
         start(web)
     }

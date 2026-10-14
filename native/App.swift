@@ -25,10 +25,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.onEscape = { [weak self] in self?.hide() }
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.minSize = NSSize(width: 380, height: 480)
+        panel.contentMinSize = NSSize(width: 380, height: 480)
         panel.contentViewController = chat
-        panel.setContentSize(NSSize(width: 480, height: 760))
         panel.setFrameAutosaveName("ChatPanel") // Only the size persists; show() always places it under the icon.
+        if panel.frame.width < 380 || panel.frame.height < 480 { panel.setContentSize(NSSize(width: 480, height: 760)) }
         panel.delegate = self
         NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) {
             [weak self] _ in
@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item.button?.target = self
         item.button?.action = #selector(click)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        show()
+        DispatchQueue.main.async { self.show() }
     }
 
     @objc private func click() {
@@ -60,14 +60,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func show() {
-        if let button = item.button, let frame = button.window?.convertToScreen(button.frame),
-           let screen = button.window?.screen?.visibleFrame {
-            // Keep the handoff bar on screen when a size saved on a taller display is restored here.
-            let height = min(panel.frame.height, frame.minY - 4 - screen.minY - 4)
-            if height < panel.frame.height { panel.setContentSize(NSSize(width: panel.frame.width, height: height)) }
-            let x = min(max(frame.midX - panel.frame.width / 2, screen.minX + 8), screen.maxX - panel.frame.width - 8)
-            panel.setFrameTopLeftPoint(NSPoint(x: x, y: frame.minY - 4))
+        // Under the icon once it is on screen; at launch, before the menu bar lays it out, top centre.
+        let screen = (item.button?.window?.screen ?? NSScreen.main ?? NSScreen.screens[0]).visibleFrame
+        var anchor = NSPoint(x: screen.midX, y: screen.maxY)
+        if let button = item.button, let window = button.window {
+            let frame = window.convertToScreen(button.convert(button.bounds, to: nil))
+            // Before layout the icon's window sits at the origin; trust it only inside the menu bar.
+            if frame.minY >= screen.maxY - 4 { anchor = NSPoint(x: frame.midX, y: screen.maxY) }
         }
+        // Keep the handoff bar on screen when a size saved on a taller display is restored here.
+        let height = min(panel.frame.height, anchor.y - 4 - screen.minY - 4)
+        if height < panel.frame.height { panel.setFrame(NSRect(x: 0, y: 0, width: panel.frame.width, height: height), display: false) }
+        let x = min(max(anchor.x - panel.frame.width / 2, screen.minX + 8), screen.maxX - panel.frame.width - 8)
+        panel.setFrameTopLeftPoint(NSPoint(x: x, y: anchor.y - 4))
         chat.bar.willShow()
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
