@@ -170,6 +170,9 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             // A blank draft is replaced as a selection; otherwise the caret goes to the end.
             var end = CFRange(location: blank ? 0 : old.utf16.count, length: blank ? old.utf16.count : 0)
             guard operationValid() else { completion("The handoff expired or changed. Nothing was added.", false); return }
+            if ignoresInsertion(selected.choice.app) {
+                return fallBack(selected, field: current, old: old, blank: blank, text: text, suffix: suffix, completion: completion)
+            }
             let setRange = AXValueCreate(.cfRange, &end).map {
                 AXUIElementSetAttributeValue(current, kAXSelectedTextRangeAttribute as CFString, $0)
             }
@@ -197,6 +200,7 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             // change before reading it back, for up to two seconds.
             confirmWrite(current, old: old, expected: expected, attempts: 20, rich: beforeFinalBreak) { message, success in
                 guard !success, message == ignoredMessage, operationValid() else { return completion(message, success) }
+                rememberIgnoresInsertion(selected.choice.app)
                 // Some web editors (Claude's ProseMirror prompt) take no AX text writes at all.
                 fallBack(selected, field: current, old: old, blank: blank, text: text, suffix: suffix, completion: completion)
             }
@@ -205,6 +209,16 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
 }
 
 private let ignoredMessage = "The app did not take the text. Nothing was added."
+
+/// Apps seen to accept AX text insertion calls without applying them; later Adds skip that wait.
+private let ignoringKey = "AppsIgnoringTextInsertion"
+private func ignoresInsertion(_ app: NSRunningApplication) -> Bool {
+    app.bundleIdentifier.map { (UserDefaults.standard.stringArray(forKey: ignoringKey) ?? []).contains($0) } ?? false
+}
+private func rememberIgnoresInsertion(_ app: NSRunningApplication) {
+    guard let id = app.bundleIdentifier, !ignoresInsertion(app) else { return }
+    UserDefaults.standard.set((UserDefaults.standard.stringArray(forKey: ignoringKey) ?? []) + [id], forKey: ignoringKey)
+}
 
 /// Line breaks and blank lines as a rich editor keeps them: runs of newlines become one, ends trimmed.
 private func normalized(_ text: String) -> String {
