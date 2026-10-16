@@ -29,12 +29,12 @@
 ```json
 {
   "handoff_id": "example-003",
-  "source": {"provider": "chatgpt", "conversation_id": "S1"},
-  "target": {"provider": "claude", "conversation_id": "T1", "identity_confidence": "verified"},
+  "source": { "provider": "chatgpt", "conversation_id": "S1" },
+  "target": { "provider": "claude", "conversation_id": "T1", "identity_confidence": "verified" },
   "mode": "delta",
   "messages": [
-    {"id": "m15", "content_sha256": "<calculated-hash>", "position": 15},
-    {"id": "m16", "content_sha256": "<calculated-hash>", "position": 16}
+    { "id": "m15", "content_sha256": "<calculated-hash>", "position": 15 },
+    { "id": "m16", "content_sha256": "<calculated-hash>", "position": 16 }
   ],
   "attachments": [],
   "result": "composer_inserted",
@@ -70,23 +70,23 @@ ChatGPT · 当前会话                        42 条
 
 ## 验收矩阵（至少自动化可覆盖决策逻辑）
 
-| 场景 | 预期 |
-|---|---|
-| 新 source → 新 target | 默认全量 |
-| 同 source → 经确认的同 target | 仅上次成功填入后新增，范围可见 |
-| 同 source → 新 target | 默认全量，旧 target 进度仍保留 |
-| 同一窗口中目标 conversation 改变 | 不沿用旧 target 的增量记录 |
-| 无稳定 target identity | 不猜测，默认全量或明确手动绑定 |
-| 手动非连续选择 | 按源序插入选中消息；未选中不被偷偷算作已送达 |
-| 文本修改/重新生成 | hash/版本检测，明确更新的处理策略 |
-| 准备成功但粘贴失败 | 成功游标不前移，可重试 |
-| 粘贴结果无法确认 | 状态 unknown，不能记作 inserted |
-| 已填入后用户清空或未 Send | 可重填；不声称目标模型阅读 |
-| 目标 composer 已有草稿 | 不静默覆盖、不自动发送 |
-| 同一来源多目标并行 | mapping 相互独立 |
-| 附件与消息关联 | manifest 可核验，并区分下载与目标可用 |
-| 重复按主按钮 | 有去重或显式重填流程 |
-| 超大输入 | 显示量级与分批选项，不隐式截断 |
+| 场景                             | 预期                                         |
+| -------------------------------- | -------------------------------------------- |
+| 新 source → 新 target            | 默认全量                                     |
+| 同 source → 经确认的同 target    | 仅上次成功填入后新增，范围可见               |
+| 同 source → 新 target            | 默认全量，旧 target 进度仍保留               |
+| 同一窗口中目标 conversation 改变 | 不沿用旧 target 的增量记录                   |
+| 无稳定 target identity           | 不猜测，默认全量或明确手动绑定               |
+| 手动非连续选择                   | 按源序插入选中消息；未选中不被偷偷算作已送达 |
+| 文本修改/重新生成                | hash/版本检测，明确更新的处理策略            |
+| 准备成功但粘贴失败               | 成功游标不前移，可重试                       |
+| 粘贴结果无法确认                 | 状态 unknown，不能记作 inserted              |
+| 已填入后用户清空或未 Send        | 可重填；不声称目标模型阅读                   |
+| 目标 composer 已有草稿           | 不静默覆盖、不自动发送                       |
+| 同一来源多目标并行               | mapping 相互独立                             |
+| 附件与消息关联                   | manifest 可核验，并区分下载与目标可用        |
+| 重复按主按钮                     | 有去重或显式重填流程                         |
+| 超大输入                         | 显示量级与分批选项，不隐式截断               |
 
 ## Output 优先的交付方式
 

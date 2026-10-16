@@ -15,25 +15,25 @@
 
 ## 1. 优先参考登记
 
-| ID | 类型/优先级 | 原始来源 | 应消费什么 | 禁止或边界 |
-|---|---|---|---|---|
-| N01 | 规范 / P0 | [Apple HIG — SF Symbols](https://developer.apple.com/design/human-interface-guidelines/sf-symbols) | 光学尺寸、线重、重心、不同 weight、与系统文本共处的方式 | Apple 明确禁止将 SF Symbols 或易混淆相似图形用于 app icon、logo、商标用途；不要直接挪用到品牌图标 |
-| N02 | 规范 / P0 | [Apple HIG — App Icons](https://developer.apple.com/design/human-interface-guidelines/app-icons) | app icon 在各尺寸及不同外观下的识别、简洁、中心安全区、系统遮罩 | 不能把菜单栏 template symbol 原样贴到有底板的 app icon 上就算完成 |
-| N03 | 工具与规范 / P0 | [Apple Icon Composer](https://developer.apple.com/icon-composer/) · [Xcode 工作流](https://developer.apple.com/documentation/xcode/creating-your-app-icon-using-icon-composer) | 分层路径、系统材质、refraction/highlight、Icon Composer 资产制作与预览 | 是否采用取决于目标 macOS 与工具链；不要先做不可编辑的位图再试图倒推路径 |
-| N04 | 实现 / P0 | [Apple NSStatusItem](https://developer.apple.com/documentation/appkit/nsstatusitem) · [NSImage.isTemplate](https://developer.apple.com/documentation/appkit/nsimage/istemplate) | 菜单栏按钮、template image 黑色+透明 alpha、系统着色 | 与 app icon 的多色光影生产线完全独立；具体渲染由目标 macOS 版本实测 |
-| C01 | 样本 / P0 | [Mac Menubar Apps](https://macmenubar.app/) | 菜单栏真实截屏中，图标与系统符号的视觉密度、尺寸、留白、可辨识性 | 站内内容是样本，非可自由复用的图标库 |
-| C02 | 样本 / P0 | [CleanShot X 菜单栏示例](https://macmenubar.app/app/cleanshot-x) · [CleanShot 官方站](https://cleanshot.com/) | menu bar glyph 与 popover 结构；把“小而美的工具”和复杂的功能命令区分开 | CleanShot 图标、品牌图形不供复制；参考轻量感与状态位 |
-| C03 | 样本 / P0 | [Raycast Press & Media Kit](https://www.raycast.com/press) · [Raycast 图标系统回顾](https://www.raycast.com/blog/a-fresh-look-and-feel) | 品牌 app icon 和独立 outline UI icon 的区分；系统内图标一致的圆角、描边、视觉重量 | Raycast 自己的品牌图形不是开放 logo 模板；官方明确不建议修改其图标颜色 |
-| C04 | 样本 / P1 | [PopClip 官方站](https://www.popclip.app/) · [Mac Menubar Apps — PopClip](https://macmenubar.app/app/popclip) | 工具动作一触即达、符号在工具栏与菜单栏中的简练程度；克制的操作反馈 | PopClip 核心是选中文本弹出工具，不是把其交互模式复制进本项目 |
-| C05 | 样本 / P1 | [Bartender 官方站](https://www.macbartender.com/) | 多图标拥挤的系统菜单栏内，图形存在感与间距；菜单栏可见性 | Bartender 产品自身不构成可复用 logo 资产 |
-| C06 | 图库 / P0 | [macOSicons Gallery](https://macosicons.com/) | 简单轮廓加有质感底板的真实大样本；观察高光、层次与材质，不必复古拟物 | 社区作品许可逐件核实；除非有明确许可，只做视觉参考 |
-| L01 | SVG 库 / P1 | [Lucide](https://lucide.dev/) · [ISC License](https://lucide.dev/license) | 一致线重、拐角和开放轮廓，适合界面图标语法对照 | 库授权不意味着适合直接拿某个通用符号当自有品牌 logo；保留许可声明 |
-| L02 | SVG 库 / P1 | [Iconoir](https://iconoir.com/) | 轻量几何、细线与负形；MIT 授权 | 仅取图形语言参考；原稿须按 MIT 许可处理 |
-| L03 | SVG 库 / P1 | [Phosphor](https://phosphoricons.com/) · [raw SVG / MIT](https://github.com/phosphor-icons/core) | 同一语义不同字重（thin/light/regular/bold）的对照，评估微型渲染损失 | 不直接将通用 glyph 当完整品牌主图 |
-| T01 | 工具 / P1 | [macOSicons Editor](https://macosicons.com/editor) | 可编辑路径、玻璃/黏土/浮雕效果及 icns/appiconset 输出，供实验 | 属第三方工具；查核导出文件和具体服务条款后再纳入生产 |
-| S01 | Agent Skill / P1 | [Anthropic frontend-design](https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md) | 针对具体产品建立鲜明审美方向、避免模板化设计、设计自查 | 主要面向前端，不是 macOS icon 专用 skill；只消费决策和批判方法 |
-| S02 | Agent Skill / P1 | [Anthropic canvas-design](https://github.com/anthropics/skills/blob/main/skills/canvas-design/SKILL.md) | 以形式、空间、光感等视觉思想推导方案，适合制作视觉评审板 | 主要面向 PNG/PDF 静态画面；最终必须输出可编辑矢量，不以图像生成替代路径 |
-| S03 | Agent 生态 / P2 | [Agent Skills Specification](https://agentskills.io/specification) · [Anthropic Skills Marketplace](https://github.com/anthropics/skills/blob/main/.claude-plugin/marketplace.json) | `SKILL.md`、`references/`、`assets/` 的可复用结构；若工作流稳定再蒸馏为本地 design skill | 不为这次 icon 一次性任务无谓安装大量 skill |
+| ID  | 类型/优先级      | 原始来源                                                                                                                                                                            | 应消费什么                                                                               | 禁止或边界                                                                                        |
+| --- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| N01 | 规范 / P0        | [Apple HIG — SF Symbols](https://developer.apple.com/design/human-interface-guidelines/sf-symbols)                                                                                  | 光学尺寸、线重、重心、不同 weight、与系统文本共处的方式                                  | Apple 明确禁止将 SF Symbols 或易混淆相似图形用于 app icon、logo、商标用途；不要直接挪用到品牌图标 |
+| N02 | 规范 / P0        | [Apple HIG — App Icons](https://developer.apple.com/design/human-interface-guidelines/app-icons)                                                                                    | app icon 在各尺寸及不同外观下的识别、简洁、中心安全区、系统遮罩                          | 不能把菜单栏 template symbol 原样贴到有底板的 app icon 上就算完成                                 |
+| N03 | 工具与规范 / P0  | [Apple Icon Composer](https://developer.apple.com/icon-composer/) · [Xcode 工作流](https://developer.apple.com/documentation/xcode/creating-your-app-icon-using-icon-composer)      | 分层路径、系统材质、refraction/highlight、Icon Composer 资产制作与预览                   | 是否采用取决于目标 macOS 与工具链；不要先做不可编辑的位图再试图倒推路径                           |
+| N04 | 实现 / P0        | [Apple NSStatusItem](https://developer.apple.com/documentation/appkit/nsstatusitem) · [NSImage.isTemplate](https://developer.apple.com/documentation/appkit/nsimage/istemplate)     | 菜单栏按钮、template image 黑色+透明 alpha、系统着色                                     | 与 app icon 的多色光影生产线完全独立；具体渲染由目标 macOS 版本实测                               |
+| C01 | 样本 / P0        | [Mac Menubar Apps](https://macmenubar.app/)                                                                                                                                         | 菜单栏真实截屏中，图标与系统符号的视觉密度、尺寸、留白、可辨识性                         | 站内内容是样本，非可自由复用的图标库                                                              |
+| C02 | 样本 / P0        | [CleanShot X 菜单栏示例](https://macmenubar.app/app/cleanshot-x) · [CleanShot 官方站](https://cleanshot.com/)                                                                       | menu bar glyph 与 popover 结构；把“小而美的工具”和复杂的功能命令区分开                   | CleanShot 图标、品牌图形不供复制；参考轻量感与状态位                                              |
+| C03 | 样本 / P0        | [Raycast Press & Media Kit](https://www.raycast.com/press) · [Raycast 图标系统回顾](https://www.raycast.com/blog/a-fresh-look-and-feel)                                             | 品牌 app icon 和独立 outline UI icon 的区分；系统内图标一致的圆角、描边、视觉重量        | Raycast 自己的品牌图形不是开放 logo 模板；官方明确不建议修改其图标颜色                            |
+| C04 | 样本 / P1        | [PopClip 官方站](https://www.popclip.app/) · [Mac Menubar Apps — PopClip](https://macmenubar.app/app/popclip)                                                                       | 工具动作一触即达、符号在工具栏与菜单栏中的简练程度；克制的操作反馈                       | PopClip 核心是选中文本弹出工具，不是把其交互模式复制进本项目                                      |
+| C05 | 样本 / P1        | [Bartender 官方站](https://www.macbartender.com/)                                                                                                                                   | 多图标拥挤的系统菜单栏内，图形存在感与间距；菜单栏可见性                                 | Bartender 产品自身不构成可复用 logo 资产                                                          |
+| C06 | 图库 / P0        | [macOSicons Gallery](https://macosicons.com/)                                                                                                                                       | 简单轮廓加有质感底板的真实大样本；观察高光、层次与材质，不必复古拟物                     | 社区作品许可逐件核实；除非有明确许可，只做视觉参考                                                |
+| L01 | SVG 库 / P1      | [Lucide](https://lucide.dev/) · [ISC License](https://lucide.dev/license)                                                                                                           | 一致线重、拐角和开放轮廓，适合界面图标语法对照                                           | 库授权不意味着适合直接拿某个通用符号当自有品牌 logo；保留许可声明                                 |
+| L02 | SVG 库 / P1      | [Iconoir](https://iconoir.com/)                                                                                                                                                     | 轻量几何、细线与负形；MIT 授权                                                           | 仅取图形语言参考；原稿须按 MIT 许可处理                                                           |
+| L03 | SVG 库 / P1      | [Phosphor](https://phosphoricons.com/) · [raw SVG / MIT](https://github.com/phosphor-icons/core)                                                                                    | 同一语义不同字重（thin/light/regular/bold）的对照，评估微型渲染损失                      | 不直接将通用 glyph 当完整品牌主图                                                                 |
+| T01 | 工具 / P1        | [macOSicons Editor](https://macosicons.com/editor)                                                                                                                                  | 可编辑路径、玻璃/黏土/浮雕效果及 icns/appiconset 输出，供实验                            | 属第三方工具；查核导出文件和具体服务条款后再纳入生产                                              |
+| S01 | Agent Skill / P1 | [Anthropic frontend-design](https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md)                                                                         | 针对具体产品建立鲜明审美方向、避免模板化设计、设计自查                                   | 主要面向前端，不是 macOS icon 专用 skill；只消费决策和批判方法                                    |
+| S02 | Agent Skill / P1 | [Anthropic canvas-design](https://github.com/anthropics/skills/blob/main/skills/canvas-design/SKILL.md)                                                                             | 以形式、空间、光感等视觉思想推导方案，适合制作视觉评审板                                 | 主要面向 PNG/PDF 静态画面；最终必须输出可编辑矢量，不以图像生成替代路径                           |
+| S03 | Agent 生态 / P2  | [Agent Skills Specification](https://agentskills.io/specification) · [Anthropic Skills Marketplace](https://github.com/anthropics/skills/blob/main/.claude-plugin/marketplace.json) | `SKILL.md`、`references/`、`assets/` 的可复用结构；若工作流稳定再蒸馏为本地 design skill | 不为这次 icon 一次性任务无谓安装大量 skill                                                        |
 
 **来源核查说明：** 上述 URL 为公开页面/仓库入口，本次核查日期 2026-10-16。外部页面和图库可能更新；制作前再次打开具体内容并在本地注明访问日期、截图来源、使用范围。当前未核实任何社区 icon 的单件商业授权，也未承诺第三方 Skill 能在当前 Claude Desktop 环境直接安装。
 
@@ -60,11 +60,11 @@
 
 ## 3. 本项目的三条独立方向（探索假设，非裁决）
 
-| 概念 | 菜单栏（单色/原生） | App icon（独立设计） | 主要风险 |
-|---|---|---|---|
-| D1 · **Arc Insert**（优先） | 极简 composer + 一笔斜向划入的弧线；只在交汇处保留动作指向 | 明亮但克制的滑行轨迹，从冷色空间进入输入区域，可用材质与深度 | 弧线太长会被读成刷新、回旋；落点不明确就只像擦过 |
-| D2 · **Cursor Arrival** | 简化 composer，文本线或光标成为终点；上方仅保留极短、单一进入线索 | 光标/文字出现的瞬间做成明确焦点，光学深度在板内展开 | 容易变普通聊天/输入图标；内部文字线太多会模糊 |
-| D3 · **Negative-space Insertion** | 用输入区上沿的“开口”或负形表达内容穿入，不必画两条对称光束 | 将开口转化为材质分层和方向性反射，图形与菜单栏版概念相通 | 如果演化成打印机、输纸器或烧瓶，直接拒绝 |
+| 概念                              | 菜单栏（单色/原生）                                               | App icon（独立设计）                                         | 主要风险                                         |
+| --------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------ |
+| D1 · **Arc Insert**（优先）       | 极简 composer + 一笔斜向划入的弧线；只在交汇处保留动作指向        | 明亮但克制的滑行轨迹，从冷色空间进入输入区域，可用材质与深度 | 弧线太长会被读成刷新、回旋；落点不明确就只像擦过 |
+| D2 · **Cursor Arrival**           | 简化 composer，文本线或光标成为终点；上方仅保留极短、单一进入线索 | 光标/文字出现的瞬间做成明确焦点，光学深度在板内展开          | 容易变普通聊天/输入图标；内部文字线太多会模糊    |
+| D3 · **Negative-space Insertion** | 用输入区上沿的“开口”或负形表达内容穿入，不必画两条对称光束        | 将开口转化为材质分层和方向性反射，图形与菜单栏版概念相通     | 如果演化成打印机、输纸器或烧瓶，直接拒绝         |
 
 允许设计师基于参考提出另一种更强的方向，但必须解释为何在 16pt 比现有 C 提案更容易辨识。D1 不是强制赢家。
 
