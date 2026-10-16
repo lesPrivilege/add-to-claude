@@ -186,3 +186,49 @@ test("a generated image linked by sandbox path and attached under ChatGPT's long
   assert.match(result.markdown.split('\n')[file.line], /^- preview\.png — download-needed/);
   assert.doesNotMatch(result.markdown, /mnt_data_preview|^## Files/mu);
 });
+
+test('a file in a sandbox subfolder is one file, and no internal name carries the account id', () => {
+  const message = (id, role, text, metadata = {}) => ({
+    id,
+    author: { role },
+    status: 'finished_successfully',
+    end_turn: role === 'assistant',
+    metadata,
+    content: { content_type: 'text', parts: [text] },
+  });
+  const body = JSON.stringify({
+    conversation_id: 'sub',
+    title: 'Fixtures',
+    current_node: 'a',
+    mapping: {
+      root: { parent: null, children: ['u'], message: null },
+      u: { parent: 'root', children: ['t'], message: message('u', 'user', 'Make the fixtures.') },
+      t: {
+        parent: 'u',
+        children: ['a'],
+        message: message('t', 'tool', '', {
+          attachments: [
+            { id: 'file-img', name: 'user-AbC123_9f8e_mnt_data_fixtures_test-image.png' },
+            { id: 'file-render', name: 'user-AbC123_9f8e_mnt_data_fixtures__renders_page-1.png' },
+          ],
+        }),
+      },
+      a: {
+        parent: 't',
+        children: [],
+        message: message('a', 'assistant', '[Image](sandbox:/mnt/data/fixtures/test-image.png)'),
+      },
+    },
+  });
+  const result = compile({
+    ...packet,
+    pageUrl: 'https://chatgpt.com/c/sub',
+    responseUrl: 'https://chatgpt.com/backend-api/conversation/sub',
+    body,
+  });
+  assert.deepEqual(result.attachments.map((file) => [file.id, file.name]).sort(), [
+    ['file-img', 'test-image.png'],
+    ['file-render', 'fixtures__renders_page-1.png'],
+  ]);
+  assert.doesNotMatch(result.markdown, /user-AbC123|_mnt_data_/u);
+});

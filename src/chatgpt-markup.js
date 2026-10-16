@@ -3,23 +3,25 @@
  * Two kinds reach the page's data: private-use markers (U+E200 kind U+E202 field … U+E201) for
  * citations, links and entities, and "genui" tags (<box>, <Entity/>, <Cite/> …) for laid-out
  * answers. Only the tag names below are transformed. Fenced code, inline code and unknown tags
- * stay exactly as written; template directives such as {#each …} are data and stay too.
+ * stay exactly as written. A scripted widget's template lines ({@body …}, {#each …}, {/each}, a line
+ * that is only a bound value such as {t.name}) cannot be read as text: they go, and count as an
+ * omitted widget.
  */
 
 // Containers lay out blocks: their own lines go, a closing one separates what follows, and the
 // content they indent is dedented.
 const containers = new Set(['box', 'row', 'grid', 'grid-item', 'WritingBlock', 'radio-group']);
 // Controls keep their visible label; their handlers and state are dropped with the attributes.
-const inline = new Set(['text', 'caption', 'radio', 'button']);
-const decoration = new Set(['icon', 'divider']);
+const inline = new Set(['text', 'caption', 'radio', 'button', 'badge']);
+const decoration = new Set(['icon', 'divider', 'select', 'spacer']);
 const tagNames = [...containers, ...inline, ...decoration, 'AsyncImage', 'Entity', 'Link', 'Cite'];
 const tagPattern = new RegExp(
-  `([ \\t]*)<(/?)(${tagNames.join('|')})((?:\\s+[A-Za-z_][\\w-]*(?:=(?:"[^"]*"|'[^']*'|\\{[^{}]*\\}|[^\\s"'{}<>/=\`]+))?)*)\\s*(/?)>`,
+  `([ \\t]*)<(/?)(${tagNames.join('|')})((?:\\s+[A-Za-z_][\\w-]*(?:=(?:"[^"]*"|'[^']*'|\\{(?:[^{}]|\\{(?:[^{}]|\\{[^{}]*\\})*\\})*\\}|[^\\s"'{}<>/=\`]+))?)*)\\s*(/?)>`,
   'gu',
 );
 // Values may be quoted, braced or bare (`align=start`).
 const attributePattern =
-  /([A-Za-z_][\w-]*)(?:=(?:"([^"]*)"|'([^']*)'|\{([^{}]*)\}|([^\s"'{}<>/=`]+)))?/gu;
+  /([A-Za-z_][\w-]*)(?:=(?:"([^"]*)"|'([^']*)'|\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}|([^\s"'{}<>/=`]+)))?/gu;
 const markerPattern = /([ \t]*)\ue200([a-z_]+)((?:\ue202[^\ue200-\ue202]*)*)\ue201/gu;
 const refIdPattern = /^turn\d+[a-z_]+\d+$/u;
 const inlineCode = /(`+).*?(?<!`)\1(?!`)/gu;
@@ -108,19 +110,21 @@ export function readableMarkdown(text) {
     });
     return '';
   };
-  const prose = (line) => {
-    let output = '';
-    let last = 0;
-    for (const code of line.matchAll(inlineCode)) {
-      output += line
-        .slice(last, code.index)
-        .replace(markerPattern, marker)
-        .replace(tagPattern, tag);
-      output += code[0];
-      last = code.index + code[0].length;
-    }
-    return output + line.slice(last).replace(markerPattern, marker).replace(tagPattern, tag);
+  // Markup inside an inline code span stays as written. A tag is matched on the whole line first, since
+  // its handler may itself contain backticks; it is left alone only if it starts inside a code span.
+  const outsideCode = (pattern, replace) => (text) => {
+    const spans = [...text.matchAll(inlineCode)].map((code) => [
+      code.index,
+      code.index + code[0].length,
+    ]);
+    return text.replace(pattern, (...args) => {
+      const at = args.at(-2);
+      return spans.some(([start, end]) => at >= start && at < end) ? args[0] : replace(...args);
+    });
   };
+  const markers = outsideCode(markerPattern, marker);
+  const tags = outsideCode(tagPattern, tag);
+  const prose = (line) => tags(markers(line));
 
   const lines = text.split('\n');
   const output = [];
@@ -163,11 +167,19 @@ export function readableMarkdown(text) {
       changed = true;
       continue;
     }
+    // A scripted widget's template lines: directives, script blocks and lone bound values.
+    if (/^[ \t]*\{[@#:/][^]*\}[ \t]*$|^[ \t]*(?:\{[^{}]*\}[ \t]*)+$/u.test(line)) {
+      if (/^[ \t]*\{@/u.test(line)) omitted += 1;
+      changed = true;
+      continue;
+    }
     opened = 0;
     closed = 0;
     separated = false;
     const before = cites.length + omitted;
-    const result = prose(line);
+    let result = prose(line);
+    // A control whose only content was a bound value ({s}) leaves nothing to read.
+    if (result !== line && /^[ \t]*(?:\{[^{}]*\}[ \t]*)+$/u.test(result)) result = '';
     const touched = result !== line || cites.length + omitted !== before;
     changed ||= touched;
     if (depth === 0 && opened > closed && region < 0) region = output.length;

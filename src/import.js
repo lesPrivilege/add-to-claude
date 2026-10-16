@@ -812,12 +812,22 @@ export function importConversation(raw, id, leafId) {
   // A generated file linked in a turn as sandbox:/mnt/data/<name> may also be attached, outside any
   // turn, under ChatGPT's internal name "…_mnt_data_<name>". They are one file: the attached copy
   // (fetchable by its file id) takes the turn's place and short name, and the sandbox reference goes.
+  // In a subfolder (sandbox:/mnt/data/dir/name) the internal name flattens the path: "…_mnt_data_dir_name".
+  const internalName = (reference) => {
+    let path = reference.id.split('sandbox:/mnt/data/')[1] ?? reference.name;
+    try {
+      path = decodeURIComponent(path);
+    } catch {
+      /* Keep the raw path. */
+    }
+    return `_mnt_data_${path.replaceAll('/', '_')}`;
+  };
   for (const reference of attachments.filter((file) => file.id.includes(':sandbox:'))) {
     const attached = attachments.find(
       (file) =>
         !file.turnId &&
         !file.id.includes(':sandbox:') &&
-        (file.name === reference.name || file.name.endsWith(`_mnt_data_${reference.name}`)),
+        (file.name === reference.name || file.name.endsWith(internalName(reference))),
     );
     if (!attached) continue;
     const own = issues.find((item) => item.sourceLocator === attached.sourceLocator);
@@ -827,6 +837,17 @@ export function importConversation(raw, id, leafId) {
     attachments.splice(attachments.indexOf(reference), 1);
     const raised = issues.findIndex((item) => item.sourceLocator === reference.sourceLocator);
     if (raised >= 0) issues.splice(raised, 1);
+  }
+  // An internal name left over starts with the account's id ("user-<id>_<hex>_mnt_data_…"): keep only
+  // the part after it, so the id never reaches a file name or the hand-off text.
+  for (const file of attachments) {
+    const at = file.name.lastIndexOf('_mnt_data_');
+    if (at >= 0 && file.name.length > at + 10) {
+      const name = file.name.slice(at + 10);
+      const own = issues.find((item) => item.sourceLocator === file.sourceLocator);
+      if (own) own.message = own.message.replace(file.name, name);
+      file.name = name;
+    }
   }
   if (!turns.length)
     issue(

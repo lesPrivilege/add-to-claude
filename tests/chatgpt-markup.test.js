@@ -56,7 +56,7 @@ test('layout tags unwrap to their content, dedented and separated by block', () 
   assert.equal(result.omitted, 1);
 });
 
-test('a writing block keeps its Markdown and template directives stay as data', () => {
+test("a writing block keeps its Markdown; a scripted widget's template lines go", () => {
   const text = [
     '{@body const sizes=["16px","24px"]}',
     '<grid columns={3} gap={2}>',
@@ -71,20 +71,11 @@ test('a writing block keeps its Markdown and template directives stay as data', 
     '    indented code stays',
     '</WritingBlock>',
   ].join('\n');
+  const result = readableMarkdown(text);
+  assert.equal(result.omitted, 1, 'the script counts as an omitted widget');
   assert.equal(
-    readableMarkdown(text).markdown,
-    [
-      '{@body const sizes=["16px","24px"]}',
-      '{#each sizes as s}',
-      '  {s}',
-      '{/each}',
-      '',
-      '## Origins',
-      '',
-      'First paragraph.',
-      '',
-      '    indented code stays',
-    ].join('\n'),
+    result.markdown,
+    ['## Origins', '', 'First paragraph.', '', '    indented code stays'].join('\n'),
   );
 });
 
@@ -178,4 +169,24 @@ test('bare attribute values and form controls unwrap like the other layout tags'
     ].join('\n'),
   );
   assert.equal(markdown, ['**A · 负形穿槽**', '', '全部消息', '', '查看细节'].join('\n'));
+});
+
+test('a scripted checklist widget leaves its labels, not its code', () => {
+  const text = [
+    'Acceptance matrix',
+    '{@body const tests=[{id:"E05",name:"Append"}]}',
+    '{@body const [checks,setChecks]=DIL.useState({})}',
+    '<badge color="secondary">IMG-GEN-72</badge>',
+    '{#each tests as t}',
+    '  {t.id}',
+    '  {t.name}',
+    '  <select size="md" value={checks[t.id]||"pending"} onChange={v=>setChecks(p=>({...p,[t.id]:v}))} options={[{label:"Pending",value:"pending"}]}/>',
+    '{/each}',
+    '<button block color="primary" onClick={()=>GenUI.copy("Run\\n"+tests.map(t=>`${t.id}: ${(checks[t.id]||"pending")}`).join("\\n"))}>',
+    '   Copy results',
+    '</button>',
+  ].join('\n');
+  const result = readableMarkdown(text);
+  assert.equal(result.markdown, ['Acceptance matrix', 'IMG-GEN-72', '   Copy results'].join('\n'));
+  assert.equal(result.omitted, 2);
 });
