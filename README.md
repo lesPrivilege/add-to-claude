@@ -79,7 +79,7 @@ CHROMIUM_PATH='<Chrome for Testing binary>' npm run test:browser
 - `test:native` runs the real chat controller in a real `WKWebView`, then the Accessibility checks against a synthetic app. The Accessibility checks report NOT RUN unless the terminal has Accessibility access.
 - `test:browser` runs the page observer in a real browser.
 
-[docs/support-matrix.md](docs/support-matrix.md) records what has been verified and what has not.
+[docs/support-matrix.md](docs/support-matrix.md) records what has been verified and what has not. [docs/roadmap.md](docs/roadmap.md) has what comes next.
 
 ---
 
@@ -125,4 +125,4 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
 
 ### 测试
 
-测试命令同上。[docs/support-matrix.md](docs/support-matrix.md) 记录了哪些已经验证、哪些尚未验证。
+测试命令同上。[docs/support-matrix.md](docs/support-matrix.md) 记录了哪些已经验证、哪些尚未验证；后续计划见 [docs/roadmap.md](docs/roadmap.md)。
