@@ -39,6 +39,17 @@ import WebKit
 
     /// Two turns made files with the same name; each line gets its own copy, and the shared check goes
     /// only when both have one.
+    /// A hand-off's trace reaches the exported report as counts and stage names only.
+    static func diagnostics() {
+        let trace = HandoffTrace()
+        trace.record(.started, turns: 3, scope: "new", target: "com.example.target")
+        trace.record(.inserted)
+        let report = (try? Diagnostics.sessionReport()) ?? ""
+        check(report.contains("op=\(trace.id) stage=started") && report.contains("turns=3") && report.contains("op=\(trace.id) stage=inserted"),
+              "the diagnostics report carries this session's hand-off stages")
+        check(report.contains("No message text"), "the report says what it never records")
+    }
+
     static func linkedFiles() {
         let markdown = ["# Charts", "", "Source: <https://chatgpt.com/c/two> · 4 turns · verification: partial", "<!-- b -->",
                         "", "## Content checks", "", "- chart.png: download this file…", "", "## Turn 2 — Assistant", "",
@@ -142,6 +153,7 @@ import WebKit
         check(chat.prepared == nil, "a response for a conversation no longer shown is not prepared")
 
         linkedFiles()
+        diagnostics()
         print("PASS: \(checks) WebKit checks in a real WKWebView")
         exit(0)
     }

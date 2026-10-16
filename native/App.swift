@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         chat.openSettings = { [weak self] in self?.settings.show() }
         settings.reload = { [weak self] in self?.chat.reload() }
         settings.signOut = { [weak self] in self?.chat.signOut() }
+        settings.clearWebCache = { [weak self] in self?.chat.clearWebCache() }
         settings.shortcutTaken = { [weak self] in !(self?.hotkey.use(.current) ?? true) }
         hotkey.use(.current)
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) {

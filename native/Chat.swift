@@ -123,6 +123,17 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         openExternally(web.url ?? URL(string: "https://chatgpt.com/")!)
     }
 
+    /// Clears only WebKit's caches (memory, disk, fetch), then reloads. Cookies and site storage stay,
+    /// so the sign-in survives; downloaded files and settings are not WebKit data at all.
+    func clearWebCache() {
+        let types: Set<String> = [WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeFetchCache,
+                                  WKWebsiteDataTypeOfflineWebApplicationCache]
+        WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: .distantPast) { [weak self] in
+            HandoffTrace.event("web-cache-cleared")
+            self?.web.reload()
+        }
+    }
+
     /// Clears the panel's own cookies and site data, then shows ChatGPT's sign-in page.
     func signOut() {
         let store = WKWebsiteDataStore.default()
@@ -361,6 +372,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
 
     private var lastCrash = Date.distantPast
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        HandoffTrace.event("web-content-process-terminated")
         guard webView === web else { return }
         // Reload once; a page that keeps crashing waits for the user instead of looping.
         if Date().timeIntervalSince(lastCrash) > 60 {

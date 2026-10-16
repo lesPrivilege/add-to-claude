@@ -797,6 +797,8 @@ final class HandoffBar: NSViewController {
         busy = true
         operation = UUID()
         let id = operation
+        let trace = HandoffTrace()
+        trace.record(.started, turns: scope.turns.count, scope: scope.mode, target: selected.choice.app.bundleIdentifier)
         let receipt = frozen.sourceId.map {
             log.begin(source: $0, target: identity, mode: scope.mode, turns: scope.turns, attachments: scope.turns.flatMap(\.files))
         }
@@ -811,6 +813,7 @@ final class HandoffBar: NSViewController {
         render()
 
         let fail = { [weak self] (message: String) in
+            trace.record(.failed)
             if let receipt { self?.log.move(receipt, to: .failed) }
             self?.finish("Failed: \(message)", glyph: "error")
         }
@@ -820,6 +823,7 @@ final class HandoffBar: NSViewController {
             guard markdown.utf8.count <= maximumTextBytes else {
                 return fail("\(what.prefix(1).uppercased() + what.dropFirst()) come to \(ByteCountFormatter.string(fromByteCount: Int64(markdown.utf8.count), countStyle: .file)), over the 2 MB a message box takes. Choose fewer turns, or Save.")
             }
+            trace.record(.insertAttempted, files: text.attachments.count, bytes: markdown.utf8.count)
             if let receipt { self.log.move(receipt, to: .insertionAttempted) }
             self.say("Adding \(what) to \(app)…", glyph: "waiting")
             appendToComposer(selected, text: markdown, operationValid: valid,
@@ -828,14 +832,16 @@ final class HandoffBar: NSViewController {
                 let files = filesNote.isEmpty ? "" : " " + filesNote
                 switch outcome {
                 case .inserted:
+                    trace.record(.inserted)
                     if let receipt { self.log.move(receipt, to: .composerInserted) }
                     self.scopeChoice = .auto
                     self.finish("Added \(what) to the draft in \(app). Nothing was sent.\(files)", glyph: "done")
                 case .unconfirmed:
+                    trace.record(.unconfirmed)
                     if let receipt { self.log.move(receipt, to: .unknown) }
                     self.finish("Could not confirm. \(message)\(files)", glyph: "unverified", actions: receipt.map { receipt in
-                        [("It's There", { [weak self] in self?.settle(receipt, inserted: true) }),
-                         ("It's Not", { [weak self] in self?.settle(receipt, inserted: false) })]
+                        [("It's There", { [weak self] in trace.record(.confirmedByUser); self?.settle(receipt, inserted: true) }),
+                         ("It's Not", { [weak self] in trace.record(.declinedByUser); self?.settle(receipt, inserted: false) })]
                     } ?? [])
                 case .failed:
                     fail(message)
@@ -846,12 +852,17 @@ final class HandoffBar: NSViewController {
             // Files first, so their lines can point at local copies.
             guard let self, UserDefaults.standard.bool(forKey: Preferences.downloadOnAdd), !text.attachments.isEmpty else { return append(text) }
             self.say("Preparing \(text.attachments.count) file\(text.attachments.count == 1 ? "" : "s")…", glyph: "waiting")
-            self.downloadFiles(text.attachments.map(\.key)) { append(text) }
+            self.downloadFiles(text.attachments.map(\.key)) {
+                trace.record(.filesFetched, files: text.attachments.count)
+                append(text)
+            }
         }
         if scope.everything { return withFiles(frozen) }
         project(frozen, scope.turns, scope.note) { result in
             switch result {
-            case .success(let text): withFiles(frozen.projected(text))
+            case .success(let text):
+                trace.record(.projected, turns: scope.turns.count, bytes: text.markdown.utf8.count)
+                withFiles(frozen.projected(text))
             case .failure(let message): fail(message)
             }
         }

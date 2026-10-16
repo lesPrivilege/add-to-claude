@@ -61,3 +61,16 @@ Settings window (SwiftUI) · global shortcut (Carbon hot key) · login item (SMA
 - Terminal-hosted agents are excluded. A terminal needs its own adapter, and shell pasting is not acceptable.
 - A Partial verification still allows Add. The text carries the verification line and its checks.
 - Google may refuse sign-in inside embedded web views. The owner's sign-in works.
+
+## Storage and diagnostics
+
+| Kind                                                  | Where                                                                          | Cleared by                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| ChatGPT sign-in and site data                         | WebKit's default data store                                                    | Sign Out (all site data)                                            |
+| Web caches                                            | WebKit's default data store                                                    | Clear and Reload (memory, disk and fetch caches only; sign-in kept) |
+| Settings                                              | UserDefaults                                                                   | not cleared                                                         |
+| Delivery history (ids, positions, hashes, times)      | `~/Library/Application Support/add-to-claude/`                                 | Clear History; pruned at launch by retention                        |
+| Downloaded files                                      | the files folder the user chose                                                | never cleared by the app                                            |
+| Hand-off diagnostics (stages, times, sizes, outcomes) | the unified log, subsystem `io.lesprivilege.add-to-claude`, category `handoff` | the system's own log rotation; Export… saves this session's events  |
+
+The conversation itself lives only in memory: the page observer keeps at most eight recent conversations, capped in size, and the app keeps the prepared one.

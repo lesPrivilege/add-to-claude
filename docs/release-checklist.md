@@ -45,3 +45,8 @@ Done on 2026-10-16 with synthetic data only: `npm test` (41 plugin tests) and `n
 - [ ] External links open in the default browser; sign-in popups (Google, Apple, Microsoft) complete.
 - [ ] Quitting Desktop ends the helper; quitting the helper leaves the tab showing "closed".
 - [ ] Independent review of the plugin: security, functionality and rendered UX.
+
+## Release gates (runtime hygiene, 2026-10-16)
+
+- [ ] Signing: builds signed with a stable identity (local "add-to-claude Local" now; Developer ID, hardened runtime and notarization before any public release). Check that an update keeps the Accessibility grant.
+- [ ] Endurance pass on the owner's Mac: several long conversations opened in turn, repeated target switches, a hand-off with a large file, network loss, sleep and wake, a WebKit content-process crash, and Clear Web Cache followed by a check that the sign-in survived. Export diagnostics afterwards and record peak memory from Activity Monitor.

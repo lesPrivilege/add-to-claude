@@ -19,7 +19,7 @@ node "$project_root/scripts/build-webkit.js" "$bundle/Contents/Resources/webkit"
 native="$project_root/native"
 xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \
   "$native/Main.swift" "$native/App.swift" "$native/Chat.swift" "$native/Handoff.swift" \
-  "$native/Views.swift" "$native/Composer.swift" "$native/Files.swift" "$native/Settings.swift" "$native/Delivery.swift" "$native/TurnPicker.swift" -o "$bundle/Contents/MacOS/add-to-claude"
+  "$native/Views.swift" "$native/Composer.swift" "$native/Files.swift" "$native/Settings.swift" "$native/Diagnostics.swift" "$native/Delivery.swift" "$native/TurnPicker.swift" -o "$bundle/Contents/MacOS/add-to-claude"
 plutil -lint "$bundle/Contents/Info.plist" >/dev/null
 # A stable local identity keeps the Accessibility grant across rebuilds; ad-hoc builds lose it each time.
 identity="${ADD_TO_CLAUDE_SIGNING_IDENTITY:-add-to-claude Local}"

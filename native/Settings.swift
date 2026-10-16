@@ -86,6 +86,7 @@ final class Hotkey {
 final class SettingsWindow: NSObject, NSWindowDelegate {
     var reload: () -> Void = {}
     var signOut: () -> Void = {}
+    var clearWebCache: () -> Void = {}
     var shortcutTaken: () -> Bool = { false }
     private var window: NSWindow?
 
@@ -94,6 +95,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     func show() {
         if window == nil {
             let view = SettingsView(reload: { [weak self] in self?.reload() }, signOut: { [weak self] in self?.signOut() },
+                                    clearWebCache: { [weak self] in self?.clearWebCache() },
                                     shortcutTaken: { [weak self] in self?.shortcutTaken() ?? false })
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Add to Claude Settings"
@@ -135,6 +137,7 @@ private struct SettingsView: View {
     private let signing = Signing.current
     let reload: () -> Void
     let signOut: () -> Void
+    let clearWebCache: () -> Void
     let shortcutTaken: () -> Bool
 
     @AppStorage(Preferences.keepPanelOpen) private var pinned = false
@@ -145,6 +148,7 @@ private struct SettingsView: View {
     @AppStorage(HistoryKeys.remember) private var rememberAdded = true
     @AppStorage(HistoryKeys.days) private var historyDays = 30
     @State private var confirmClear = false
+    @State private var cacheCleared = false
     @State private var pasteApps = SettingsView.pastedApps()
     @State private var login = SMAppService.mainApp.status
     @State private var loginProblem = false
@@ -215,6 +219,19 @@ private struct SettingsView: View {
                      ? "So Add can offer only what is new in a conversation it can identify. Kept on this Mac: ids, positions, hashes and times, never message text."
                      : "Add remembers what was added only until you quit.")
             } header: { sectionHeader("History", glyph: "waiting") }
+
+            Section {
+                LabeledContent("Web cache") {
+                    Button("Clear and Reload") { clearWebCache(); cacheCleared = true }
+                }
+                note(cacheCleared ? "Cleared. Your ChatGPT sign-in is kept."
+                     : "Try this first if the ChatGPT page misbehaves. Your sign-in is kept.")
+                LabeledContent("Diagnostics") {
+                    Button("Export…") { Diagnostics.export() }
+                }
+                note("This session's hand-off steps, times and sizes. Never message text, titles, file names or paths.")
+                note("Clearing never touches files you downloaded, your settings or your sign-in.")
+            } header: { sectionHeader("Storage & Diagnostics", glyph: "folder") }
 
             Section {
                 LabeledContent("Accessibility") {
