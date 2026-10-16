@@ -151,8 +151,8 @@ final class TurnRow: NSTableCellView {
     func show(_ turn: TurnInfo, checked: Bool, note text: String?) {
         box.state = checked ? .on : .off
         box.setAccessibilityLabel("Turn \(turn.position), \(turn.role == "user" ? "you" : "ChatGPT")")
-        role.image = NSImage(systemSymbolName: turn.role == "user" ? "person" : "sparkle",
-                             accessibilityDescription: turn.role == "user" ? "You" : "ChatGPT")
+        role.image = glyph(turn.role == "user" ? "person" : "chat", size: 14)
+        role.setAccessibilityLabel(turn.role == "user" ? "You" : "ChatGPT")
         number.stringValue = "\(turn.position)"
         preview.stringValue = turn.preview.isEmpty ? "(no text)" : turn.preview
         preview.textColor = turn.preview.isEmpty ? .tertiaryLabelColor : .labelColor
