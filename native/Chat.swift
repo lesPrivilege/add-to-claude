@@ -74,6 +74,10 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         bar.withFiles = { [weak self] prepared in self?.withFiles(prepared) ?? (prepared.markdown, "") }
         bar.fileRows = { [weak self] in self?.fileRows() ?? [] }
         bar.downloadFiles = { [weak self] ids, done in self?.downloadSelected(ids, done: done) ?? done() }
+        bar.project = { [weak self] prepared, turns, note, done in
+            guard let self else { return done(.failure("The panel closed.")) }
+            self.project(prepared, turns: turns, note: note, done: done)
+        }
         bar.isCurrent = { [weak self] candidate in
             guard let self, let prepared = self.prepared else { return false }
             return prepared.revision == candidate.revision && pageKey(self.web.url) == candidate.page
@@ -175,21 +179,17 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             }
             // A late answer for a conversation the panel has already left is not the one on screen.
             guard let markdown = body["markdown"] as? String, page == pageKey(web.url) || isChatRoot(web.url) else { return }
+            guard let attachments = parseAttachments(body["attachments"], lineCount: markdown.components(separatedBy: "\n").count),
+                  let turnList = parseTurnList(body["turnList"]), turnList.count == body["turns"] as? Int else {
+                return set(nil, .unavailable("This conversation could not be read."))
+            }
             let prepared = Prepared(revision: UUID(), page: page, markdown: markdown,
                                     title: safeLabel(body["title"] as? String ?? "ChatGPT conversation", limit: 120),
-                                    turns: body["turns"] as? Int ?? 0, files: body["files"] as? Int ?? 0,
+                                    turns: turnList.count, files: body["files"] as? Int ?? 0,
                                     verification: body["verification"] as? String ?? "",
                                     issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) },
-                                    attachments: (body["attachments"] as? [[String: Any]] ?? []).compactMap { file in
-                                        guard let key = file["key"] as? String, let id = file["id"] as? String,
-                                              let line = file["line"] as? Int else { return nil }
-                                        return Attachment(key: key, id: id, name: safeLabel(file["name"] as? String ?? "", limit: 200),
-                                                          label: file["label"] as? String ?? "",
-                                                          turn: file["turn"] as? Int ?? 0,
-                                                          messageId: file["messageId"] as? String ?? "", line: line,
-                                                          check: file["check"] as? Int ?? -1)
-                                    },
-                                    verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false)
+                                    attachments: attachments,
+                                    verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false, turnList: turnList)
             set(prepared, .ready(prepared))
         case "file":
             // A link the page itself requested for one of its files; only https on ChatGPT's own hosts.
@@ -205,6 +205,32 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         case "invalid": set(nil, .unavailable(safeLabel(body["message"] as? String ?? "", limit: 160)))
         case "unavailable": set(nil, .unavailable("This page did not expose its original messages."))
         default: break
+        }
+    }
+
+    // MARK: some turns
+
+    /// Asks the compiler, in the isolated world, for these turns of the conversation on screen. It
+    /// answers only when each turn still has the hash shown, on the same page; the result is checked here.
+    func project(_ prepared: Prepared, turns: [TurnInfo], note: String,
+                 done: @escaping (ProjectionResult) -> Void) {
+        guard self.prepared?.revision == prepared.revision, !turns.isEmpty else { return done(.failure("The conversation changed.")) }
+        web.callAsyncJavaScript("return addToClaudeProject(page, turns, note)",
+                                arguments: ["page": prepared.page, "turns": turns.map { ["id": $0.id, "sha256": $0.sha256] }, "note": note],
+                                in: nil, in: .defaultClient) { [weak self] outcome in
+            guard let self, self.prepared?.revision == prepared.revision else { return done(.failure("The conversation changed.")) }
+            guard case .success(let value) = outcome, let body = value as? [String: Any] else {
+                return done(.failure("These turns could not be prepared."))
+            }
+            if let error = body["error"] as? String { return done(.failure(safeLabel(error, limit: 160))) }
+            guard let markdown = body["markdown"] as? String, markdown.utf8.count <= 16 * 1024 * 1024,
+                  body["selectedTurns"] as? Int == turns.count,
+                  let attachments = parseAttachments(body["attachments"], lineCount: markdown.components(separatedBy: "\n").count),
+                  let verification = body["verification"] as? String else {
+                return done(.failure("These turns could not be prepared."))
+            }
+            done(.success(ProjectedText(markdown: markdown, attachments: attachments, verification: verification,
+                                        verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false)))
         }
     }
 

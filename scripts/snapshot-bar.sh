@@ -8,6 +8,7 @@ native="$project_root/native"
 cp -R "$native/icons" "$work/icons"
 xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \
   "$native/Handoff.swift" "$native/Views.swift" "$native/Composer.swift" "$native/Files.swift" "$native/Settings.swift" \
+  "$native/Delivery.swift" "$native/TurnPicker.swift" \
   "$project_root/tests/native/Snapshot.swift" -o "$work/snapshot"
 mkdir -p "$project_root/artifacts"
 "$work/snapshot" "$project_root/artifacts"

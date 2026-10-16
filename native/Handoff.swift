@@ -14,6 +14,57 @@ struct Prepared {
     let attachments: [Attachment]
     /// Whether only missing local files keep it partial.
     let verifiedWithFiles: Bool
+    /// Each turn: id, role, position, preview, hash and file keys, for choosing turns and the log.
+    var turnList: [TurnInfo] = []
+
+    /// The ChatGPT conversation id; nil for a chat that has none yet.
+    var sourceId: String? { sourceConversationId(page) }
+
+    /// The same preparation carrying another text: some of its turns, projected by the compiler.
+    func projected(_ text: ProjectedText) -> Prepared {
+        Prepared(revision: revision, page: page, markdown: text.markdown, title: title, turns: turns, files: text.attachments.count,
+                 verification: text.verification, issues: issues, attachments: text.attachments,
+                 verifiedWithFiles: text.verifiedWithFiles, turnList: turnList)
+    }
+}
+
+/// Some turns of a prepared conversation as the compiler projected them; line numbers are this text's.
+struct ProjectedText {
+    let markdown: String
+    let attachments: [Attachment]
+    let verification: String
+    let verifiedWithFiles: Bool
+}
+
+/// Reads a compiler result's file list; nil when any entry is malformed or points outside the text.
+func parseAttachments(_ value: Any?, lineCount: Int) -> [Attachment]? {
+    guard let files = value as? [[String: Any]], files.count <= 1000 else { return nil }
+    var result: [Attachment] = []
+    for file in files {
+        guard let key = file["key"] as? String, let id = file["id"] as? String, let line = file["line"] as? Int,
+              (0..<lineCount).contains(line), key.utf8.count <= 1024, id.utf8.count <= 1024 else { return nil }
+        let check = file["check"] as? Int ?? -1
+        guard check == -1 || (0..<lineCount).contains(check) else { return nil }
+        result.append(Attachment(key: key, id: id, name: safeLabel(file["name"] as? String ?? "", limit: 200),
+                                 label: file["label"] as? String ?? "", turn: file["turn"] as? Int ?? 0,
+                                 messageId: file["messageId"] as? String ?? "", line: line, check: check))
+    }
+    return result
+}
+
+/// Reads the compiler's per-turn list; nil when malformed. Positions must run 1, 2, 3… in order.
+func parseTurnList(_ value: Any?) -> [TurnInfo]? {
+    guard let rows = value as? [[String: Any]], rows.count <= 5000 else { return nil }
+    var result: [TurnInfo] = []
+    for (index, row) in rows.enumerated() {
+        guard let id = row["id"] as? String, !id.isEmpty, id.utf8.count <= 512,
+              let role = row["role"] as? String, role == "user" || role == "assistant",
+              row["position"] as? Int == index + 1, let hash = row["sha256"] as? String, isSHA256(hash) else { return nil }
+        let files = (row["files"] as? [String] ?? []).prefix(1000).map { String($0.prefix(1024)) }
+        result.append(TurnInfo(id: id, role: role, position: index + 1, preview: safeLabel(row["preview"] as? String ?? "", limit: 80),
+                               sha256: hash, files: files))
+    }
+    return Set(result.map(\.id)).count == result.count ? result : nil
 }
 
 /// A file the conversation refers to. `key` is unique in the conversation; `id` and `messageId` are how
@@ -97,7 +148,23 @@ final class HandoffBar: NSViewController {
     /// The files list: what the conversation refers to and what can be downloaded now.
     var fileRows: () -> [FileRow] = { [] }
     var downloadFiles: ([String], @escaping () -> Void) -> Void = { _, done in done() }
+    /// Some turns of a preparation, projected by the compiler in the page's isolated world.
+    var project: (Prepared, [TurnInfo], String, @escaping (ProjectionResult) -> Void) -> Void = { _, _, _, done in
+        done(.failure("Choosing turns is not available here."))
+    }
+    /// Whether this app may use Accessibility; replaceable so snapshots can show the trusted bar.
+    var isTrusted: () -> Bool = { AXIsProcessTrusted() }
+    var log = DeliveryLog.shared
     private var filesPopover: NSPopover?
+    private var turnsPopover: NSPopover?
+    /// What the scope menu says for the next Add. Not saved; back to Auto after an Add lands and when
+    /// the source conversation or the target changes.
+    private var scopeChoice = ScopeChoice.auto
+    /// Which conversation the chosen window shows, as far as it can be told (see `identify`).
+    private(set) var target: TargetIdentity?
+    private var sessions: [WindowSession] = []
+    private var scopeSignature = ""
+    private var sourceKey: String?
     private var source = SourceState.waiting
     private let registry = ComposerRegistry()
     private var targets: [Target] = []
@@ -130,6 +197,11 @@ final class HandoffBar: NSViewController {
     private let statusGlyph = NSImageView()
     private let statusText = label(size: 11, color: .secondaryLabelColor)
     private let statusRow = NSStackView()
+    private let statusActions = NSStackView()
+    private let scopeButton = NSPopUpButton(frame: .zero, pullsDown: true)
+    private let scopeDetail = label(size: 11, color: .secondaryLabelColor)
+    private lazy var bindButton = NSButton(title: "Continue in this conversation", target: self, action: #selector(toggleBinding))
+    private let scopeRow = NSStackView()
     private var pickerSignature = ""
     private var statusIsResult = false
     private var statusIsAccessHint = false
@@ -157,9 +229,23 @@ final class HandoffBar: NSViewController {
         add.bezelStyle = .rounded
         add.setContentCompressionResistancePriority(.required, for: .horizontal)
         add.setContentHuggingPriority(.required, for: .horizontal)
-        targetRow.setViews([agentIcon, picker, refresh, add], in: .leading)
+        scopeButton.setAccessibilityLabel("Turns to add")
+        scopeButton.toolTip = "Which turns Add puts into the draft"
+        scopeButton.setContentHuggingPriority(.required, for: .horizontal)
+        scopeButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        targetRow.setViews([agentIcon, picker, refresh, scopeButton, add], in: .leading)
         targetRow.spacing = 6
         targetRow.setCustomSpacing(10, after: refresh)
+        targetRow.setCustomSpacing(4, after: scopeButton)
+        bindButton.bezelStyle = .accessoryBarAction
+        bindButton.controlSize = .small
+        bindButton.font = .systemFont(ofSize: 11)
+        bindButton.setContentHuggingPriority(.required, for: .horizontal)
+        bindButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        scopeDetail.toolTip = nil
+        scopeRow.setViews([scopeDetail, NSView(), bindButton], in: .leading)
+        scopeRow.spacing = 6
+        scopeRow.edgeInsets = NSEdgeInsets(top: 0, left: 22, bottom: 0, right: 0)
         let lockIcon = NSImageView(image: glyph("lock") ?? NSImage())
         lockIcon.contentTintColor = .systemOrange
         let accessText = label("Accessibility is off. It is needed to add into other apps.", size: 11, color: .secondaryLabelColor)
@@ -172,19 +258,24 @@ final class HandoffBar: NSViewController {
         statusText.maximumNumberOfLines = 2
         statusText.lineBreakMode = .byWordWrapping
         statusText.cell?.truncatesLastVisibleLine = true
-        statusRow.setViews([statusGlyph, statusText], in: .leading)
+        statusActions.spacing = 4
+        statusActions.setContentHuggingPriority(.required, for: .horizontal)
+        statusText.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        statusText.preferredMaxLayoutWidth = 250 // Wraps beside a question's buttons; the row widens it when there are none.
+        statusRow.setViews([statusGlyph, statusText, statusActions], in: .leading)
         statusRow.spacing = 6
         statusRow.isHidden = true
 
         let separator = NSBox()
         separator.boxType = .separator
-        let column = NSStackView(views: [separator, sourceRow, targetRow, access, statusRow])
+        let column = NSStackView(views: [separator, sourceRow, targetRow, scopeRow, access, statusRow])
         column.orientation = .vertical
         column.alignment = .leading
         column.spacing = 8
+        column.setCustomSpacing(4, after: targetRow)
         column.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 10, right: 12)
         separator.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
-        for row in [sourceRow, targetRow, access, statusRow] {
+        for row in [sourceRow, targetRow, scopeRow, access, statusRow] {
             row.widthAnchor.constraint(equalTo: column.widthAnchor, constant: -24).isActive = true
         }
         view = column
@@ -203,6 +294,13 @@ final class HandoffBar: NSViewController {
         source = state
         // An Add or Save result belongs to the conversation it was about; target problems stay.
         if prepared?.revision != before && !busy && statusIsResult { say("") }
+        // A manual scope is for this conversation only.
+        let key = prepared.map { $0.sourceId ?? $0.page }
+        if key != nil && key != sourceKey {
+            sourceKey = key
+            scopeChoice = .auto
+            turnsPopover?.close()
+        }
         render()
     }
 
@@ -243,7 +341,7 @@ final class HandoffBar: NSViewController {
         filesButton.title = "\(prepared?.attachments.count ?? 0)"
         filesButton.setAccessibilityLabel("Files: \(prepared?.attachments.count ?? 0)")
 
-        let trusted = AXIsProcessTrusted()
+        let trusted = isTrusted()
         if trusted && statusIsAccessHint { say("") }
         access.isHidden = trusted
         targetRow.isHidden = !trusted
@@ -252,11 +350,172 @@ final class HandoffBar: NSViewController {
         refresh.isEnabled = !busy && !discovering
         let destination = composer.map { safeLabel($0.choice.app.localizedName ?? "app", limit: 24) }
         add.title = destination.map { "Add to \($0)" } ?? "Add"
-        add.toolTip = composer.map { "Adds this conversation to \($0.choice.displayLabel(limit: 60)) without sending it" }
-        add.isEnabled = prepared.map { $0.markdown.utf8.count <= maximumTextBytes } == true && composer != nil && !busy
+        let scope = currentScope
+        renderScope(scope, trusted: trusted)
+        add.toolTip = composer.map { composer in
+            "Adds \(scope.map { $0.everything ? "this conversation" : $0.detail.lowercased() } ?? "this conversation") to "
+                + "\(composer.choice.displayLabel(limit: 60)) without sending it"
+        }
+        let addable = scope.map { scope in
+            scope.everything ? prepared.map { $0.markdown.utf8.count <= maximumTextBytes } == true
+                : !scope.turns.isEmpty || (scope.mode == "new" && !(analysis?.lastBatch.isEmpty ?? true))
+        } ?? false
+        add.isEnabled = addable && composer != nil && !busy
         // Accent only when it can act; a disabled accent button reads as pale text on blue.
         add.bezelColor = add.isEnabled ? .controlAccentColor : nil
         add.contentTintColor = add.isEnabled ? .white : nil
+    }
+
+    // MARK: scope
+
+    /// What the log knows about this conversation in the chosen target.
+    private var analysis: ScopeAnalysis? {
+        guard let prepared else { return nil }
+        return analyzeScope(turns: prepared.turnList, source: prepared.sourceId, target: target, records: log.records)
+    }
+
+    private var currentScope: ResolvedScope? {
+        guard let prepared, let analysis else { return nil }
+        return resolveScope(scopeChoice, turns: prepared.turnList, analysis: analysis)
+    }
+
+    /// The pull-down left of Add, and the line under it. The menu is rebuilt only when it would change.
+    private func renderScope(_ scope: ResolvedScope?, trusted: Bool) {
+        scopeButton.isHidden = scope == nil
+        scopeButton.isEnabled = !busy
+        let analysis = analysis
+        let canBind = target?.confidence == .unconfirmed && !(analysis?.added.isEmpty ?? true)
+        let bound = target?.confidence == .confirmed
+        bindButton.isHidden = !(canBind || bound) || busy
+        bindButton.title = bound ? "Stop continuing" : "Continue in this conversation"
+        bindButton.toolTip = bound
+            ? "Add stops treating this window as the conversation you added to, and offers all turns again"
+            : "This app does not say which conversation the window shows. Confirm it is still the one you added to, so Add offers only what is new"
+        var detail = scope?.detail ?? ""
+        if bound { detail = "Same conversation (your choice) · " + detail }
+        else if canBind && scope?.mode == "all" { detail += " · target not identified" }
+        scopeDetail.stringValue = detail
+        scopeDetail.toolTip = detail
+        scopeRow.isHidden = !trusted || scope == nil || composer == nil
+            || (scope?.mode == "all" && scope?.automatic == true && !canBind && !bound)
+
+        guard let scope, let analysis, let prepared else { return }
+        let signature = [scope.label, "\(scopeChoice)", "\(analysis.newApplicable)", "\(analysis.newTurns.count)",
+                         "\(analysis.changedTurns.count)", "\(prepared.turnList.count)"].joined(separator: "|")
+        guard signature != scopeSignature else { return }
+        scopeSignature = signature
+        let menu = NSMenu()
+        menu.addItem(withTitle: scope.label, action: nil, keyEquivalent: "") // A pull-down's title item.
+        let auto = resolveScope(.auto, turns: prepared.turnList, analysis: analysis)
+        let item = { (title: String, choice: ScopeChoice?, enabled: Bool, action: Selector) in
+            let entry = NSMenuItem(title: title, action: enabled ? action : nil, keyEquivalent: "")
+            entry.target = self
+            entry.isEnabled = enabled
+            entry.representedObject = choice.map { ScopeBox($0) }
+            if let choice { entry.state = self.scopeChoice == choice ? .on : .off }
+            menu.addItem(entry)
+        }
+        item("Auto: \(auto.mode == "new" ? "New since last add" : "All turns")", .auto, true, #selector(pickScope(_:)))
+        menu.addItem(.separator())
+        item("New since last add · \(analysis.newTurns.count)", .new, analysis.newApplicable, #selector(pickScope(_:)))
+        if analysis.newApplicable && !analysis.changedTurns.isEmpty {
+            item("New and changed · \(analysis.newTurns.count + analysis.changedTurns.count)", .newAndChanged, true, #selector(pickScope(_:)))
+        }
+        item("All turns · \(prepared.turnList.count)", .all, true, #selector(pickScope(_:)))
+        let chosen: Bool = { if case .chosen = scopeChoice { return true }; return false }()
+        let choose = NSMenuItem(title: "Choose turns…", action: #selector(chooseTurns), keyEquivalent: "")
+        choose.target = self
+        choose.state = chosen ? .on : .off
+        menu.addItem(choose)
+        scopeButton.menu = menu
+        scopeButton.setTitle(scope.label)
+    }
+
+    @objc private func pickScope(_ sender: NSMenuItem) {
+        guard let choice = (sender.representedObject as? ScopeBox)?.choice else { return }
+        scopeChoice = choice
+        if statusIsResult { say("") }
+        render()
+    }
+
+    @objc private func chooseTurns() {
+        guard let prepared, let analysis else { return }
+        turnsPopover?.close()
+        // Start from what the scope offers now, plus the earlier turns whose text changed since added.
+        let start: Set<String> = {
+            if case .chosen(let ids) = scopeChoice { return Set(ids) }
+            return Set((currentScope?.turns ?? []).map(\.id)).union(analysis.changedTurns.map(\.id))
+        }()
+        let popover = NSPopover()
+        popover.behavior = .transient
+        let picker = TurnPicker(turns: prepared.turnList, added: analysis.added, changed: Set(analysis.changedTurns.map(\.id)),
+                                selected: start,
+                                changedSelection: { [weak self] ids in
+                                    guard let self, let turns = self.prepared?.turnList else { return }
+                                    self.scopeChoice = .chosen(turns.filter { ids.contains($0.id) }.map(\.id))
+                                    self.render()
+                                },
+                                done: { [weak popover] in popover?.close() })
+        popover.contentViewController = picker
+        turnsPopover = popover
+        scopeChoice = .chosen(prepared.turnList.filter { start.contains($0.id) }.map(\.id))
+        render()
+        popover.show(relativeTo: scopeButton.bounds, of: scopeButton, preferredEdge: .maxY)
+    }
+
+    // MARK: target identity
+
+    /// One chosen window, from when it was chosen until it closes or changes its title. Ids name it
+    /// in the log; `bound` is the user's "Continue in this conversation".
+    private final class WindowSession {
+        let app: pid_t
+        let launchDate: Date
+        let window: AXUIElement
+        let title: String
+        let id = UUID().uuidString.lowercased()
+        var bound = false
+        init(_ choice: WindowChoice) {
+            app = choice.app.processIdentifier
+            launchDate = choice.launchDate
+            window = choice.window
+            title = choice.title
+        }
+        func matches(_ choice: WindowChoice) -> Bool {
+            app == choice.app.processIdentifier && launchDate == choice.launchDate && title == choice.title && CFEqual(window, choice.window)
+        }
+    }
+
+    /// Which conversation the window shows: verified when the window names it (its page URL), else this
+    /// window session, confirmed only if the user said so. App, pid, window and title never decide sameness.
+    private func identify(_ composer: Composer) -> TargetIdentity {
+        let app = composer.choice.app.bundleIdentifier ?? "pid-\(composer.choice.app.processIdentifier)"
+        if let id = conversationIdentity(in: composer.choice.window) {
+            return TargetIdentity(app: app, conversation: id, confidence: .verified)
+        }
+        let session = sessions.first { $0.matches(composer.choice) } ?? {
+            let session = WindowSession(composer.choice)
+            sessions.append(session)
+            return session
+        }()
+        sessions.removeAll { $0 !== session && $0.app == session.app && CFEqual($0.window, session.window) }
+        return TargetIdentity(app: app, conversation: "window:\(session.id)", confidence: session.bound ? .confirmed : .unconfirmed)
+    }
+
+    /// Uses this composer as the target, with its identity read now (or as given, for snapshots).
+    func select(_ chosen: Composer?, identity: TargetIdentity? = nil) {
+        let before = target
+        composer = chosen
+        target = identity ?? chosen.map(identify)
+        if target != before { scopeChoice = .auto; turnsPopover?.close() }
+        render()
+    }
+
+    @objc private func toggleBinding() {
+        guard let composer, let session = sessions.first(where: { $0.matches(composer.choice) }) else { return }
+        session.bound.toggle()
+        target = identify(composer)
+        scopeChoice = .auto
+        render()
     }
 
     /// Rebuilt only when its rows change, so page updates never disturb an open menu.
@@ -281,13 +540,23 @@ final class HandoffBar: NSViewController {
         else { picker.selectItem(at: 0) }
     }
 
-    private func say(_ text: String, glyph name: String? = nil, result: Bool = false) {
+    /// The status line, with up to two small buttons for a question it asks.
+    private func say(_ text: String, glyph name: String? = nil, result: Bool = false, actions: [(String, () -> Void)] = []) {
         statusIsResult = result
         statusIsAccessHint = false
         statusText.stringValue = text
+        statusText.toolTip = text
         statusGlyph.image = name.flatMap { glyph($0, size: 14) }
         statusGlyph.isHidden = name == nil
         statusRow.isHidden = text.isEmpty
+        statusActions.setViews(actions.map { title, run in
+            let button = ClosureButton(title: title, run: run)
+            button.controlSize = .small
+            button.font = .systemFont(ofSize: 11)
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
+            return button
+        }, in: .leading)
+        statusActions.isHidden = actions.isEmpty
     }
 
     // MARK: targets
@@ -305,7 +574,8 @@ final class HandoffBar: NSViewController {
                 self.discovering = false
                 if let composer = self.composer, self.registry.id(of: composer) == nil { self.composer = nil }
                 if self.composer == nil { self.restoreLastTarget() }
-                self.render()
+                // The target may show another conversation by now; read it again.
+                if !self.busy { self.select(self.composer) } else { self.render() }
             }
         }
     }
@@ -313,13 +583,12 @@ final class HandoffBar: NSViewController {
     @objc private func choose() {
         guard let id = picker.selectedItem?.representedObject as? String else { return }
         let (chosen, problem) = registry.composer(id)
-        composer = chosen
         if let chosen { remember(chosen) }
         if chosen == nil {
             say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error")
         }
         else { say("") }
-        render()
+        select(chosen)
     }
 
     // The last window used, by app and window title, so the next session starts there if it is open.
@@ -462,35 +731,124 @@ final class HandoffBar: NSViewController {
 
     // MARK: add
 
+    /// Add: the scope shown, unless it is exactly what was just added (then it asks first), or there is
+    /// nothing new (then it offers the last batch again).
     @objc private func addContext() {
-        guard !busy, let selected = composer, let frozen = prepared else { return }
+        guard !busy, composer != nil, prepared != nil, let scope = currentScope, let analysis else { return }
+        if scope.mode == "new" && scope.turns.isEmpty {
+            guard !analysis.lastBatch.isEmpty else { return }
+            let again = resolveScope(.again, turns: prepared!.turnList, analysis: analysis)
+            return say("Nothing new since last add. Add the last \(again.turns.count == 1 ? "turn" : "\(again.turns.count) turns") again?",
+                       glyph: "info", actions: [("Add Again", { [weak self] in self?.run(again) }), ("Cancel", { [weak self] in self?.say("") })])
+        }
+        if isAlreadyAdded(scope, analysis: analysis) {
+            let again = ResolvedScope(mode: "again", turns: scope.turns, note: "added again", everything: scope.everything,
+                                      label: scope.label, detail: scope.detail, automatic: false)
+            return say("Already added — Add again?", glyph: "info",
+                       actions: [("Add Again", { [weak self] in self?.run(again) }), ("Cancel", { [weak self] in self?.say("") })])
+        }
+        run(scope)
+    }
+
+    /// Prepares the text for these turns, downloads their files, appends to the draft, and records each
+    /// step: prepared → insertion_attempted → composer_inserted, failed or unknown.
+    private func run(_ scope: ResolvedScope) {
+        guard !busy, let selected = composer, let frozen = prepared, !scope.turns.isEmpty else { return }
+        // The target is read again right before writing: a window that now shows another conversation is
+        // not the one the scope was worked out for.
+        let identity = identify(selected)
+        guard identity == target else {
+            target = identity
+            scopeChoice = .auto
+            say("The target conversation changed. Check the turns to add, then Add again.", glyph: "error", result: true)
+            return render()
+        }
         busy = true
         operation = UUID()
         let id = operation
-        say("Adding…", glyph: "waiting")
-        render()
+        let receipt = frozen.sourceId.map {
+            log.begin(source: $0, target: identity, mode: scope.mode, turns: scope.turns, attachments: scope.turns.flatMap(\.files))
+        }
         let valid: () -> Bool = { [weak self] in
             guard let self, self.operation == id, let current = self.prepared else { return false }
             return current.revision == frozen.revision && self.isCurrent(frozen)
         }
-        let append = { [weak self] in
-            guard let self, valid() else { return self?.finish("The conversation changed. Nothing was added.", false) ?? () }
-            self.say("Adding…", glyph: "waiting")
-            let (text, filesNote) = self.withFiles(frozen)
-            appendToComposer(selected, text: text, operationValid: valid,
-                             revalidateSource: { reply in reply(valid()) }) { [weak self] message, success in
-                self?.finish(filesNote.isEmpty ? message : message + " " + filesNote, success)
+        let app = safeLabel(selected.choice.app.localizedName ?? "the app", limit: 24)
+        let what = scope.everything ? "all \(scope.turns.count) turn\(scope.turns.count == 1 ? "" : "s")"
+            : "\(scope.turns.count) turn\(scope.turns.count == 1 ? "" : "s")"
+        say("Preparing \(what)…", glyph: "waiting")
+        render()
+
+        let fail = { [weak self] (message: String) in
+            if let receipt { self?.log.move(receipt, to: .failed) }
+            self?.finish("Failed: \(message)", glyph: "error")
+        }
+        let append = { [weak self] (text: Prepared) in
+            guard let self, valid() else { return fail("The conversation changed. Nothing was added.") }
+            let (markdown, filesNote) = self.withFiles(text)
+            guard markdown.utf8.count <= maximumTextBytes else {
+                return fail("\(what.prefix(1).uppercased() + what.dropFirst()) come to \(ByteCountFormatter.string(fromByteCount: Int64(markdown.utf8.count), countStyle: .file)), over the 2 MB a message box takes. Choose fewer turns, or Save.")
+            }
+            if let receipt { self.log.move(receipt, to: .insertionAttempted) }
+            self.say("Adding \(what) to \(app)…", glyph: "waiting")
+            appendToComposer(selected, text: markdown, operationValid: valid,
+                             revalidateSource: { reply in reply(valid()) }) { [weak self] message, outcome in
+                guard let self else { return }
+                let files = filesNote.isEmpty ? "" : " " + filesNote
+                switch outcome {
+                case .inserted:
+                    if let receipt { self.log.move(receipt, to: .composerInserted) }
+                    self.scopeChoice = .auto
+                    self.finish("Added \(what) to the draft in \(app). Nothing was sent.\(files)", glyph: "done")
+                case .unconfirmed:
+                    if let receipt { self.log.move(receipt, to: .unknown) }
+                    self.finish("Could not confirm. \(message)\(files)", glyph: "unverified", actions: receipt.map { receipt in
+                        [("It's There", { [weak self] in self?.settle(receipt, inserted: true) }),
+                         ("It's Not", { [weak self] in self?.settle(receipt, inserted: false) })]
+                    } ?? [])
+                case .failed:
+                    fail(message)
+                }
             }
         }
-        // Files first, so their lines can point at local copies.
-        guard UserDefaults.standard.bool(forKey: Preferences.downloadOnAdd), !frozen.attachments.isEmpty else { return append() }
-        say("Downloading files…", glyph: "waiting")
-        downloadFiles(frozen.attachments.map(\.key)) { append() }
+        let withFiles = { [weak self] (text: Prepared) in
+            // Files first, so their lines can point at local copies.
+            guard let self, UserDefaults.standard.bool(forKey: Preferences.downloadOnAdd), !text.attachments.isEmpty else { return append(text) }
+            self.say("Preparing \(text.attachments.count) file\(text.attachments.count == 1 ? "" : "s")…", glyph: "waiting")
+            self.downloadFiles(text.attachments.map(\.key)) { append(text) }
+        }
+        if scope.everything { return withFiles(frozen) }
+        project(frozen, scope.turns, scope.note) { result in
+            switch result {
+            case .success(let text): withFiles(frozen.projected(text))
+            case .failure(let message): fail(message)
+            }
+        }
     }
 
-    private func finish(_ message: String, _ success: Bool) {
-        busy = false
-        say(message, glyph: success ? "done" : "error", result: true)
+    /// The user's answer to "Could not confirm": it is in the draft, or it is not.
+    private func settle(_ receipt: String, inserted: Bool) {
+        log.move(receipt, to: inserted ? .composerInserted : .failed, byUser: true)
+        if inserted { scopeChoice = .auto }
+        say(inserted ? "Marked as added. Nothing was sent." : "Marked as not added. Add again when ready.",
+            glyph: inserted ? "done" : "info", result: true)
         render()
     }
+
+    private func finish(_ message: String, glyph name: String, actions: [(String, () -> Void)] = []) {
+        busy = false
+        say(message, glyph: name, result: true, actions: actions)
+        render()
+    }
+}
+
+enum ProjectionResult {
+    case success(ProjectedText)
+    case failure(String)
+}
+
+/// A scope choice carried by a menu item.
+private final class ScopeBox: NSObject {
+    let choice: ScopeChoice
+    init(_ choice: ScopeChoice) { self.choice = choice }
 }

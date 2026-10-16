@@ -114,6 +114,24 @@ import WebKit
               && prepared.markdown.range(of: "Synthetic question.")!.lowerBound
                  < prepared.markdown.range(of: "Original **Markdown**")!.lowerBound, "exact Markdown in order")
         check(chat.bar.isCurrent(prepared), "preparation is current")
+        check(prepared.turnList.map(\.role) == ["user", "assistant"] && prepared.turnList.allSatisfy { isSHA256($0.sha256) }
+              && prepared.turnList[1].preview == "Original **Markdown** 中文 ✓" && prepared.sourceId == "one",
+              "per-turn ids, roles, previews and hashes arrive with the preparation")
+
+        // Some turns, projected by the compiler in the isolated world, for the hash the app was shown.
+        var projected: ProjectionResult?
+        chat.project(prepared, turns: [prepared.turnList[1]], note: "new since last add") { projected = $0 }
+        pump(until: { projected != nil }, "the bridge answers a request for some turns")
+        if case .success(let text) = projected! {
+            check(text.markdown.contains("\nTurn 2 of 2 · new since last add\n") && text.markdown.contains("## Turn 2 — Assistant")
+                  && !text.markdown.contains("Synthetic question.") && text.verification == "verified",
+                  "the subset text: the chosen turn under its own number, with the scope line")
+        } else { check(false, "the subset text") }
+        projected = nil
+        let stale = TurnInfo(id: "a", role: "assistant", position: 2, preview: "", sha256: String(repeating: "0", count: 64), files: [])
+        chat.project(prepared, turns: [stale], note: "chosen") { projected = $0 }
+        pump(until: { projected != nil }, "the bridge answers a stale request")
+        if case .failure = projected! { check(true, "") } else { check(false, "a turn whose text changed since it was shown is refused") }
 
         _ = evaluate(web, "history.pushState(null, '', '/c/another'); true")
         pump(until: { chat.prepared == nil }, "navigating to another conversation revokes it")

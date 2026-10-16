@@ -14,9 +14,9 @@ enum Preferences {
     static let appsUsingPaste = ignoringKey
 
     static func register() {
-        UserDefaults.standard.register(defaults: [keepPanelOpen: false, showAtLaunch: true,
-                                                  shortcut: Shortcut.none.rawValue, restoreLastWindow: true,
-                                                  downloadOnAdd: true])
+        let defaults: [String: Any] = [keepPanelOpen: false, showAtLaunch: true, shortcut: Shortcut.none.rawValue,
+                                       restoreLastWindow: true, downloadOnAdd: true]
+        UserDefaults.standard.register(defaults: defaults.merging(HistoryKeys.defaults) { $1 })
     }
 
     static var pinned: Bool {
@@ -119,6 +119,9 @@ private struct SettingsView: View {
     @AppStorage(Preferences.shortcut) private var shortcut = Shortcut.none
     @AppStorage(Preferences.restoreLastWindow) private var restoreLast = true
     @AppStorage(Preferences.downloadOnAdd) private var downloadOnAdd = true
+    @AppStorage(HistoryKeys.remember) private var rememberAdded = true
+    @AppStorage(HistoryKeys.days) private var historyDays = 30
+    @State private var confirmClear = false
     @State private var pasteApps = SettingsView.pastedApps()
     @State private var login = SMAppService.mainApp.status
     @State private var loginProblem = false
@@ -173,6 +176,24 @@ private struct SettingsView: View {
             } header: { sectionHeader("Hand-off", glyph: "brand") }
 
             Section {
+                Toggle("Remember what was added", isOn: $rememberAdded)
+                    .onChange(of: rememberAdded) { DeliveryLog.shared.preferencesChanged() }
+                Picker("Keep for", selection: $historyDays) {
+                    Text("7 days").tag(7)
+                    Text("30 days").tag(30)
+                    Text("90 days").tag(90)
+                }
+                .disabled(!rememberAdded)
+                .onChange(of: historyDays) { DeliveryLog.shared.prune() }
+                LabeledContent("History") {
+                    Button("Clear History…") { confirmClear = true }
+                }
+                note(rememberAdded
+                     ? "So Add can offer only what is new in a conversation it can identify. Kept on this Mac: ids, positions, hashes and times, never message text."
+                     : "Add remembers what was added only until you quit.")
+            } header: { sectionHeader("History", glyph: "waiting") }
+
+            Section {
                 LabeledContent("Accessibility") {
                     HStack(spacing: 6) {
                         Label { Text(trusted ? "Allowed" : "Not allowed") } icon: { glyphImage(trusted ? "done" : "lock") }
@@ -204,6 +225,11 @@ private struct SettingsView: View {
             trusted = AXIsProcessTrusted()
             login = SMAppService.mainApp.status
             pasteApps = SettingsView.pastedApps()
+        }
+        .confirmationDialog("Clear what Add to Claude remembers adding?", isPresented: $confirmClear) {
+            Button("Clear History", role: .destructive) { DeliveryLog.shared.clear() }
+        } message: {
+            Text("The next Add into any conversation offers all turns again. Your conversations and drafts are not touched.")
         }
         .confirmationDialog("Sign out of ChatGPT in Add to Claude?", isPresented: $confirmSignOut) {
             Button("Sign Out", role: .destructive) { signOut() }
