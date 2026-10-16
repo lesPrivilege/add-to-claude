@@ -10,6 +10,8 @@ import AppKit
 
 let root = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ".")
 let icons = root.appendingPathComponent("docs/design/icons")
+// The WO-02 candidates are archived; the neutral reference glyphs stay with the shipped design.
+let archive = root.appendingPathComponent("docs/archive/design-icons")
 let out = root.appendingPathComponent("artifacts/icons")
 try! FileManager.default.createDirectory(at: out.appendingPathComponent("export"), withIntermediateDirectories: true)
 
@@ -17,12 +19,12 @@ struct Candidate { let id: String; let name: String; let glyph: URL; let app: UR
 let candidates = [
     Candidate(id: "P0", name: "P0 · current (rejected)", glyph: root.appendingPathComponent("native/icons/brand.svg"),
               app: root.appendingPathComponent("native/brand/app-icon.svg")),
-    Candidate(id: "D1", name: "D1 · Arc Insert", glyph: icons.appendingPathComponent("d1-arc-insert/glyph.svg"),
-              app: icons.appendingPathComponent("d1-arc-insert/app-icon.svg")),
-    Candidate(id: "D2", name: "D2 · Cursor Arrival", glyph: icons.appendingPathComponent("d2-cursor-arrival/glyph.svg"),
-              app: icons.appendingPathComponent("d2-cursor-arrival/app-icon.svg")),
-    Candidate(id: "D3", name: "D3 · Negative-space Inlet", glyph: icons.appendingPathComponent("d3-negative-inlet/glyph.svg"),
-              app: icons.appendingPathComponent("d3-negative-inlet/app-icon.svg")),
+    Candidate(id: "D1", name: "D1 · Arc Insert", glyph: archive.appendingPathComponent("d1-arc-insert/glyph.svg"),
+              app: archive.appendingPathComponent("d1-arc-insert/app-icon.svg")),
+    Candidate(id: "D2", name: "D2 · Cursor Arrival", glyph: archive.appendingPathComponent("d2-cursor-arrival/glyph.svg"),
+              app: archive.appendingPathComponent("d2-cursor-arrival/app-icon.svg")),
+    Candidate(id: "D3", name: "D3 · Negative-space Inlet", glyph: archive.appendingPathComponent("d3-negative-inlet/glyph.svg"),
+              app: archive.appendingPathComponent("d3-negative-inlet/app-icon.svg")),
 ]
 let refs = ["magnifier", "clock", "battery", "bell"].map { icons.appendingPathComponent("ref/\($0).svg") }
 

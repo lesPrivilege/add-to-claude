@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 // The delivery log and the scope rule, with synthetic turns and a throwaway file. No UI, no AX.
-// Rows named "WO" are the logic rows of the acceptance matrix in docs/workorders/WO-01-incremental-handoff.md.
+// Rows named "WO" are the logic rows of the acceptance matrix in docs/archive/workorders/WO-01-incremental-handoff.md.
 @main enum DeliveryTests {
     static var checks = 0
     static func check(_ condition: Bool, _ label: String) {
