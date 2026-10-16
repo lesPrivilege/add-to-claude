@@ -6,6 +6,11 @@ Recorded 2026-10-16 from the owner's plan. Order matters more than dates.
 
 The menu-bar app (0.6.0) is the form that ships. ChatGPT is the source, and the destination is any open app with a text box, reached through Accessibility.
 
+## 0.6.1 (collecting; fixed together)
+
+- **Name the bundle "Add to Claude.app".** The zip unpacks to `add-to-claude.app`, so Finder and Launchpad show "add-to-claude".
+- **Skip files already downloaded.** Add downloads every file again and only then drops a copy whose SHA-256 matches the existing `name.ext`. Check the local file before downloading instead, so a repeated Add costs no transfer.
+
 ## Next forms
 
 1. **Claude mod.** Waits until Claude's newly released mod format settles, so the port is an adaptation rather than a rewrite.
