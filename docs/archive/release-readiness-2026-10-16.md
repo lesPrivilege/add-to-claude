@@ -1,3 +1,5 @@
+> Archived 2026-10-16: superseded by [support-matrix.md](../support-matrix.md) and [release-checklist.md](../release-checklist.md).
+
 # Add to Claude · Release Readiness Review
 
 > **Note on merge (2026-10-16):** written from `main` before incremental Add, the Arc Insert icons, the local signing identity and the storage/diagnostics work landed. R1.7 now applies: incremental Add ships, scoped to provider + conversation + destination with per-turn hashes (see `docs/decisions/incremental-handoff.md`). Current evidence is in `support-matrix.md`.
@@ -21,7 +23,7 @@ One user journey: **Open ChatGPT → inspect the current conversation → choose
 
 ## 1. Evidence currently recorded (not rerun for this document)
 
-Source: [support-matrix](./support-matrix.md), [architecture](./architecture.md), [roadmap](./roadmap.md), [README](../README.md), checked 2026-10-16.
+Source: [support-matrix](../support-matrix.md), [architecture](../architecture.md), [roadmap](../roadmap.md), [README](../../README.md), checked 2026-10-16.
 
 | Evidence               | Current description                                                                                                                                           |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -12,6 +12,6 @@ Development dependencies are locked in `package-lock.json`:
 | prettier                             | 3.6.2   | MIT        |
 | fsevents (macOS optional dependency) | 2.3.2   | MIT        |
 
-Their installed packages retain their own LICENSE/NOTICE files under `node_modules`; dependencies are not vendored into the source or portable runtime artifact. Chrome/Chromium, Node.js, macOS and Xcode are separately installed tools with their own licenses. The native build references the owner's installed Node executable and does not redistribute it. Future redistribution of a runtime must include its applicable notices.
+Their installed packages retain their own LICENSE/NOTICE files under `node_modules`; dependencies are not vendored into the source or portable runtime artifact. Chrome/Chromium, Node.js, macOS and Xcode are separately installed tools with their own licenses. Node.js is used only to build the WebKit scripts and run tests; the app does not use or redistribute it. Future redistribution of a runtime must include its applicable notices.
 
-Source provenance and official documentation links are in `docs/research.md` and `docs/target-inventory.md`. Names of third-party applications identify possible destinations, not affiliation or guaranteed compatibility. This private project does not introduce a custom end-user agreement or grant a new public source license.
+Source provenance and official documentation links are in `docs/archive/research.md`. Names of third-party applications identify possible destinations, not affiliation or guaranteed compatibility. This private project does not introduce a custom end-user agreement or grant a new public source license.

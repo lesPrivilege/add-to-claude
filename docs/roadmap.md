@@ -31,8 +31,8 @@ Sources and destinations meet at one format, so a new provider or a new form add
 
 Before a second provider, move two things into the shared shape:
 
-- **File links.** How a file's download link is obtained is ChatGPT-specific today: the observer's resolver and the downloader (`native/Files.swift`) assume `files/download` and `interpreter/download`. Each source adapter should supply its own link step behind one interface.
+- **File links.** How a file's download link is obtained is ChatGPT-specific today: the observer's resolver (`src/page-observer.js`) asks for `files/download` and `interpreter/download` links, and the link matching in `native/Files.swift` and `native/Chat.swift` keys files by ChatGPT's file ids and sandbox paths. Each source adapter should supply its own link step behind one interface; the download itself already takes a plain URL.
 - **File lines.** Pointing a file line at its local copy (`linkFiles`) lives in `native/Handoff.swift`. Once a second form exists it belongs in `src/` as one function both forms use.
-- **Selection.** Done in the menu-bar app (WO-01, [decision log](decisions/incremental-handoff.md)).
+- **Selection.** Done in the menu-bar app in 0.6.0 ([decision log](decisions/incremental-handoff.md)).
   - The projection of chosen turns is in the shared format (`projectMarkdown` with `turnIds`, plus per-turn hashes from `describeTurns`).
   - The delivery log and the scope rule live natively in `native/Delivery.swift`.

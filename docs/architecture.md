@@ -7,7 +7,7 @@ menu-bar icon ─▶ ChatPanel (NSPanel; hides, never closes)
                   │    page world:      observer.js  (src/page-observer.js)
                   │    defaultClient:   bridge.js    (compiler + bridge bundle) ─▶ "handoff" handler
                   └─ HandoffBar: summary · files · preview/copy/save · window picker · scope · Add ─▶ Composer (AX)
-Settings window (SwiftUI) · global shortcut (Carbon hot key) · login item (SMAppService)
+Settings (SwiftUI, in the panel's place) · global shortcut (Carbon hot key) · login item (SMAppService)
 ```
 
 ## Web content
@@ -26,7 +26,7 @@ Settings window (SwiftUI) · global shortcut (Carbon hot key) · login item (SMA
 
 ## Compiler (`src/`)
 
-`compile.js` → `chatgpt-response.js` (paged → mapping via `paged-conversation.js`) → `import.js` (selected branch, turns, citations, attachments, issues) → `model.js` (validated model and the Markdown projection). The projection is `# title`, a source line with the verification state, content checks, then `## Turn N — Role` with the original Markdown, `### References` and `### Files`. Hidden reasoning and tool traffic are left out (`message-visibility.js`).
+`compile.js` → `chatgpt-response.js` (paged → mapping via `paged-conversation.js`) → `import.js` (selected branch, turns, citations, attachments, issues) → `model.js` (validated model and the Markdown projection). The projection is `# title`, a source line with the verification state, content checks, then `## Turn N — Role` with the original Markdown, `### References` and `### Files`. Hidden reasoning and tool traffic are left out (`message-visibility.js`). ChatGPT's rendering markup (`<box>`, `<Entity/>`, `<Cite/>`, private-use citation markers) is read as the Markdown its own Copy button gives, and a scripted widget's template lines are dropped and flagged as an omitted widget (`chatgpt-markup.js`).
 
 - **Some turns.** `projectMarkdown(model, lines, { turnIds, note })` projects only the chosen turns, in source order, under their own numbers. Each brings only its references, files and content checks; checks about the whole conversation and files of no turn always go. A scope line follows the source line ("Turns 15–21 of 42 · new since last add"). `handoff()` in `compile.js` returns the text with file and check line numbers for that text.
 - **Per turn.** `compile` also returns `turnList`: id, role, position, a preview of at most 80 characters, file keys, and `sha256`. The hash covers the turn's projected body without its numbered heading (`describeTurns`, `sha256.js`).
@@ -34,6 +34,7 @@ Settings window (SwiftUI) · global shortcut (Carbon hot key) · login item (SMA
 ## App (`native/`)
 
 - **`App.swift`**: the status item, the panel, the hidden main menu (editing keys, ⌘, ⌘R ⌘[ ⌘W), the global shortcut and click-away hiding. A click in another app or another app coming forward hides the panel, unless it is pinned or one of our own windows is in front.
+  - One window at a time: Settings opens in the panel's place under the menu-bar icon (the page keeps running), and closing it, or clicking the icon, brings the panel back. Opened while the panel is hidden, Settings opens centred.
 - **`Chat.swift` (`ChatController`)** owns the web view.
   - **Packets.** Handler messages are accepted only from its own web view, the isolated world, the main frame and a ChatGPT origin, for a page on that origin. A `ready` for a page the view has left is dropped. Each accepted `ready` becomes a `Prepared` with a fresh revision; navigation or a `changed` packet revokes it.
   - **Files.** It asks the page for missing links (10 s at most), downloads through the web view's own session with `WKDownload` into `<files folder>/<conversation title>/`, and records each path and SHA-256. The page's own downloads land in the same folder.
@@ -52,8 +53,8 @@ Settings window (SwiftUI) · global shortcut (Carbon hot key) · login item (SMA
   2. If the app ignores that (Claude for Mac does), set the value of an empty box, or post ⌘V to that app's process only, then restore the clipboard.
   3. Apps known to ignore step 1 skip its wait. The target is never activated, and nothing is sent.
   - It reports `inserted` only when the text reads back. A draft that changed but cannot be confirmed (a reformatting paste, for one) is `unconfirmed`; nothing added is `failed`.
-  - `conversationIdentity` reads which conversation a window shows from its `AXWebArea`'s `AXURL` or the window's `AXDocument`. Only `https://claude.ai/chat/<uuid> or https://claude.ai/epitaxy/local_<uuid>` counts; the walk is bounded to 1 s.
-- **`Files.swift`**: the files folder and the downloader. **`Settings.swift`**: preferences, the hot key and the Settings window. **`Views.swift`**: SVG template glyphs and small controls.
+  - `conversationIdentity` reads which conversation a window shows from its `AXWebArea`'s `AXURL` or the window's `AXDocument`. Only `https://claude.ai/chat/<uuid>` or `https://claude.ai/epitaxy/local_<uuid>` counts; the walk is bounded to 1 s.
+- **`Files.swift`**: the files folder and the downloader. **`Settings.swift`**: preferences, the hot key and the Settings window. **`Diagnostics.swift`**: each hand-off's stages, times, sizes and outcome in the unified log (counts and fixed names only, never text, titles, file names or paths), and Export…. **`Views.swift`**: SVG template glyphs and small controls.
 
 ## Limits
 

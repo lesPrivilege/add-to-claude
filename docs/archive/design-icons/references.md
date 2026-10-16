@@ -1,3 +1,5 @@
+> Archived 2026-10-16: superseded by [design/icons/README.md](../../design/icons/README.md).
+
 # Icon references
 
 Access date for all entries: 2026-10-16. Method: WebFetch (page converted and summarised by a small model; Apple pages via the developer.apple.com/tutorials/data JSON endpoints, except N03b which returned only a title). The research pass could not see image pixels. The images were then viewed (hot-linked, not downloaded) in a browser on the same date, and those observations are in the section "Observed images" at the end. Numeric facts not stated by a page are marked "not stated".

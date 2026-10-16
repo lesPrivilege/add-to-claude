@@ -1,6 +1,6 @@
 # Distilled icon grammar (WO-02)
 
-One page, distilled from references.md and the rendered checks in artifacts/icons/. Where a figure is not from a source, this page says so.
+One page, distilled from [references.md](../../archive/design-icons/references.md) and the rendered checks in artifacts/icons/. Where a figure is not from a source, this page says so.
 
 ## Menu-bar glyph
 

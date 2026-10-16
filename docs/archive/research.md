@@ -1,3 +1,5 @@
+> Archived 2026-10-16: superseded by [architecture.md](../architecture.md) and [product-contract.md](../product-contract.md); the owner's terms decision is in [release/0.6.0.md](../release/0.6.0.md).
+
 # Integration research
 
 Checked 2026-10-12. This is a bounded review of primary documentation and the two project references in the brief. It records design inputs, not proof of compatibility. Runtime evidence belongs in `support-matrix.md`.
@@ -100,3 +102,12 @@ Safari was investigated before the owner confirmed Chrome. [Apple WWDC23: What's
 ## Isolated Chrome native-host fixture
 
 Public Chromium source inspected on 2026-10-13: [`chrome/common/chrome_paths.cc`](https://github.com/chromium/chromium/blob/main/chrome/common/chrome_paths.cc), observed blob `1aee81647dc6a1f1180f344d146d0c811cd341c4`, lines 488–493 resolves `DIR_USER_NATIVE_MESSAGING` from `DIR_USER_DATA` plus `NativeMessagingHosts`. This supports registering the integration fixture's helper under the temporary Playwright user-data directory instead of changing the owner's Chrome registration. The passing installed-Chrome scenario independently demonstrates that lookup on this Mac. The link follows upstream main; the blob identity records the version inspected. This supports fixture isolation, not owner-profile permission or AX compatibility. No third-party code was executed.
+
+## Reference evidence checked on 2026-10-12 (moved from product-contract.md)
+
+- [yesooner exporter README](https://github.com/yesooner/chatgpt-conversation-export-extension/blob/main/README.md), blob `54c9f1d3f4b988a1d9b6b558fe6ab1aea834d11d`, and [background.js](https://github.com/yesooner/chatgpt-conversation-export-extension/blob/main/background.js), blob `aa2d17363248052debb5b616f97d9016dc11e5cc`: selected-tab temporary debugger attachment, page reload, response-body reading and detach. This supports the technique, not compatibility with this user's current account. Its broad response matching and text trimming are not adopted.
+- [thekester exporter README](https://github.com/thekester/chatgpt-export/blob/main/README.md), blob `a257e968219a2d36ecb5d0e7ae458be64d8db44e`: reports citation/media/file preservation and capability-dependent partial results. Its history archival/deletion and private-endpoint probing are outside this utility's scope. README claims are not runtime evidence.
+- [Magpie code standards](https://github.com/yetone/magpie/blob/main/docs/code-standards.md), blob `5907adff44e753c632c0f23f0ea471637a219a42`: complete-path fixes, meaningful failing regressions, cleanup of test processes and real-platform evidence. These are quality references; Magpie-specific build/release commands and unrelated project policies are not this project's instructions.
+- [Chrome permissions](https://developer.chrome.com/docs/extensions/reference/api/permissions) explicitly lists `debugger` among permissions that cannot be optional. [Chrome debugger](https://developer.chrome.com/docs/extensions/reference/api/debugger) requires manifest declaration, documents selected-tab sessions, enterprise attach restrictions and detachment when DevTools opens. Original capture therefore needs an install-time debugger permission and a visible, user-started temporary attachment. No policy bypass is planned.
+
+Other conversation references (`chrome-use`, `chatgpt-use`, `codex-chatgpt-web` and Magpie's window implementation) remain candidates for bounded study when an implementation decision needs them. Their discussion is not proof of an implemented transport or support claim.

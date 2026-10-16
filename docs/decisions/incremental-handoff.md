@@ -1,6 +1,6 @@
 # Decision log: incremental hand-off and turn selection
 
-Work order: [WO-01](../workorders/WO-01-incremental-handoff.md). Decided by the owner (arbiter) on 2026-10-16; implemented on branch `feat/handoff-incremental-log`. Each decision names the code and the test that hold it.
+Work order: [WO-01](../archive/workorders/WO-01-incremental-handoff.md). Decided by the owner (arbiter) on 2026-10-16; shipped in 0.6.0. Each decision names the code and the test that hold it.
 
 ## 1. Which turns Add offers
 
@@ -13,15 +13,15 @@ Work order: [WO-01](../workorders/WO-01-incremental-handoff.md). Decided by the 
 
 ## 2. Target identity
 
-- **Verified** only when the target window names its conversation: the URL of its `AXWebArea` (`AXURL`) or the window's `AXDocument` is `https://claude.ai/chat/<uuid> or https://claude.ai/epitaxy/local_<uuid>`. Several web areas naming different conversations count as none. The id is read when a window is chosen, each time the panel opens, and again right before writing. If it changed since the scope was worked out, Add stops with "The target conversation changed".
+- **Verified** only when the target window names its conversation: the URL of its `AXWebArea` (`AXURL`) or the window's `AXDocument` is `https://claude.ai/chat/<uuid>` or `https://claude.ai/epitaxy/local_<uuid>`. Several web areas naming different conversations count as none. The id is read when a window is chosen, each time the panel opens, and again right before writing. If it changed since the scope was worked out, Add stops with "The target conversation changed".
 - **Never inferred** from the app, pid, window number, window title or paste history.
 - **Otherwise:** the default is All. After a successful Add into such a window, the bar offers **Continue in this conversation**. It is visible, the user confirms it once per window session, and **Stop continuing** cancels it.
   - A window session lasts until the window closes, its app relaunches, or its title changes. A changed title only ever ends a binding; it never starts one.
   - Receipts for a window session stay in memory; they mean nothing after it ends.
-- **What Claude for Mac exposes: unverified.** Claude for Mac is an Electron app. Add already sets `AXManualAccessibility` so its web content is exposed, and `native/Composer.swift` walks the window to find the prompt. Whether its `AXWebArea` carries `AXURL = https://claude.ai/chat/<uuid> or https://claude.ai/epitaxy/local_<uuid>` has not been observed: this work was done without driving Claude.
-  - The owner can settle it with `bash scripts/probe-target-ax.sh` (read-only; the terminal needs Accessibility). Open two conversations, run the probe, switch conversations, and run it again.
-  - **If the id shows and changes with the conversation:** incremental Add works as designed.
-  - **If not:** every Add into Claude defaults to All, and New is available only through the explicit binding.
+- **What Claude for Mac exposes.** Claude for Mac is an Electron app. Add sets `AXManualAccessibility` so its web content is exposed, and `native/Composer.swift` walks the window to find the prompt.
+  - Observed by the owner (2026-10-16, again on 0.6.0-rc.7): a Claude Code session's `AXWebArea` carries `AXURL = https://claude.ai/epitaxy/local_<uuid>`, so New is offered there, and the target follows whichever session window is open.
+  - Not yet observed: a plain Claude chat (`https://claude.ai/chat/<uuid>`), and a switch between conversations inside one window. Until then such a target is recognised by window: Add offers All after a switch, and New through the explicit binding.
+  - `bash scripts/probe-target-ax.sh` (read-only; the terminal needs Accessibility) shows what a window exposes. Run it with two conversations open, switch, and run it again.
 - Code: `targetConversationId` and `conversationIdentity` in `native/Composer.swift`; `identify`, `WindowSession` and `toggleBinding` in `native/Handoff.swift`.
 
 ## 3. Source identity and changed turns

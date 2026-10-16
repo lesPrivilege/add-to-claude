@@ -1,3 +1,5 @@
+> Archived 2026-10-16: superseded by [design/icons/README.md](../../design/icons/README.md) (input to WO-02, delivered in 0.6.0).
+
 # gpt-handoff · Design Reference Registry
 
 **登记日期：** 2026-10-16  

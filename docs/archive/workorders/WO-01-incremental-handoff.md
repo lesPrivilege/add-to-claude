@@ -1,3 +1,5 @@
+> Archived 2026-10-16: superseded by [decisions/incremental-handoff.md](../../decisions/incremental-handoff.md) (delivered in 0.6.0).
+
 # Work Order 01 — Incremental Handoff / 自动增量与消息选择
 
 **目标产品：** gpt-handoff（macOS menu-bar/top-bar 工具）  

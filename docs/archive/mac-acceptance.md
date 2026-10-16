@@ -1,3 +1,5 @@
+> Archived 2026-10-16: superseded by [support-matrix.md](../support-matrix.md).
+
 # Mac acceptance log
 
 ## 2026-10-16 · Files on Add, Settings, rename

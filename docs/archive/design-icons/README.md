@@ -1,3 +1,5 @@
+> Archived 2026-10-16: superseded by [design/icons/README.md](../../design/icons/README.md) (shipped R1 glyph + R3 app icon).
+
 # WO-02 · Dual-track icon candidates
 
 Status: **candidates only.** The production icons (native/icons/brand.svg, native/brand/\*) are unchanged. The owner decides first.
@@ -25,11 +27,11 @@ The shared metaphor of all three pairs is **a line that arrives and settles in t
 | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | Reference sources, with access dates, licence notes and observed images           | [references.md](references.md)                                                                                                                  |
 | Reference board: links to third-party images, does not copy them                  | [reference-board.html](reference-board.html) (open locally)                                                                                     |
-| One-page distilled grammar                                                        | [grammar.md](grammar.md)                                                                                                                        |
+| One-page distilled grammar                                                        | [grammar.md](../../design/icons/grammar.md)                                                                                                     |
 | D1 sources                                                                        | [d1-arc-insert/glyph.svg](d1-arc-insert/glyph.svg) · [d1-arc-insert/app-icon.svg](d1-arc-insert/app-icon.svg)                                   |
 | D2 sources                                                                        | [d2-cursor-arrival/glyph.svg](d2-cursor-arrival/glyph.svg) · [d2-cursor-arrival/app-icon.svg](d2-cursor-arrival/app-icon.svg)                   |
 | D3 sources                                                                        | [d3-negative-inlet/glyph.svg](d3-negative-inlet/glyph.svg) · [d3-negative-inlet/app-icon.svg](d3-negative-inlet/app-icon.svg)                   |
-| Neutral reference glyphs (original, SF-like weight)                               | [ref/](ref/)                                                                                                                                    |
+| Neutral reference glyphs (original, SF-like weight)                               | [ref/](../../design/icons/ref/)                                                                                                                 |
 | Menu-bar check: 16/18/20 pt, @1x/@2x, light/dark, plain/tinted, P0 for comparison | [../../../artifacts/icons/menubar-compare.png](../../../artifacts/icons/menubar-compare.png)                                                    |
 | App-icon check: 32/64/128/256 px on Dock-like light and dark                      | [../../../artifacts/icons/appicon-compare.png](../../../artifacts/icons/appicon-compare.png)                                                    |
 | 3 × 2 board                                                                       | [../../../artifacts/icons/board.png](../../../artifacts/icons/board.png)                                                                        |
@@ -48,7 +50,7 @@ xcrun swiftc -O scripts/icons/render.swift -o /tmp/icon-render && /tmp/icon-rend
 
 ## The three directions
 
-### D1 · Arc Insert (the owner's lead; superseded on 2026-10-16 by R1 + R3, see [refine.md](refine.md))
+### D1 · Arc Insert (the owner's lead; superseded on 2026-10-16 by R1 + R3, see [refine.md](../../design/icons/refine.md))
 
 **Glyph.** The composer's top-left corner is left open. One trail, thin to thick, sweeps in from the upper left, flattens into the composer's line of text and stops short of a caret.
 

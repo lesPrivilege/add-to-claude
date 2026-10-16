@@ -32,7 +32,7 @@ Today the source is ChatGPT. The destination can be any app with a text box.
   - Then the text: every turn, with its role, original Markdown, references and each file's local path and SHA-256, goes into the end of the chosen message box.
   - The target app is not brought forward, and nothing is sent.
 - **Which turns.** A small menu left of Add shows what Add will put in: "All · 42", "New · 6" or "3 selected". It picks by itself (Auto), and you can override it for one Add.
-- **Settings** (⌘,): open at login, show at launch, keep the panel open, a shortcut to show the panel, start with the last window, download files on Add, the files folder, what Add remembers and for how long, Accessibility status, and sign out.
+- **Settings** (⌘,) opens in the panel's place; closing it brings the panel back. It has open at login, show at launch, keep the panel open, a shortcut to show the panel, start with the last window, download files on Add, the files folder, what Add remembers and for how long, clearing the web cache (the sign-in is kept), a diagnostics export without message text, Accessibility status, and sign out.
 
 ### Adding again and choosing turns
 
@@ -108,10 +108,10 @@ CHROMIUM_PATH='<Chrome for Testing binary>' npm run test:browser
 ```
 
 - `npm test` covers the model, the adapters, the compiler, the page observer, and the bundled bridge.
-- `test:native` runs the real chat controller in a real `WKWebView`, then the Accessibility checks against a synthetic app. The Accessibility checks report NOT RUN unless the terminal has Accessibility access.
+- `test:native` checks the delivery log and the scope rule, runs the real chat controller in a real `WKWebView`, then the Accessibility checks against a synthetic app. The Accessibility checks report NOT RUN unless the terminal has Accessibility access.
 - `test:browser` runs the page observer in a real browser.
 
-[docs/support-matrix.md](docs/support-matrix.md) records what has been verified and what has not. [docs/roadmap.md](docs/roadmap.md) has what comes next.
+[docs/support-matrix.md](docs/support-matrix.md) records what has been verified and what has not. [docs/roadmap.md](docs/roadmap.md) has what comes next, and [docs/README.md](docs/README.md) lists the rest of the documentation.
 
 ---
 
@@ -138,7 +138,7 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
   - 再写入文字：每一轮连同角色、原始 Markdown、引用，以及每个文件的本地路径和 SHA-256，追加到所选输入框的末尾。
   - 目标应用不会被切到前台，也不会发送任何内容。
 - **哪些轮次。** Add 左边的小菜单显示这次会放进去什么：「All · 42」「New · 6」或「3 selected」。它会自动选择（Auto），你也可以只为这一次 Add 改选。
-- **设置**（⌘,）：登录时打开、启动时显示面板、保持面板常开、显示面板的快捷键、默认使用上次的窗口、Add 时下载文件、文件夹位置、记住添加过什么以及保留多久、辅助功能权限状态，以及退出登录。
+- **设置**（⌘,）在面板的位置打开，关闭后回到面板。包括：登录时打开、启动时显示面板、保持面板常开、显示面板的快捷键、默认使用上次的窗口、Add 时下载文件、文件夹位置、记住添加过什么以及保留多久、清除网页缓存（保留登录）、导出不含消息正文的诊断信息、辅助功能权限状态，以及退出登录。
 
 ### 再次添加与选择轮次
 
@@ -189,4 +189,4 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
 
 ### 测试
 
-测试命令同上。[docs/support-matrix.md](docs/support-matrix.md) 记录了哪些已经验证、哪些尚未验证；后续计划见 [docs/roadmap.md](docs/roadmap.md)。
+测试命令同上。[docs/support-matrix.md](docs/support-matrix.md) 记录了哪些已经验证、哪些尚未验证；后续计划见 [docs/roadmap.md](docs/roadmap.md)；其余文档见 [docs/README.md](docs/README.md)。

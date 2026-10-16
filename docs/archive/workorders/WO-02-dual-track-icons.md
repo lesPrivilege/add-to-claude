@@ -1,3 +1,5 @@
+> Archived 2026-10-16: superseded by [design/icons/README.md](../../design/icons/README.md) (delivered in 0.6.0).
+
 # Work Order 02 — 双轨 Icon Design / 参考消费与视觉交付
 
 **产品：** gpt-handoff（macOS menu-bar/top-bar 工具）  

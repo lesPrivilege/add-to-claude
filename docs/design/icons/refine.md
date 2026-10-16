@@ -1,6 +1,6 @@
 # Icon refinement of D1 Arc Insert (R1–R3)
 
-Status: **candidates only.** native/icons/brand.svg and native/brand/\* are unchanged. Render: [../../../artifacts/icons/refine-compare.png](../../../artifacts/icons/refine-compare.png). It has four columns (D1, R1, R2, R3). The rows are 16/18/22 pt strips in light and dark beside the ref/ glyphs, a 4× pixel zoom of the 16 pt @1x glyph, the app icon at 256/128/64/32 on light and dark Dock grounds, and the glyph drawn large.
+Status: **adopted** — R1 glyph + R3 app icon, see [Adopted](#adopted-owner-2026-10-16) below. Render: [../../../artifacts/icons/refine-compare.png](../../../artifacts/icons/refine-compare.png). It has four columns (D1, R1, R2, R3). The rows are 16/18/22 pt strips in light and dark beside the ref/ glyphs, a 4× pixel zoom of the 16 pt @1x glyph, the app icon at 256/128/64/32 on light and dark Dock grounds, and the glyph drawn large.
 
 The concept is the same in all three: a stream arrives from the upper left and lands at the end of the composer's line. The concept is the same, but the drawing is new. Each app icon is the glyph's 24 grid mapped at 32 px per unit (x' = 512 + 32(x − 12), y' = 522 + 32(y − 12)), so the glyph and the icon are one drawing. None of them uses a taper. The trail has one weight everywhere.
 
@@ -13,7 +13,7 @@ The concept is the same in all three: a stream arrives from the upper left and l
 
 **App icon.** The plate is deep spruce (#1F5A60 → #0B2328) instead of generic navy, and peach on teal is a complementary pair. The composer outline is pale. The arc fades in from the upper left, so its start fills the upper part of the plate. The peach head is the only warm element, with one soft glow.
 
-## R2 · Line Becomes Text — `r2-line-becomes-text/`
+## R2 · Line Becomes Text — [`archive/design-icons/r2-line-becomes-text/`](../../archive/design-icons/r2-line-becomes-text/glyph.svg)
 
 **Glyph.** A closed composer. Inside it, one line sweeps down from the upper-left inner corner, levels off as the text line and stops before a caret.
 
@@ -42,7 +42,9 @@ R3 is a palette and material rethink of R1, the strongest drawing. Its glyph is 
 2. **R1 pair.** It has the same drawing, and is the safer choice if the owner wants a dark icon. Teal reads better than navy and holds up at 32 px.
 3. **R2 pair.** It has the best menu-bar nativeness and the clearest "text field" icon, but it gives up the outside arrival, which is the concept's identity. Use the R2 glyph only if R1's tub or sled echo is confirmed by a first-glance test.
 
-## Not done
+## Not done during the round
+
+As recorded at the time; the adopted pair was later built into `AppIcon.icns` by `scripts/make-app-icon.sh` and checked by the owner in the real menu bar.
 
 - No independent first-glance review. No real menu bar or Dock check.
 - No .icns build.
@@ -55,4 +57,4 @@ The owner chose **R1 glyph + R3 app icon**, with two tweaks, now in `native/icon
 - **Sled echo.** R1's arc started straight above the composer's left wall, so it read as that wall curling up, like a sled's runner. The arc now starts inside the opening (5.2, 2.4 on the 24 grid) and drops in clear of the wall, and the top edge starts at 9.4 to keep the opening wide. It reads as arriving.
 - **Tile edge.** The ivory plate's edge line went from 16 % at 3 px to 30 % at 5 px, so the tile holds on a light Dock.
 
-Comparison: `artifacts/icons/final-tweak.png` (as drawn vs tweaked). The menu-bar mark still needs the owner's eye in the real menu bar.
+Comparison: `artifacts/icons/final-tweak.png` (as drawn vs tweaked). The owner checked the menu-bar mark in light and dark menu bars on rc.4.

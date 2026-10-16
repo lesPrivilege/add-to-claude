@@ -1,43 +1,77 @@
-# Release checklist (0.6.0)
+# Release checklist
 
-## Done
+How to cut a release candidate and a release, drawn from how 0.6.0 was made. Replace `X.Y.Z`, `N` (the candidate) and `B` (the build number) throughout. Record what ran, what did not, and what the owner saw, separately, in [support-matrix.md](support-matrix.md).
 
-- [x] `npm test` (136/136, of which 37 plugin) and the WebKit half of `npm run test:native` (21 checks) pass at the release source.
-- [x] The owner's ChatGPT login works in the panel and survives restart.
-- [x] Live conversations, including long paged ones, project in order with original Markdown and references.
-- [x] Add places the text into an empty Claude prompt without sending or activating Claude.
-- [x] Add downloads a generated file and puts its local path and SHA-256 into the text.
-- [x] Temporary diagnostics are removed.
-- [x] Independent review of all changes since `902166b`; its nine defects are fixed with tests.
-- [x] The app builds unsigned for macOS 14 or later on arm64, with its app icon.
-- [x] No runtime npm dependency; no history, telemetry or credential collection. The page's session token stays in the page.
+## Gates
 
-## Before release
+A release goes out only when each line is checked or carries an explicit owner decision.
 
-- [ ] Owner's Mac, renamed build:
-  - Sign in again and grant Accessibility to Add to Claude.
-  - Add a conversation that has rendering markup (cards, entities, citations) and check that the text reads cleanly.
-  - Add a conversation with an uploaded file or image, and one with two same-name generated files.
-  - Add into a non-empty Claude prompt and into a second app; confirm nothing is sent and no window moves.
-  - Try the global shortcut, open at login, sign out, Escape and ⌘W.
-- [ ] Incremental hand-off (WO-01), owner's Mac with Claude for Mac:
-  - Run `bash scripts/probe-target-ax.sh` with two Claude conversations open, then again after switching conversations in one window. Record whether `AXURL` carries `claude.ai/chat/<uuid>` and whether it follows the switch; update the decision log.
-  - [x] New into a Claude Code session in Claude for Mac: "Turns 5–6 of 6 · new since last add", verified (owner, 2026-10-16).
-  - Add a long conversation, reply twice in ChatGPT, and check that Add offers "New · 2" with the right range. Switch Claude to another conversation and check that it offers All.
-  - Choose turns… with a gap, Add, and check the text's scope line, references and file lines.
-  - Click Add twice on the same scope and check that "Already added — Add again?" appears.
-  - Paste into a non-empty Claude prompt and check that "Could not confirm" offers It's There / It's Not.
-  - Check the log file holds no message text; Clear History, then turn Remember off.
-- [x] Run `npm run test:browser` and the Accessibility half of `npm run test:native` from a terminal that has the browser and Accessibility (R0 on `v0.6.0-rc.1`: 14/14 and 49/49; see [release/0.6.0-rc.1.md](release/0.6.0-rc.1.md)).
-- [ ] Dark appearance and VoiceOver pass over the bar, the Files popover and Settings.
-- [x] The owner decides the service-terms question (2026-10-16): the owner accepts the risk for the private beta. The release notes and README say plainly what the app reads and through which session, that it is not affiliated with or approved by OpenAI or Anthropic, and that users check the terms that apply to them. This is the owner's decision, not an authorization from either company.
-- [x] Signing, hardened runtime, notarization and Gatekeeper, or an explicit decision to ship unsigned: the owner chose a **private technical beta** (2026-10-16). 0.6.0 ships as a GitHub pre-release signed with the local identity, labelled as needing right-click → Open on first launch. Developer ID and notarization stay required for a public release.
+- [ ] `npm test`, `npm run test:browser` and `npm run test:native` pass on the release code. The Accessibility half of `test:native` reports NOT RUN unless the terminal has Accessibility; run it from one that does (the owner's terminal) whenever `native/Composer.swift` changed since the last run.
+- [ ] `npx prettier --check .` passes.
+- [ ] An independent review of everything since the last release, covering security, behaviour and the rendered UI. Each finding is fixed with a test or declined with a reason.
+- [ ] The owner's run on the candidate build with a real ChatGPT account (see [On the owner's Mac](#on-the-owners-mac)). Lines that are not run are recorded as not run, with the reason.
+- [ ] No runtime npm dependency; no telemetry, history archive or credential collection; the delivery log and diagnostics hold no message text. The page's session token stays in the page.
+- [ ] The terms statement in the README and the release notes still says what the app reads and through which session.
+- [ ] Signing: the build is signed with the stable identity, so an update keeps the Accessibility grant. **A public release** also needs Developer ID signing, hardened runtime, notarization and a Gatekeeper launch without Open Anyway; until then a release is a private technical beta marked as a pre-release.
+- [ ] [support-matrix.md](support-matrix.md), the README (both languages) and the release notes describe this version.
 
-## DeepSeek Harness plugin
+## On the owner's Mac
 
-Shelved by the owner on 2026-10-16; not part of this release. See [decisions/deepseek-harness-plugin.md](decisions/deepseek-harness-plugin.md).
+Use throwaway conversations. Mark each line PASS, FAIL, BLOCKED or NOT RUN. Items with no owner result for 0.6.0 are marked ◦.
 
-## Release gates (runtime hygiene, 2026-10-16)
+- Start: launch from the new location; still signed in; Accessibility still allowed; open at login off and on ◦.
+- Keys: global shortcut, click-away, pin, Esc, ⌘W, ⌘R, ⌘, ◦.
+- Reading: several old conversations in turn; a long paged one; a branched turn ◦; one with cards, entities or citations ◦; a reply in progress keeps Add off.
+- Writing: an empty Claude draft; a non-empty draft with the caret in the middle ◦; a second app such as TextEdit ◦; the same scope twice ◦; Choose turns… with a gap ◦; New after replying in ChatGPT; a switch between Claude conversations in one window ◦.
+- Files: an uploaded PDF or text file, an image, and two same-name generated files; each saved once, with its own path and SHA-256.
+- Failure: Accessibility revoked mid-session (E09) ◦; network lost during a download (E10) ◦; the target window closed before Add (E16).
+- Appearance: dark appearance and VoiceOver over the bar, Files popover, turn picker and Settings ◦.
+- Storage: Clear and Reload keeps the sign-in ◦; Clear History ◦; the delivery log holds no message text and no account id.
+- Endurance, over a day of normal use: long sessions, many shows and Adds, sleep and wake, peak memory from Activity Monitor ◦.
+- Afterwards: Settings → Storage & Diagnostics → Export… and keep the file with the results.
 
-- [ ] Signing: builds signed with a stable identity (local "add-to-claude Local" now; Developer ID, hardened runtime and notarization before any public release). Check that an update keeps the Accessibility grant.
-- [ ] Endurance pass on the owner's Mac: several long conversations opened in turn, repeated target switches, a hand-off with a large file, network loss, sleep and wake, a WebKit content-process crash, and Clear Web Cache followed by a check that the sign-in survived. Export diagnostics afterwards and record peak memory from Activity Monitor.
+## Cut a release candidate
+
+1. Bump the version: `version` in `package.json`, and `CFBundleShortVersionString` (X.Y.Z) and `CFBundleVersion` (B, one more than the last build) in `native/Info.plist`. Commit as "Version X.Y.Z (release candidate N, build B)".
+2. Run the suites on that commit after a clean `npm ci`.
+3. Tag it: `git tag -a vX.Y.Z-rc.N -m "Add to Claude X.Y.Z release candidate N"`.
+4. Build into a fresh folder (the script refuses to overwrite) and check the signature:
+
+   ```bash
+   bash scripts/build-macos.sh "$PWD/dist/rc-N/add-to-claude.app"
+   codesign --verify --strict dist/rc-N/add-to-claude.app
+   codesign -dv dist/rc-N/add-to-claude.app   # Authority=add-to-claude Local
+   spctl -a -vv dist/rc-N/add-to-claude.app   # rejected until Developer ID and notarization
+   ```
+
+   The build signs with "add-to-claude Local" when that identity is in the login keychain (`bash scripts/make-signing-identity.sh` creates it, once per Mac), and ad-hoc otherwise. Do not ship an ad-hoc build: it loses the Accessibility grant on every update.
+
+5. Archive and checksum:
+
+   ```bash
+   ditto -c -k --keepParent dist/rc-N/add-to-claude.app dist/rc-N/add-to-claude-X.Y.Z-rc.N.zip
+   shasum -a 256 dist/rc-N/add-to-claude-X.Y.Z-rc.N.zip
+   ```
+
+6. Record the candidate's evidence (suites, bundle id, build, signature, archive SHA-256, Gatekeeper) and hand the build to the owner for the run above. `dist/` is not committed.
+
+## Publish the release
+
+1. Write the release notes in `docs/release/X.Y.Z.md`: what is new, install steps with the archive's SHA-256, known limits, the terms statement, and the evidence. Link evidence files by paths that exist at the release tag.
+2. Build the release archive from the final commit as in steps 4–5, as `dist/release/add-to-claude-X.Y.Z.zip`, and put its SHA-256 into the notes. Commit.
+3. Tag the commit that carries the notes and push the branch and the tag:
+
+   ```bash
+   git tag -a vX.Y.Z -m "Add to Claude X.Y.Z"
+   git push origin main vX.Y.Z
+   ```
+
+4. Create the GitHub release. Use `--prerelease` while the build is not notarized:
+
+   ```bash
+   gh release create vX.Y.Z dist/release/add-to-claude-X.Y.Z.zip \
+     --title "Add to Claude X.Y.Z" --notes-file docs/release/X.Y.Z.md --prerelease
+   ```
+
+5. Download the asset from the release page, compare its SHA-256 with the notes, unpack it and run `codesign --verify --strict` on the app.
+6. Afterwards, move the candidates' evidence to `docs/archive/release-X.Y.Z/`, fix the notes' relative links, and update [support-matrix.md](support-matrix.md).
