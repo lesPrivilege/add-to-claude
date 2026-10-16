@@ -42,9 +42,13 @@ struct FileRow {
 /// A push button that runs a closure; keeps small popover controls free of selector plumbing.
 final class ClosureButton: NSButton {
     private var run: () -> Void = {}
-    convenience init(title: String, run: @escaping () -> Void) {
+    convenience init(title: String, glyph name: String? = nil, run: @escaping () -> Void) {
         self.init(frame: .zero)
         self.title = title
+        if let name {
+            image = glyph(name, size: 14)
+            imagePosition = .imageLeading
+        }
         bezelStyle = .rounded
         self.run = run
         target = self
@@ -118,7 +122,7 @@ final class HandoffBar: NSViewController {
         picker.action = #selector(choose)
         picker.setContentHuggingPriority(.defaultLow, for: .horizontal)
         picker.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        add.image = glyph("add")
+        add.image = glyph("brand")
         add.imagePosition = .imageTrailing
         add.bezelStyle = .rounded
         add.bezelColor = .controlAccentColor
@@ -367,18 +371,22 @@ final class HandoffBar: NSViewController {
         scroll.heightAnchor.constraint(equalToConstant: CGFloat(min(rows.count, 10)) * 26).isActive = true
         scroll.widthAnchor.constraint(equalToConstant: 388).isActive = true
         let note = label("Saved to \(FilesFolder.root.path)", size: 11, color: .secondaryLabelColor)
-        let downloadButton = ClosureButton(title: "Download Selected") { [weak self] in
+        let downloadButton = ClosureButton(title: "Download Selected", glyph: "download") { [weak self] in
             let ids = boxes.filter { $0.0.state == .on }.map(\.1)
             guard !ids.isEmpty else { return }
             self?.say("Downloading \(ids.count) file\(ids.count == 1 ? "" : "s")…", glyph: "waiting")
             self?.downloadFiles(ids) { self?.filesPopover?.close(); self?.render() }
         }
         downloadButton.isEnabled = !boxes.isEmpty
-        let showFolder = ClosureButton(title: "Show Folder") {
+        let showFolder = ClosureButton(title: "Show Folder", glyph: "folder") {
             try? FileManager.default.createDirectory(at: FilesFolder.root, withIntermediateDirectories: true)
             NSWorkspace.shared.open(FilesFolder.root)
         }
-        let column = NSStackView(views: [label("Files in this conversation", size: 12, weight: .semibold), scroll, note,
+        let headerIcon = NSImageView(image: glyph("attach", size: 14) ?? NSImage())
+        headerIcon.contentTintColor = .secondaryLabelColor
+        let header = NSStackView(views: [headerIcon, label("Files in this conversation", size: 12, weight: .semibold)])
+        header.spacing = 6
+        let column = NSStackView(views: [header, scroll, note,
                                          NSStackView(views: [showFolder, NSView(), downloadButton])])
         column.orientation = .vertical
         column.alignment = .leading

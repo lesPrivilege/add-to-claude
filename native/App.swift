@@ -51,7 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         watchForElsewhere()
 
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = glyph("menubar", size: 18)
+        item.button?.image = glyph("brand", size: 18)
         item.button?.setAccessibilityLabel("Add to Claude")
         item.button?.toolTip = "Add to Claude: hand this chat to an agent harness"
         item.button?.target = self

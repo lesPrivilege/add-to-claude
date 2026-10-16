@@ -14,6 +14,7 @@ bundle="$work/add-to-claude.app"
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
 cp "$project_root/native/Info.plist" "$bundle/Contents/Info.plist"
 cp -R "$project_root/native/icons" "$bundle/Contents/Resources/icons"
+cp "$project_root/native/brand/AppIcon.icns" "$bundle/Contents/Resources/AppIcon.icns"
 node "$project_root/scripts/build-webkit.js" "$bundle/Contents/Resources/webkit"
 native="$project_root/native"
 xcrun --sdk macosx swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \

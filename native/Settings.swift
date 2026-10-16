@@ -144,7 +144,7 @@ private struct SettingsView: View {
                     ForEach(Shortcut.allCases) { Text($0.title).tag($0) }
                 }
                 if taken { note("Another app uses \(shortcut.title). Choose another.") }
-            } header: { Text("General") }
+            } header: { sectionHeader("General", glyph: "settings") }
 
             Section {
                 Toggle("Start with the last window used", isOn: $restoreLast)
@@ -170,7 +170,7 @@ private struct SettingsView: View {
                         }
                     }
                 }
-            } header: { Text("Hand-off") }
+            } header: { sectionHeader("Hand-off", glyph: "brand") }
 
             Section {
                 LabeledContent("Accessibility") {
@@ -190,7 +190,7 @@ private struct SettingsView: View {
                         Button("Sign Out…", role: .destructive) { confirmSignOut = true }
                     }
                 }
-            } header: { Text("Access") } footer: {
+            } header: { sectionHeader("Access", glyph: "lock") } footer: {
                 Text("Add to Claude \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · reads only the page you are on, never sends for you")
                     .font(.caption).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
             }
@@ -229,6 +229,10 @@ private struct SettingsView: View {
     private func reveal(_ url: URL) {
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    private func sectionHeader(_ title: String, glyph name: String) -> some View {
+        Label { Text(title) } icon: { glyphImage(name) }
     }
 
     private func note(_ text: String) -> some View {
