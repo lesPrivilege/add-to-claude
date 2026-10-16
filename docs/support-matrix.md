@@ -2,6 +2,17 @@
 
 Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release notes](release/0.6.1.md#review-and-checks): `npm test` 120/120, delivery log 120, WebKit 34, Accessibility 54 (owner's terminal), browser 14/14 carried over from 0.6.0 (observer unchanged), and the owner's run on rc.2 and rc.3. Everything below is unchanged by 0.6.1 unless that page says otherwise.
 
+### 0.6.1 on the owner's Mac (installed release build, 2026-10-17)
+
+| Area                                                                                                                                 | Result                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Installed `/Applications/Add to Claude.app`, byte-identical to the published `add-to-claude-0.6.1.zip`                               | Owner                                                                                                                                      |
+| A note before a tool call and the answer after it arrive as one turn, the source comment listing both messages                       | Owner: two exchanges in one conversation                                                                                                   |
+| Resolved citations read `[n]` in place, matching the turn's numbered References                                                      | Owner: `[1]`–`[3]` in one answer                                                                                                           |
+| Citations with no matching source read `[?]` in place; that answer has no References, and the top notice names it                    | Owner                                                                                                                                      |
+| Laid-out cards (layer cards, a concept card, a four-stage flow, a project card) read flush left in reading order, with no code block | Owner. A stage flow's arrows are not drawn, by the owner's rule. Some cards leave two blank lines instead of one; Markdown renders one gap |
+| Saved files reused after a relaunch                                                                                                  | **Not run**                                                                                                                                |
+
 Evidence for Add to Claude 0.6.0 (build 12, tag `v0.6.0`), a private technical beta, on the owner's Mac: macOS 27.0.1 (arm64), macOS SDK 26.5, Swift 6.3.3, Node 25.9.0, Google Chrome 155. The release code is the code of 0.6.0-rc.7; `v0.6.0` adds only documentation. The per-candidate records are in [archive/release-0.6.0/](archive/release-0.6.0/0.6.0-rc.3.md).
 
 Three kinds of evidence, kept apart:
