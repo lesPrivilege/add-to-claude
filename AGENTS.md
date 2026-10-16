@@ -1,4 +1,4 @@
-# gpt-handoff
+# add-to-claude
 
 This is an independent project. Never modify or push `/workspace/Praxis`.
 

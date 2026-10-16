@@ -52,8 +52,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = glyph("menubar", size: 18)
-        item.button?.setAccessibilityLabel("Ferry")
-        item.button?.toolTip = "Ferry: add this chat to an agent"
+        item.button?.setAccessibilityLabel("Add to Claude")
+        item.button?.toolTip = "Add to Claude: hand this chat to an agent harness"
         item.button?.target = self
         item.button?.action = #selector(click)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -66,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let app = NSMenu()
         app.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         app.addItem(withTitle: "Hide Panel", action: #selector(hidePanel), keyEquivalent: "w").target = self
-        app.addItem(withTitle: "Quit Ferry", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        app.addItem(withTitle: "Quit Add to Claude", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let edit = NSMenu(title: "Edit")
         edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
         edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let menu = NSMenu()
             menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
             menu.addItem(.separator())
-            menu.addItem(withTitle: "Quit Ferry", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+            menu.addItem(withTitle: "Quit Add to Claude", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
             item.menu = menu
             item.button?.performClick(nil)
             item.menu = nil

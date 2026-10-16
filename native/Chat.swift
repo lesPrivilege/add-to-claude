@@ -1,11 +1,7 @@
 import AppKit
 import CryptoKit
-import OSLog
 import WebKit
 
-// TEMPORARY diagnostic: request shapes from the live page (ids redacted) go to the local system log.
-private let traceLog = Logger(subsystem: "io.lesprivilege.gpt-handoff", category: "trace")
-private let navLog = Logger(subsystem: "io.lesprivilege.gpt-handoff", category: "nav")
 
 private let chatHosts: Set<String> = ["chatgpt.com", "chat.openai.com"]
 /// Hosts that sign-in may pass through. Anything else a link opens goes to the default browser.
@@ -177,21 +173,15 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                                                           messageId: file["messageId"] as? String ?? "", line: line,
                                                           issue: file["issue"] as? String ?? "")
                                     })
-            if !prepared.issues.isEmpty {
-                traceLog.notice("partial: \(prepared.issues.joined(separator: " | "), privacy: .public)")
-            }
             set(prepared, .ready(prepared))
-        case "trace": traceLog.notice("\(body["method"] as? String ?? "", privacy: .public) \(body["path"] as? String ?? "", privacy: .public)")
         case "file":
             // A link the page itself requested for one of its files; only https on ChatGPT's own hosts.
             guard let id = body["id"] as? String, let text = body["url"] as? String, let url = URL(string: text),
                   url.scheme == "https", let host = url.host,
                   chatHosts.contains(host) || host.hasSuffix(".oaiusercontent.com") else { return }
             fileLinks[id] = FileLink(url: url, name: body["name"] as? String ?? "", seen: Date())
-            traceLog.notice("file link \(id.hasPrefix("sandbox:") ? "sandbox" : "id", privacy: .public) name=\(body["name"] as? String ?? "", privacy: .public)")
             settle(id)
         case "file-missing":
-            traceLog.notice("file link missing: \(body["status"] as? String ?? "", privacy: .public)")
             settle(body["id"] as? String ?? "")
         case "changed": set(nil, .waiting)
         case "invalid": set(nil, .unavailable(safeLabel(body["message"] as? String ?? "", limit: 160)))
@@ -255,7 +245,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         let missing = files.filter { link(for: $0) == nil }
         guard !missing.isEmpty, resolving == nil else { return done() }
         resolving = (Set(missing.map(\.id)), done)
-        web.callAsyncJavaScript("ferryResolve(files)", arguments: ["files": missing.map { ["id": $0.id, "messageId": $0.messageId] }],
+        web.callAsyncJavaScript("addToClaudeResolve(files)", arguments: ["files": missing.map { ["id": $0.id, "messageId": $0.messageId] }],
                                 in: nil, in: .defaultClient) { _ in }
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in self?.settle(nil) }
     }
@@ -305,8 +295,6 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { return decisionHandler(.cancel) }
-        // TEMPORARY diagnostic: how the page's file clicks navigate (scheme, host, path shape only).
-        navLog.notice("navigate \(url.scheme ?? "-", privacy: .public)://\(url.host ?? "", privacy: .public)\(url.path.replacingOccurrences(of: #"[A-Za-z0-9_-]{20,}"#, with: ":id", options: .regularExpression), privacy: .public) type=\(action.navigationType.rawValue) main=\(action.targetFrame?.isMainFrame ?? false) download=\(action.shouldPerformDownload)")
         if action.shouldPerformDownload { return decisionHandler(.download) }
         guard action.targetFrame?.isMainFrame != false else {
             return decisionHandler(["https", "about", "blob", "data"].contains(url.scheme ?? "") ? .allow : .cancel)
@@ -320,7 +308,6 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        navLog.notice("response \(response.response.mimeType ?? "-", privacy: .public) show=\(response.canShowMIMEType) main=\(response.isForMainFrame)")
         decisionHandler(response.canShowMIMEType ? .allow : .download)
     }
 
@@ -335,7 +322,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         if Date().timeIntervalSince(lastCrash) > 60 {
             set(nil, .unavailable("The page stopped. It is reloading."))
             web.reload()
-        } else { set(nil, .unavailable("The page stopped again. Quit and reopen Ferry.")) }
+        } else { set(nil, .unavailable("The page stopped again. Quit and reopen Add to Claude.")) }
         lastCrash = Date()
     }
 
@@ -348,7 +335,6 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = action.request.url else { return nil }
-        navLog.notice("new window \(url.scheme ?? "-", privacy: .public)://\(url.host ?? "", privacy: .public)")
         guard url.scheme == "about" || (url.scheme == "https" && url.host.map(signInHosts.contains) == true) else {
             openExternally(url)
             return nil
@@ -414,7 +400,6 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             path = folder.appendingPathComponent("\((name as NSString).deletingPathExtension) \(index)" + ((name as NSString).pathExtension.isEmpty ? "" : ".\((name as NSString).pathExtension)"))
             index += 1
         }
-        navLog.notice("download to conversation folder: \(path.lastPathComponent, privacy: .public)")
         pageDownloads[ObjectIdentifier(download)] = (path, suggestedFilename)
         completionHandler(path)
     }

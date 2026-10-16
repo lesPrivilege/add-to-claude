@@ -19,7 +19,7 @@ function harness(initialURL = page, { socketSupport = false } = {}) {
   };
   const window = {
     postMessage: (data, _origin, ports) => {
-      if (data.type === 'gpt-handoff/port')
+      if (data.type === 'add-to-claude/port')
         ports[0].onmessage = ({ data: packet }) =>
           messages.push(JSON.parse(JSON.stringify(packet)));
     },

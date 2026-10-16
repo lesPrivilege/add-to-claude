@@ -16,7 +16,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     !['chatgpt.com', 'chat.openai.com'].includes(documentURL.hostname)
   )
     return;
-  const key = Symbol.for('gpt-handoff.passive-observer');
+  const key = Symbol.for('add-to-claude.passive-observer');
   if (window[key]) return;
   Object.defineProperty(window, key, { value: true });
   let generation = 0,
@@ -74,24 +74,13 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     };
   };
   const channel = new MessageChannel();
-  window.postMessage({ type: 'gpt-handoff/port' }, location.origin, [channel.port2]);
+  window.postMessage({ type: 'add-to-claude/port' }, location.origin, [channel.port2]);
   const port = channel.port1;
   const post = (value) => {
     try {
       port.postMessage(value);
     } catch {}
   };
-  // TEMPORARY diagnostic: request shapes only, ids redacted, to learn how the live page loads chats.
-  const trace = (method, url) =>
-    post({
-      kind: 'trace',
-      pageUrl: location.origin + location.pathname,
-      method,
-      path:
-        url.origin +
-        url.pathname.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}|[A-Za-z0-9_-]{20,}/giu, ':id') +
-        (url.search ? `?${[...url.searchParams.keys()].join('&')}` : ''),
-    });
   // The page's own API headers (its session token and client ids), kept in this closure only so a
   // file link can be requested the way the page requests it. They are never posted to the app.
   let apiHeaders = null;
@@ -138,7 +127,6 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
             path,
             { headers: apiHeaders, credentials: 'include' },
           ]);
-          trace(`RESOLVE ${response.status}`, new URL(path, location.origin));
           status = String(response.status);
           const value = response.ok ? await response.json() : null;
           const url = value?.download_url ? new URL(value.download_url, location.origin) : null;
@@ -167,12 +155,6 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
   port.onmessage = ({ data }) => {
     if (data?.kind === 'resolve') void resolveFiles(data.files);
   };
-  addEventListener('DOMContentLoaded', () =>
-    trace(
-      `DOM mapping-in-html=${/"mapping"/u.test(document.documentElement.innerHTML)}`,
-      new URL(location.href),
-    ),
-  );
   const invalidate = (keepBase = false) => {
     generation++;
     for (const reader of readers) void reader.cancel().catch(() => {});
@@ -382,7 +364,6 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
         const socket = Reflect.construct(target, args, newTarget);
         try {
           const url = new URL(socket.url);
-          trace('WS', url);
           if (
             url.origin !== 'wss://ws.chatgpt.com' ||
             !/^\/p4\/ws\/user\/[^/]+$/u.test(url.pathname)
@@ -532,7 +513,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
   };
   const originalFetch = window.fetch;
   window.fetch = function (...args) {
-    let requested, selected, method, readRequest, shape, fileLink;
+    let requested, selected, method, readRequest, fileLink;
     try {
       requested = new URL(
         typeof args[0] === 'string' || args[0] instanceof URL ? args[0] : args[0].url,
@@ -540,11 +521,6 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       );
       selected = surface();
       method = String(args[1]?.method ?? args[0]?.method ?? 'GET').toUpperCase();
-      if (
-        requested.pathname.includes('/backend-api/') ||
-        requested.pathname.includes('conversation')
-      )
-        trace(method, requested);
       // The page asks for a short-lived link before it shows or saves a file. Keep that link so the
       // app can download the same file through this session when the user adds the conversation.
       const fileId = /^\/backend-api\/files\/download\/([A-Za-z0-9_-]{1,200})$/u.exec(
@@ -553,13 +529,6 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       if (fileId && requested.origin === location.origin && method === 'GET') fileLink = fileId;
       if (requested.origin === location.origin && requested.pathname.startsWith('/backend-api/'))
         keepApiHeaders(args[0], args[1]);
-      // TEMPORARY diagnostic: for conversation loads, the response shape (type, size, key names only).
-      if (
-        requested.origin === location.origin &&
-        /conversation|^\/c\/|\.data$/u.test(requested.pathname) &&
-        !requested.pathname.includes('/stream_status')
-      )
-        shape = requested;
       if (
         selected &&
         method === 'POST' &&
@@ -578,7 +547,6 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       void promise
         .then((response) => response.clone().json())
         .then((value) => {
-          trace(`FILE keys=${Object.keys(value ?? {}).join(',')}`, requested);
           const url = new URL(value?.download_url, location.origin);
           if (url.protocol === 'https:')
             post({
@@ -588,46 +556,6 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
               url: url.href,
               name: typeof value.file_name === 'string' ? value.file_name : '',
             });
-        })
-        .catch(() => {});
-    if (shape)
-      void promise
-        .then(async (response) => {
-          const type = response.headers.get('content-type') ?? '';
-          if (type.includes('event-stream'))
-            return trace(`SHAPE ${method} ${response.status} ${type}`, shape);
-          const text = await response.clone().text();
-          // Type skeleton only: key names, types and sizes, never values. Id-keyed maps collapse to one entry.
-          const describe = (value, depth = 0) => {
-            if (value === null) return 'null';
-            if (Array.isArray(value))
-              return `[${value.length}${value.length && depth < 5 ? ' × ' + describe(value[0], depth + 1) : ''}]`;
-            if (typeof value !== 'object')
-              return typeof value === 'string' ? 's' : (typeof value)[0];
-            const keys = Object.keys(value);
-            if (depth >= 5) return `{${keys.length}}`;
-            if (keys.length > 8 && keys.every((key) => /[0-9a-f-]{12,}|^client-created/u.test(key)))
-              return `{${keys.length} ids → ${describe(value[keys[0]], depth + 1)}}`;
-            return `{${keys.map((key) => `${key}:${describe(value[key], depth + 1)}`).join(',')}}`;
-          };
-          try {
-            const counts = {};
-            for (const message of JSON.parse(text).messages ?? []) {
-              const key = `${message.author?.role}:${message.content?.content_type}:${message.recipient === 'all' || !message.recipient ? 'all' : 'tool'}:${message.channel ?? '-'}:${message.metadata?.is_visually_hidden_from_conversation ? 'hidden' : 'shown'}`;
-              counts[key] = (counts[key] ?? 0) + 1;
-            }
-            trace(`TYPES ${JSON.stringify(counts)}`, shape);
-          } catch {}
-          let skeleton;
-          try {
-            skeleton = describe(JSON.parse(text));
-          } catch {
-            skeleton = 'not JSON';
-          }
-          const params = [...shape.searchParams.keys()].join('&');
-          const head = `SHAPE ${method} ${response.status} ${type.split(';')[0]} ${text.length}b params=${params}`;
-          for (let start = 0, part = 0; start < skeleton.length && part < 12; start += 700, part++)
-            trace(`${head} #${part} ${skeleton.slice(start, start + 700)}`, shape);
         })
         .catch(() => {});
     if (!selected || !requested) return promise;

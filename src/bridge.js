@@ -9,14 +9,14 @@ if (handler && window === top) {
     if (
       event.source !== window ||
       event.origin !== location.origin ||
-      event.data?.type !== 'gpt-handoff/port' ||
+      event.data?.type !== 'add-to-claude/port' ||
       !event.ports?.[0]
     )
       return;
     removeEventListener('message', adopt);
     const port = event.ports[0];
     // The app asks, from this isolated world only, for links to the files it is about to download.
-    globalThis.ferryResolve = (files) =>
+    globalThis.addToClaudeResolve = (files) =>
       port.postMessage({
         kind: 'resolve',
         files: (Array.isArray(files) ? files : []).map((file) => ({
@@ -25,13 +25,6 @@ if (handler && window === top) {
         })),
       });
     port.onmessage = ({ data: packet }) => {
-      if (packet?.kind === 'trace')
-        return handler.postMessage({
-          kind: 'trace',
-          page: String(packet.pageUrl),
-          method: String(packet.method),
-          path: String(packet.path),
-        });
       if (packet?.kind === 'file')
         return handler.postMessage({
           kind: 'file',

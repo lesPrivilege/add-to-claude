@@ -280,7 +280,6 @@ final class HandoffBar: NSViewController {
         if let chosen { remember(chosen) }
         if chosen == nil {
             say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error")
-            if let choice = registry.choice(id) { DispatchQueue.global().async { logTextElements(choice) } }
         }
         else { say("") }
         render()
@@ -304,7 +303,7 @@ final class HandoffBar: NSViewController {
 
     @objc private func allowAccess() {
         _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-        say("Turn on Ferry in System Settings → Privacy & Security → Accessibility. This bar updates by itself.")
+        say("Turn on Add to Claude in System Settings → Privacy & Security → Accessibility. This bar updates by itself.")
     }
 
     // MARK: context

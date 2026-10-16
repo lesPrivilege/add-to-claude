@@ -11,7 +11,7 @@ enum FilesFolder {
     static var root: URL {
         get {
             UserDefaults.standard.string(forKey: key).map { URL(fileURLWithPath: $0, isDirectory: true) }
-                ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0].appendingPathComponent("Ferry")
+                ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0].appendingPathComponent("Add to Claude")
         }
         set { UserDefaults.standard.set(newValue.path, forKey: key) }
     }

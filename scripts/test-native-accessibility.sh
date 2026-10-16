@@ -14,7 +14,7 @@ cat > "$fixture_bundle/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>Fixture</string>
-<key>CFBundleIdentifier</key><string>io.lesprivilege.gpt-handoff-ax-fixture</string>
+<key>CFBundleIdentifier</key><string>io.lesprivilege.add-to-claude-ax-fixture</string>
 <key>CFBundleName</key><string>Synthetic composer</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>

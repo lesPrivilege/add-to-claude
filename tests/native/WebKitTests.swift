@@ -30,9 +30,9 @@ import WebKit
         let literal = String(data: try! JSONSerialization.data(withJSONObject: [conversation], options: .fragmentsAllowed), encoding: .utf8)!
         let packet = "{ kind: 'response', pageUrl: location.origin + location.pathname, responseUrl: location.origin + '/backend-api/conversation/one', capturedAt: new Date().toISOString(), method: 'GET', body: \(literal.dropFirst().dropLast()) }"
         _ = evaluate(web, """
-            window.postMessage({ type: 'gpt-handoff/source', packet: \(packet) }, location.origin);
+            window.postMessage({ type: 'add-to-claude/source', packet: \(packet) }, location.origin);
             const channel = new MessageChannel();
-            window.postMessage({ type: 'gpt-handoff/port' }, location.origin, [channel.port2]);
+            window.postMessage({ type: 'add-to-claude/port' }, location.origin, [channel.port2]);
             channel.port1.postMessage(\(packet)); true
             """)
     }
@@ -70,7 +70,7 @@ import WebKit
         let web = webView!
         pump(until: { !web.isLoading && web.url != nil }, "synthetic page loads")
 
-        check(evaluate(web, "window[Symbol.for('gpt-handoff.passive-observer')] === true") as? Bool == true,
+        check(evaluate(web, "window[Symbol.for('add-to-claude.passive-observer')] === true") as? Bool == true,
               "observer runs in the page world")
         check(evaluate(web, "typeof window.webkit?.messageHandlers?.handoff") as? String == "undefined",
               "page scripts cannot reach the native handler")

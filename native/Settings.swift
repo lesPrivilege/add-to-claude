@@ -95,7 +95,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             let view = SettingsView(reload: { [weak self] in self?.reload() }, signOut: { [weak self] in self?.signOut() },
                                     shortcutTaken: { [weak self] in self?.shortcutTaken() ?? false })
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-            window.title = "Ferry Settings"
+            window.title = "Add to Claude Settings"
             window.styleMask = [.titled, .closable]
             window.level = aboveChatPanel
             window.isReleasedWhenClosed = false
@@ -134,11 +134,11 @@ private struct SettingsView: View {
                 Toggle("Open at login", isOn: Binding(get: { login == .enabled || login == .requiresApproval },
                                                       set: setLogin))
                 if login == .requiresApproval {
-                    note("Approve Ferry in System Settings → General → Login Items.")
+                    note("Approve Add to Claude in System Settings → General → Login Items.")
                 } else if loginProblem {
-                    note("macOS did not accept the login item. Move Ferry to Applications and try again.")
+                    note("macOS did not accept the login item. Move Add to Claude to Applications and try again.")
                 }
-                Toggle("Show the panel when Ferry opens", isOn: $showAtLaunch)
+                Toggle("Show the panel when Add to Claude opens", isOn: $showAtLaunch)
                 Toggle("Keep the panel open when switching apps", isOn: $pinned)
                 Picker("Shortcut to show the panel", selection: $shortcut) {
                     ForEach(Shortcut.allCases) { Text($0.title).tag($0) }
@@ -191,7 +191,7 @@ private struct SettingsView: View {
                     }
                 }
             } header: { Text("Access") } footer: {
-                Text("Ferry \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · reads only the page you are on, never sends for you")
+                Text("Add to Claude \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · reads only the page you are on, never sends for you")
                     .font(.caption).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
             }
         }
@@ -204,7 +204,7 @@ private struct SettingsView: View {
             login = SMAppService.mainApp.status
             pasteApps = SettingsView.pastedApps()
         }
-        .confirmationDialog("Sign out of ChatGPT in Ferry?", isPresented: $confirmSignOut) {
+        .confirmationDialog("Sign out of ChatGPT in Add to Claude?", isPresented: $confirmSignOut) {
             Button("Sign Out", role: .destructive) { signOut() }
         } message: {
             Text("This clears the panel's cookies and site data. Your conversations stay on ChatGPT.")

@@ -1,6 +1,5 @@
 import AppKit
 import ApplicationServices
-import OSLog
 
 let maximumTextBytes = 2 * 1024 * 1024
 let accessibilityTimeout: Float = 0.15
@@ -179,7 +178,6 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             let stillFocused = focusedComposer(selected.choice).map { CFEqual($0, current) } ?? false
             let after = axString(current, kAXValueAttribute)
             let range = selectedRange(current)
-            appendLog.notice("append check: old=\(old.utf16.count) blank=\(blank) setRange=\(setRange?.rawValue ?? -1) focused=\(stillFocused) valueAfter=\(after?.utf16.count ?? -1) unchanged=\(sameTextUnits(after, old)) range=\(range?.location ?? -1),\(range?.length ?? -1) wanted=\(end.location),\(end.length)")
             // Rich editors (ProseMirror in Claude, for one) end the draft with a paragraph marker the caret
             // cannot pass. Inserting just before that final newline is the same end-of-draft position.
             let units = Array(old.utf16)
@@ -246,7 +244,6 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
             event?.postToPid(selected.choice.app.processIdentifier)
         }
         waitForChange(field, old: old, attempts: 20) { written in
-            appendLog.notice("append fallback paste: got=\(written?.utf16.count ?? -1) landed=\(landed(written))")
             guard let written, !sameTextUnits(written, old) else {
                 return completion("This app takes text only by pasting. The conversation is on the clipboard: click its message box and press ⌘V.", false)
             }
@@ -263,9 +260,8 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
     }
     guard blank, axSettable(field, kAXValueAttribute) else { return paste() }
     // An empty box has no rich content to lose, so replacing its whole value is safe here.
-    let result = AXUIElementSetAttributeValue(field, kAXValueAttribute as CFString, text as CFString)
+    AXUIElementSetAttributeValue(field, kAXValueAttribute as CFString, text as CFString)
     waitForChange(field, old: old, attempts: 10) { written in
-        appendLog.notice("append fallback value: result=\(result.rawValue) got=\(written?.utf16.count ?? -1) landed=\(landed(written))")
         if landed(written) { return completion("Added. Review the draft there; nothing was sent.", true) }
         if let written, !sameTextUnits(written, old) {
             return completion("Text was added but reads back differently. Check the draft before retrying.", false)
@@ -291,12 +287,6 @@ private func confirmWrite(_ field: AXUIElement, old: String, expected: String, a
         }
         return
     }
-    let mismatch = written.map { Array($0.utf16) }.flatMap { got -> Int? in
-        let want = Array(expected.utf16)
-        return zip(got, want).enumerated().first { $0.element.0 != $0.element.1 }?.offset
-            ?? (got.count == want.count ? nil : min(got.count, want.count))
-    }
-    appendLog.notice("append write: waited=\(20 - attempts) expected=\(expected.utf16.count) got=\(written?.utf16.count ?? -1) firstDifference=\(mismatch ?? -1) rich=\(rich)")
     if sameTextUnits(written, expected) { return completion("Added. Review the draft there; nothing was sent.", true) }
     if sameTextUnits(written, old) { return completion(ignoredMessage, false) }
     completion("Text was added but reads back differently. Check the draft before retrying.", false)
@@ -365,31 +355,4 @@ final class ComposerRegistry {
         let (field, problem) = inspectComposer(choice)
         return (field.map { Composer(choice: choice, editor: $0) }, problem)
     }
-}
-
-// TEMPORARY diagnostic: append checks by length and position only, never text.
-private let appendLog = Logger(subsystem: "io.lesprivilege.gpt-handoff", category: "ax")
-
-// TEMPORARY diagnostic: the editable text elements a rejected window exposes (labels and capabilities,
-// never their text), written to the local system log.
-func logTextElements(_ choice: WindowChoice) {
-    let log = Logger(subsystem: "io.lesprivilege.gpt-handoff", category: "ax")
-    let app = AXUIElementCreateApplication(choice.app.processIdentifier)
-    let focused = axElement(app, kAXFocusedUIElementAttribute)
-    log.notice("window \(safeLabel(choice.app.localizedName ?? "?"), privacy: .public): app focused element role=\(focused.flatMap { axString($0, kAXRoleAttribute) } ?? "none", privacy: .public)")
-    var queue: [(AXUIElement, Int)] = [(choice.window, 0)], visited = 0
-    while !queue.isEmpty && visited < 4000 {
-        let (element, depth) = queue.removeFirst()
-        visited += 1
-        let role = axString(element, kAXRoleAttribute) ?? ""
-        if ["AXTextArea", "AXTextField", "AXComboBox"].contains(role) || attribute(element, "AXEditableAncestor") != nil && role == "AXGroup" {
-            let label = [kAXDescriptionAttribute, kAXTitleAttribute, kAXPlaceholderValueAttribute, kAXSubroleAttribute, "AXDOMClassList"]
-                .compactMap { name in attribute(element, name).map { "\(name)=\(safeLabel(String(describing: $0), limit: 60))" } }.joined(separator: " ")
-            log.notice("depth \(depth) \(role, privacy: .public) \(label, privacy: .public) focused=\(attribute(element, kAXFocusedAttribute) as? Bool ?? false) setText=\(axSettable(element, kAXSelectedTextAttribute)) setRange=\(axSettable(element, kAXSelectedTextRangeAttribute)) setValue=\(axSettable(element, kAXValueAttribute)) same=\(focused.map { CFEqual($0, element) } ?? false)")
-        }
-        if depth < 40, let children = attribute(element, kAXChildrenAttribute) as? [AXUIElement] {
-            queue.append(contentsOf: children.map { ($0, depth + 1) })
-        }
-    }
-    log.notice("scanned \(visited) elements")
 }

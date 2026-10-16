@@ -57,7 +57,7 @@ async function run() {
     [...listeners].forEach((fn) => fn({ source, origin, data, ports }));
   // What the observer does at document start: offer one private port.
   const port = {};
-  const offer = (target = port) => event({ type: 'gpt-handoff/port' }, [target]);
+  const offer = (target = port) => event({ type: 'add-to-claude/port' }, [target]);
   const send = (packet, through = port) => through.onmessage?.({ data: packet });
   return { posted, event, offer, send };
 }
@@ -81,9 +81,9 @@ test('the bundled bridge posts exactly what the compiler module produces', async
 
 test('only the first port is used; page-posted packets and foreign or later ports are ignored', async () => {
   const { posted, event, offer, send } = await run();
-  event({ type: 'gpt-handoff/source', packet }); // A page script posting a packet directly.
-  event({ type: 'gpt-handoff/port' }, [{}], {}); // A port from another window.
-  event({ type: 'gpt-handoff/port' }, [{}], undefined, 'https://example.com');
+  event({ type: 'add-to-claude/source', packet }); // A page script posting a packet directly.
+  event({ type: 'add-to-claude/port' }, [{}], {}); // A port from another window.
+  event({ type: 'add-to-claude/port' }, [{}], undefined, 'https://example.com');
   offer(); // The observer's port, offered first at document start.
   const later = {};
   offer(later); // A page script offering its own port afterwards.
