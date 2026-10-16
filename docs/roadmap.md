@@ -12,6 +12,10 @@ Done (see [release/0.6.1.md](release/0.6.1.md)): the bundle is "Add to Claude.ap
 
 Owner's rule for cards (2026-10-17): do not fit the projection to one snapshot of ChatGPT's layout. Words that carry the meaning are enough; the reader infers the relations. So layout markup converges to plain text in reading order rather than being reconstructed per widget.
 
+## Open to contributions
+
+- **Picking up a long reply without a reload.** Reading is passive, so a long task's answer needs the reload button (top left, ⌘R), which is easy to miss. Left as it is for 0.6.1; a better signal or an automatic re-read is welcome as a community PR.
+
 ## Next forms
 
 1. **Claude mod.** Waits until Claude's newly released mod format settles, so the port is an adaptation rather than a rewrite.

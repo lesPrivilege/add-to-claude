@@ -68,9 +68,9 @@ Today the source is ChatGPT. The destination can be any app with a text box.
 
 > Add to Claude is an independent tool, not affiliated with or approved by OpenAI or Anthropic. It reads the ChatGPT page you have open through your own session; check that this fits the terms that apply to your account.
 
-0.6.0 is a private technical beta for Apple silicon Macs on macOS 14 or later. It is signed with the author's own certificate, not an Apple Developer ID, and not notarized, so macOS asks once before the first launch.
+0.6.1 is a private technical beta for Apple silicon Macs on macOS 14 or later. It is signed with the author's own certificate, not an Apple Developer ID, and not notarized, so macOS asks once before the first launch.
 
-1. Download `add-to-claude-0.6.0.zip` from [Releases](https://github.com/lesPrivilege/add-to-claude/releases), check its SHA-256 against the release notes, unzip it and move **Add to Claude** to Applications.
+1. Download `add-to-claude-0.6.1.zip` from [Releases](https://github.com/lesPrivilege/add-to-claude/releases), check its SHA-256 against the release notes, unzip it and move **Add to Claude** to Applications.
 2. Open it. macOS refuses the first time; go to System Settings → Privacy & Security, choose **Open Anyway** for Add to Claude, and confirm.
 3. Sign in to ChatGPT in the panel, then choose **Allow…** in the bar for Accessibility (below). Later releases signed with the same certificate keep that permission.
 
@@ -175,9 +175,9 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
 
 > Add to Claude 是独立工具，与 OpenAI 或 Anthropic 无关联，也未获其认可。它通过你自己的会话读取你打开的 ChatGPT 页面；请自行确认这符合你账号适用的条款。
 
-0.6.0 是面向 Apple 芯片 Mac（macOS 14 或更高版本）的私有技术测试版。它用作者自己的证书签名，不是 Apple 开发者 ID，也未经公证，所以第一次打开前 macOS 会询问一次。
+0.6.1 是面向 Apple 芯片 Mac（macOS 14 或更高版本）的私有技术测试版。它用作者自己的证书签名，不是 Apple 开发者 ID，也未经公证，所以第一次打开前 macOS 会询问一次。
 
-1. 从 [Releases](https://github.com/lesPrivilege/add-to-claude/releases) 下载 `add-to-claude-0.6.0.zip`，与发布说明核对 SHA-256，解压后把 **Add to Claude** 移到“应用程序”。
+1. 从 [Releases](https://github.com/lesPrivilege/add-to-claude/releases) 下载 `add-to-claude-0.6.1.zip`，与发布说明核对 SHA-256，解压后把 **Add to Claude** 移到“应用程序”。
 2. 打开它。第一次会被拒绝；到 系统设置 → 隐私与安全性，为 Add to Claude 选择 **仍要打开**，再确认。
 3. 在面板里登录 ChatGPT，然后点击底栏的 **Allow…** 开启辅助功能（见下文）。之后用同一证书签名的版本会保留这项授权。
 

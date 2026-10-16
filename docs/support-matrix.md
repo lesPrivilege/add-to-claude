@@ -1,5 +1,7 @@
 # Support matrix
 
+Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release notes](release/0.6.1.md#review-and-checks): `npm test` 120/120, delivery log 120, WebKit 34, Accessibility 54 (owner's terminal), browser 14/14 carried over from 0.6.0 (observer unchanged), and the owner's run on rc.2 and rc.3. Everything below is unchanged by 0.6.1 unless that page says otherwise.
+
 Evidence for Add to Claude 0.6.0 (build 12, tag `v0.6.0`), a private technical beta, on the owner's Mac: macOS 27.0.1 (arm64), macOS SDK 26.5, Swift 6.3.3, Node 25.9.0, Google Chrome 155. The release code is the code of 0.6.0-rc.7; `v0.6.0` adds only documentation. The per-candidate records are in [archive/release-0.6.0/](archive/release-0.6.0/0.6.0-rc.3.md).
 
 Three kinds of evidence, kept apart:
