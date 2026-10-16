@@ -8,11 +8,13 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test tests/*.test.js",
+    "test": "node --test tests/*.test.js plugins/deepseek-harness/tests/*.test.js",
     "test:browser": "playwright test",
     "build:webkit": "node scripts/build-webkit.js",
     "test:native": "bash scripts/test-native.sh",
     "build:macos": "bash scripts/build-macos.sh",
+    "build:dsh": "node plugins/deepseek-harness/build.js",
+    "test:dsh-electron": "node plugins/deepseek-harness/tests/electron/run.js",
     "check": "npm test && npm run test:browser && npm run test:native",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

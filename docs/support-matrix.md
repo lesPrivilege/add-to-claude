@@ -6,7 +6,7 @@ Evidence for Add to Claude 0.5.0 on macOS 27.0.1 (arm64), recorded 2026-10-16. A
 
 | Check                                                                                                                                                                                                                              | Result                                                                                           |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `npm test`: model, adapters, compiler, rendering-markup cleanup, page observer and file-link resolver, bundled bridge, per-file line positions                                                                                     | 99/99                                                                                            |
+| `npm test`: model, adapters, compiler, rendering-markup cleanup, page observer and file-link resolver, bundled bridge, per-file line positions                                                                                     | 136/136 (99 core, 37 plugin)                                                                     |
 | `npm run test:native`, WebKit half: the real `ChatController` in a real `WKWebView`; page-forged packets and late ports ignored; responses prepared in order; revocation on navigation; same-name files linked to their own copies | 21 checks                                                                                        |
 | `npm run test:native`, Accessibility half: background append with exact readback, target never activated                                                                                                                           | 49 checks in the owner's earlier run; **not run** in this round (the runner lacks Accessibility) |
 | `npm run test:browser`: page observer in Chrome for Testing                                                                                                                                                                        | **Not run** in this round (browser not installed on the runner); 14/14 earlier                   |
@@ -30,6 +30,15 @@ Evidence for Add to Claude 0.5.0 on macOS 27.0.1 (arm64), recorded 2026-10-16. A
 | Renamed build (`io.lesprivilege.add-to-claude`): fresh login, fresh Accessibility grant                                     | **Not verified**                                             |
 | Dark appearance, VoiceOver, keyboard-only use                                                                               | **Not verified**                                             |
 | Signing, notarization, Gatekeeper                                                                                           | **Not done**: no signing identity on this Mac                |
+
+## DeepSeek Harness plugin (`dsh-chatgpt-panel` 0.1.0)
+
+| Check                                                                                                                                                                                                                     | Result           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| Node unit tests in `npm test`: navigation policy, payload validation, file names and the `linkFiles` port, appending to the draft, host routes, helper channel, built preload, client bundle                              | 37 pass          |
+| `npm run test:dsh-electron`: the ChatGPT window in real Electron 43.3.0, throwaway profile, synthetic chatgpt.com served in memory; observer, compiled text, file link, download with SHA-256, verified text, link policy | 16 checks        |
+| Inside DeepSeek Harness 0.2.0-rc.2: loading, routes, the sidebar tab, appending into the real composer                                                                                                                    | **Not verified** |
+| Real ChatGPT sign-in and a live conversation in the plugin's window                                                                                                                                                       | **Not verified** |
 
 ## Review
 

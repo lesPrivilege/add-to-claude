@@ -1,0 +1,8 @@
+{
+  "name": "dsh-chatgpt-panel-helper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ChatGPT panel helper window for DeepSeek Harness (Electron main process).",
+  "type": "module",
+  "main": "main.js"
+}
