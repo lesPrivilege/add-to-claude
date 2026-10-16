@@ -116,6 +116,7 @@ import AppKit
 
         // The turn picker: 42 turns, 1–30 and 33–36 added, turn 7 changed since, 37–42 chosen.
         let picker = TurnPicker(turns: turns(42, edited: [7]), added: Set((1...30).map { "m\($0)" } + (33...36).map { "m\($0)" }).subtracting(["m7"]),
+                                lastAdd: Set((9...14).map { "m\($0)" }),
                                 changed: ["m7"], selected: Set((37...42).map { "m\($0)" } + ["m7"]), changedSelection: { _ in }, done: {})
         let window = NSWindow(contentViewController: picker)
         window.layoutIfNeeded()

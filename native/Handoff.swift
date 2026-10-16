@@ -402,6 +402,11 @@ final class HandoffBar: NSViewController {
         var detail = scope?.detail ?? ""
         if bound { detail = "Same conversation (your choice) · " + detail }
         else if canBind && scope?.mode == "all" { detail += " · target not identified" }
+        // Adding everything again still says how much of it this target already has, for review.
+        if let scope, let analysis, scope.mode == "all" || scope.mode == "chosen", !analysis.added.isEmpty {
+            let already = scope.turns.filter { analysis.added.contains($0.id) }.count
+            if already > 0 { detail += " · \(already) already added" }
+        }
         scopeDetail.stringValue = detail
         scopeDetail.toolTip = detail
         scopeRow.isHidden = !trusted || scope == nil || composer == nil
@@ -463,7 +468,8 @@ final class HandoffBar: NSViewController {
         }()
         let popover = NSPopover()
         popover.behavior = .transient
-        let picker = TurnPicker(turns: prepared.turnList, added: analysis.added, changed: Set(analysis.changedTurns.map(\.id)),
+        let picker = TurnPicker(turns: prepared.turnList, added: analysis.added, lastAdd: Set(analysis.lastBatch.map(\.id)),
+                                changed: Set(analysis.changedTurns.map(\.id)),
                                 selected: start,
                                 changedSelection: { [weak self] ids in
                                     guard let self, let turns = self.prepared?.turnList else { return }

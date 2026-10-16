@@ -14,10 +14,14 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
     private let footer = label(size: 11, color: .secondaryLabelColor)
     private var anchor: Int?
 
-    init(turns: [TurnInfo], added: Set<String>, changed: Set<String>, selected: Set<String>,
+    /// Turns of the most recent Add into this target, marked apart from earlier ones for review.
+    private let lastAdd: Set<String>
+
+    init(turns: [TurnInfo], added: Set<String>, lastAdd: Set<String> = [], changed: Set<String>, selected: Set<String>,
          changedSelection: @escaping (Set<String>) -> Void, done: @escaping () -> Void) {
         self.turns = turns
         self.added = added
+        self.lastAdd = lastAdd
         self.changed = changed
         self.selected = selected
         self.changedSelection = changedSelection
@@ -76,7 +80,8 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
         let cell = tableView.makeView(withIdentifier: TurnRow.identifier, owner: self) as? TurnRow ?? TurnRow()
         let turn = turns[row]
         cell.show(turn, checked: selected.contains(turn.id),
-                  note: changed.contains(turn.id) ? "changed" : added.contains(turn.id) ? "added" : nil)
+                  note: changed.contains(turn.id) ? "changed" : lastAdd.contains(turn.id) ? "last add"
+                      : added.contains(turn.id) ? "added" : nil)
         cell.toggled = { [weak self] on in self?.toggle(row: row, on: on) }
         return cell
     }
@@ -163,8 +168,9 @@ final class TurnRow: NSTableCellView {
         files.toolTip = "\(turn.files.count) file\(turn.files.count == 1 ? "" : "s")"
         note.stringValue = text ?? ""
         note.isHidden = text == nil
-        note.textColor = text == "changed" ? .systemOrange : .secondaryLabelColor
-        mark.isHidden = text != "added"
+        note.textColor = text == "changed" ? .systemOrange : text == "last add" ? .controlAccentColor : .secondaryLabelColor
+        mark.isHidden = text != "added" && text != "last add"
+        mark.contentTintColor = text == "last add" ? .controlAccentColor : .secondaryLabelColor
     }
 
     @objc private func flip() { toggled(box.state == .on) }

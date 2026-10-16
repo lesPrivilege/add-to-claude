@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import ServiceManagement
+import Security
 import SwiftUI
 
 /// What the user can change, kept in UserDefaults. The files folder lives with `FilesFolder`.
@@ -109,7 +110,29 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 }
 
+/// How this copy is signed: a stable identity keeps macOS permissions across updates; ad-hoc does not.
+struct Signing {
+    let summary: String
+    let stable: Bool
+
+    static let current: Signing = {
+        var code: SecCode?
+        var staticCode: SecStaticCode?
+        var info: CFDictionary?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code,
+              SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode,
+              SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let values = info as? [String: Any] else { return Signing(summary: "Unsigned", stable: false) }
+        if let leaf = (values[kSecCodeInfoCertificates as String] as? [SecCertificate])?.first,
+           let name = SecCertificateCopySubjectSummary(leaf) as String? {
+            return Signing(summary: "Signed by \(name)", stable: true)
+        }
+        return Signing(summary: "Ad-hoc · permissions reset on update", stable: false)
+    }()
+}
+
 private struct SettingsView: View {
+    private let signing = Signing.current
     let reload: () -> Void
     let signOut: () -> Void
     let shortcutTaken: () -> Bool
@@ -211,9 +234,22 @@ private struct SettingsView: View {
                         Button("Sign Out…", role: .destructive) { confirmSignOut = true }
                     }
                 }
-            } header: { sectionHeader("Access", glyph: "lock") } footer: {
-                Text((["Add to Claude", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String]
-                    .compactMap { $0 }.joined(separator: " ")) + " · reads only the page you are on, never sends for you")
+            } header: { sectionHeader("Access", glyph: "lock") }
+
+            Section {
+                LabeledContent("Version") {
+                    Text([Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+                          (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String).map { "(\($0))" }]
+                        .compactMap { $0 }.joined(separator: " ")).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                LabeledContent("Signature") {
+                    Label { Text(signing.summary) } icon: { glyphImage(signing.stable ? "done" : "info") }
+                        .foregroundStyle(signing.stable ? Color.secondary : Color.orange)
+                        .help(signing.stable ? "Updates signed the same way keep the Accessibility permission."
+                              : "Ad-hoc builds change their signature, so macOS asks for Accessibility after every update. Run scripts/make-signing-identity.sh once, then rebuild.")
+                }
+            } header: { sectionHeader("About", glyph: "info") } footer: {
+                Text("Add to Claude · reads only the page you are on, never sends for you")
                     .font(.caption).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
             }
         }

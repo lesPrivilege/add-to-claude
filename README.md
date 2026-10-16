@@ -80,7 +80,7 @@ open dist/add-to-claude.app
 ```
 
 1. Sign in to ChatGPT in the panel.
-2. Choose **Allow…** in the bar, then turn on Add to Claude in System Settings → Privacy & Security → Accessibility. An unsigned rebuild needs this again.
+2. Choose **Allow…** in the bar, then turn on Add to Claude in System Settings → Privacy & Security → Accessibility. An ad-hoc build needs this again after every rebuild; to keep it across updates, run `bash scripts/make-signing-identity.sh` once (it creates a local signing identity in your login keychain), then rebuild.
 3. Click once into the target app's message box, choose its window in the bar, and click **Add**.
 
 ### DeepSeek Harness plugin
@@ -168,7 +168,7 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
 需要 macOS 14 或更高版本、Xcode 命令行工具，以及 Node.js 24 或更高版本。构建命令见上文英文部分。
 
 1. 在面板里登录 ChatGPT。
-2. 点击底栏的 **Allow…**，然后在 系统设置 → 隐私与安全性 → 辅助功能 中打开 Add to Claude。未签名的重新构建需要再次授权。
+2. 点击底栏的 **Allow…**，然后在 系统设置 → 隐私与安全性 → 辅助功能 中打开 Add to Claude。临时签名（ad-hoc）的构建每次重建后都要重新授权；运行一次 `bash scripts/make-signing-identity.sh`（在登录钥匙串中创建本机签名身份）再重建，之后的更新会保留授权。
 3. 先在目标应用的输入框里点一下，在底栏选中它的窗口，再点击 **Add**。
 
 ### DeepSeek Harness 插件
