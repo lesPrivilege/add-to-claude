@@ -1,13 +1,16 @@
-# Handoff product contract
+# Product contract
 
 The goal is a small macOS menu-bar utility that passes functional and real-machine acceptance and is ready to release. A passing fixture suite alone is not enough.
 
-## Current design (owner decisions, 2026-10-13 to 2026-10-14)
+## Current design (owner decisions, 2026-10-13 to 2026-10-16)
+
+- **Name.** Add to Claude (`add-to-claude`), named for the destination most people use. The button names the actual destination ("Add to Codex", "Add to Claude"). Earlier working names were gpt-handoff and Ferry.
 
 - **Surface.** A menu-bar panel that is the ChatGPT website itself, in the app's own persistent WebKit session, with a thin handoff bar beneath it. Hiding never destroys the page. No handoff may open a browser, refresh the page, raise or switch windows, flicker, or put a blocking overlay over the chat.
 - **Session.** The owner signs in once inside the panel. Their sign-in method was confirmed to work in the embedded view, survive restart and send messages (login probe, 2026-10-14). That result superseded the Chrome-session route and its extension, which were removed. Browser credentials are never copied.
 - **Target.** An exact window that is already open in another app. Text is appended into its composer in the background and read back to confirm. Nothing is sent.
-- **Memory only.** No session journal or conversation archive. Only WebKit's own login data persists.
+- **Memory only.** No session journal or conversation archive. WebKit's login data, the settings and the files the user downloads are the only things on disk.
+- **Files.** Add downloads the conversation's files into a folder per conversation and points the text at each local copy, unless the user turns that off.
 - **Scope.** The owner authorized a complete first-principles refactor. Earlier paths were removed: the local HTTP desk, the DOM/scroll collector, the popups, and the Chrome extension with its relay.
 
 ## Source and interpretation
@@ -35,7 +38,13 @@ Original Markdown, source coverage, citation resolution, downloaded bytes and ta
 
 ## Status
 
-See [support-matrix.md](support-matrix.md) and [release-checklist.md](release-checklist.md). R1 is covered for synthetic data only. R3 and R4 are implemented and pass the owner's Accessibility run against a synthetic app; real clients are not yet checked. R2 is limited to file references; attachment bytes are not implemented. R8 is open.
+See [support-matrix.md](support-matrix.md) and [release-checklist.md](release-checklist.md).
+
+- **R1** holds for the owner's live conversations, including long paged ones.
+- **R2** holds for a generated Markdown file: downloaded on Add, with its path and SHA-256 in the text. Uploaded files and images are implemented but not yet seen live.
+- **R3 and R4** pass the synthetic Accessibility suite and Claude for Mac with an empty prompt. A non-empty prompt and a second client are open.
+- **R6** has its controls, Settings and icons; keyboard, VoiceOver and dark appearance are unchecked.
+- **R8** is open: signing, notarization and an independent review remain.
 
 ## Reference evidence checked on 2026-10-12
 

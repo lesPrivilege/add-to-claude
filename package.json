@@ -1,6 +1,6 @@
 {
   "name": "add-to-claude",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Menu-bar ChatGPT panel that adds the open conversation to an existing composer window, without sending.",

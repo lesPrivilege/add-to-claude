@@ -1,5 +1,20 @@
 # Mac acceptance log
 
+## 2026-10-16 · Files on Add, Settings, rename
+
+Confirmed by the owner:
+
+- **Generated file.** Add downloads `topbar_attachment_test.md` into `~/Downloads/Ferry/Top Bar封装与登录继承/`, and the hand-off text carries its path and SHA-256 under the turn's `### Files`.
+- **Panel controls and Settings.** The header controls, Settings window, pin and click-away hiding were used during the round without problems reported.
+
+What was wrong before: Add never downloaded anything itself, and the Files list only offered files whose link the page had already fetched. A generated file is referred to by its sandbox path, so it never matched. Now the app asks the page for each missing link through the page's own session, then downloads.
+
+Since then:
+
+- The app is Add to Claude, with bundle id `io.lesprivilege.add-to-claude`. The panel's ChatGPT login and settings start fresh under the new id, and Accessibility must be granted again.
+- The temporary diagnostics are gone.
+- A linked file's "download this file" check is dropped, and a hand-off with no checks left reads verified. Not yet seen live.
+
 ## 2026-10-14 · Live round with the owner's account and Claude for Mac
 
 What works now, confirmed by the owner:
@@ -22,7 +37,7 @@ Not working yet:
 - Attachment downloads. The page fetches `/backend-api/files/download/<id>` (`status, download_url, metadata, file_name, creation_time, no_auth_user_upload, mime_type, file_size_bytes`) when it shows a file, and the observer keeps that link. But the chat's own file card does nothing in the panel (no navigation, new window or download was logged), and the Files list did not offer the generated `topbar_attachment_test.md` as downloadable even after name matching.
 - Other target apps, non-empty Claude drafts, and panel stacking (the panel stays above other apps until the icon is clicked).
 
-Temporary diagnostics are still in the build (request shapes, message types, window text elements, append checks, navigation). Read them with `/usr/bin/log show --last 15m --info --predicate 'subsystem == "io.lesprivilege.gpt-handoff"'`. Remove them before release.
+These findings came from temporary diagnostics in the unified log. They were removed on 2026-10-16.
 
 ## 2026-10-14 · Embedded panel (supersedes the Chrome extension route below)
 

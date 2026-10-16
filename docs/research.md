@@ -2,6 +2,13 @@
 
 Checked 2026-10-12. This is a bounded review of primary documentation and the two project references in the brief. It records design inputs, not proof of compatibility. Runtime evidence belongs in `support-matrix.md`.
 
+> **Update, 2026-10-16.** Two decisions below were later changed by the owner:
+>
+> - The product reads the conversation from the ChatGPT page's own requests inside its embedded panel, rather than from an export.
+> - To download a file on Add, the page requests the file's link through its own session. The request reuses the headers the page itself last sent, inside the page, and the token never reaches the app.
+>
+> Both rely on ChatGPT endpoints that are not public APIs. Whether this fits the applicable terms is the owner's decision, recorded as open in `release-checklist.md`.
+
 ## Decisions supported by the evidence
 
 1. Implement an explicit selected-tab reader and existing-tab picker, tested only with synthetic browser fixtures here. Keep DOM extraction isolated and unverified. Export remains the documented original-Markdown source. Do not describe fixture tests as approval under the service terms or proof of current live ChatGPT markup.
