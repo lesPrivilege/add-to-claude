@@ -1,5 +1,7 @@
 # Add to Claude · Release Readiness Review
 
+> **Note on merge (2026-10-16):** written from `main` before incremental Add, the Arc Insert icons, the local signing identity and the storage/diagnostics work landed. R1.7 now applies: incremental Add ships, scoped to provider + conversation + destination with per-turn hashes (see `docs/decisions/incremental-handoff.md`). Current evidence is in `support-matrix.md`.
+
 **Recorded:** 2026-10-16  
 **Target:** macOS menu-bar app `0.5.0` → Release Candidate (not an approval to publish)  
 **Source:** `lesPrivilege/add-to-claude`, `main` at review time  
@@ -21,15 +23,15 @@ One user journey: **Open ChatGPT → inspect the current conversation → choose
 
 Source: [support-matrix](./support-matrix.md), [architecture](./architecture.md), [roadmap](./roadmap.md), [README](../README.md), checked 2026-10-16.
 
-| Evidence | Current description |
-|---|---|
-| Unit tests | 136/136 recorded (99 core + 37 plugin), synthetic |
-| Real WKWebView | 21 checks recorded |
-| AX real native harness | 49 checks **from a prior run**, not run in the latest recorded round |
-| Real Chromium | 14/14 **from a prior run**, not run in the latest recorded round |
-| Real owner smoke | ChatGPT sign-in/persistence; conversation capture; empty Claude draft; one generated Markdown attachment |
-| Not owner-verified | Nonempty Claude draft; another target app; uploaded file/images; shortcut/login item/sign-out; renamed stable bundle; dark mode/VoiceOver/keyboard navigation |
-| Distribution | Unsigned build; no Developer ID/notarization/Gatekeeper evidence |
+| Evidence               | Current description                                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit tests             | 136/136 recorded (99 core + 37 plugin), synthetic                                                                                                             |
+| Real WKWebView         | 21 checks recorded                                                                                                                                            |
+| AX real native harness | 49 checks **from a prior run**, not run in the latest recorded round                                                                                          |
+| Real Chromium          | 14/14 **from a prior run**, not run in the latest recorded round                                                                                              |
+| Real owner smoke       | ChatGPT sign-in/persistence; conversation capture; empty Claude draft; one generated Markdown attachment                                                      |
+| Not owner-verified     | Nonempty Claude draft; another target app; uploaded file/images; shortcut/login item/sign-out; renamed stable bundle; dark mode/VoiceOver/keyboard navigation |
+| Distribution           | Unsigned build; no Developer ID/notarization/Gatekeeper evidence                                                                                              |
 
 **Inference:** implementation and synthetic correctness are established for portions of the path. End-to-end proof and signed distribution are not. Never silently promote an earlier or synthetic result to current-round real-device evidence.
 
@@ -111,24 +113,24 @@ Each item needs: changed path or rationale for no code change; one failing-befor
 
 ## 4. Manual test scenarios (minimum physical-device gate)
 
-| ID | Scenario | Expected evidence |
-|---|---|---|
-| E01 | Fresh app install; ChatGPT login and restart | Recording; persisted login or clearly explained SSO failure |
-| E02 | 2–3 old conversations; one `Cmd+R`; send a short new message | Capture order/count/version before and after; no stale handoff |
-| E03 | Long, paginated and branching chat | Visible message count and handoff count match; issues explicit |
-| E04 | Claude empty draft, real Add | AX readback; target not activated; no Send |
-| E05 | Claude nonempty draft with Unicode and cursor in middle | Existing draft preserved and exactly one append |
-| E06 | Second actual GUI target | Correct PID/window; wrong target never modified |
-| E07 | Repeat Add and interrupt at write boundary | Explicit dedupe/uncertain status; no silent duplicate |
-| E08 | Generate file; upload text/PDF/image; two same-name files | Per-file bytes, path, SHA-256, no collision |
-| E09 | Revoke Accessibility during session | Safe stop, readable error, retry after grant |
-| E10 | Disconnect, sleep/wake, restart mid-download | No corrupt completed file and no stale write |
-| E11 | Panel anchored/pinned, multi-display, Spaces/fullscreen | No jump, focus theft, lost panel or dead controls |
-| E12 | Light/dark, keyboard-only, VoiceOver | Accessible complete core path and visible focus |
-| E13 | Clear cache vs reveal downloads vs sign out | Correct distinct storage consequences; no surprise deletion |
-| E14 | Signed notarized DMG/ZIP clean install and upgrade | Gatekeeper passes; known stable ID; upgrade/rollback evidence |
-| E15 | Idle + show/hide 50x + Add 10x + long session | CPU/RSS/disk/p95 interaction traces and no unexplained monotonic growth |
-| E16 | Content process crash, source navigation, target closes | Stale revision rejected; no unintended destination edit |
+| ID  | Scenario                                                     | Expected evidence                                                       |
+| --- | ------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| E01 | Fresh app install; ChatGPT login and restart                 | Recording; persisted login or clearly explained SSO failure             |
+| E02 | 2–3 old conversations; one `Cmd+R`; send a short new message | Capture order/count/version before and after; no stale handoff          |
+| E03 | Long, paginated and branching chat                           | Visible message count and handoff count match; issues explicit          |
+| E04 | Claude empty draft, real Add                                 | AX readback; target not activated; no Send                              |
+| E05 | Claude nonempty draft with Unicode and cursor in middle      | Existing draft preserved and exactly one append                         |
+| E06 | Second actual GUI target                                     | Correct PID/window; wrong target never modified                         |
+| E07 | Repeat Add and interrupt at write boundary                   | Explicit dedupe/uncertain status; no silent duplicate                   |
+| E08 | Generate file; upload text/PDF/image; two same-name files    | Per-file bytes, path, SHA-256, no collision                             |
+| E09 | Revoke Accessibility during session                          | Safe stop, readable error, retry after grant                            |
+| E10 | Disconnect, sleep/wake, restart mid-download                 | No corrupt completed file and no stale write                            |
+| E11 | Panel anchored/pinned, multi-display, Spaces/fullscreen      | No jump, focus theft, lost panel or dead controls                       |
+| E12 | Light/dark, keyboard-only, VoiceOver                         | Accessible complete core path and visible focus                         |
+| E13 | Clear cache vs reveal downloads vs sign out                  | Correct distinct storage consequences; no surprise deletion             |
+| E14 | Signed notarized DMG/ZIP clean install and upgrade           | Gatekeeper passes; known stable ID; upgrade/rollback evidence           |
+| E15 | Idle + show/hide 50x + Add 10x + long session                | CPU/RSS/disk/p95 interaction traces and no unexplained monotonic growth |
+| E16 | Content process crash, source navigation, target closes      | Stale revision rejected; no unintended destination edit                 |
 
 Every E-test gets `PASS / FAIL / BLOCKED / NOT RUN`, binary SHA-256, `git HEAD`, OS, machine, date, reproduction, screenshot/video/log pointer. A successful synthetic test does not close an E-test.
 
