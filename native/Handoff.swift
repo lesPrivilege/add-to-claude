@@ -132,6 +132,7 @@ final class HandoffBar: NSViewController {
     private let statusRow = NSStackView()
     private var pickerSignature = ""
     private var statusIsResult = false
+    private var statusIsAccessHint = false
 
     override func loadView() {
         let chatIcon = NSImageView(image: glyph("chat") ?? NSImage())
@@ -154,8 +155,6 @@ final class HandoffBar: NSViewController {
         picker.setContentHuggingPriority(.defaultLow, for: .horizontal)
         picker.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         add.bezelStyle = .rounded
-        add.bezelColor = .controlAccentColor
-        add.contentTintColor = .white
         add.setContentCompressionResistancePriority(.required, for: .horizontal)
         add.setContentHuggingPriority(.required, for: .horizontal)
         targetRow.setViews([agentIcon, picker, refresh, add], in: .leading)
@@ -245,6 +244,7 @@ final class HandoffBar: NSViewController {
         filesButton.setAccessibilityLabel("Files: \(prepared?.attachments.count ?? 0)")
 
         let trusted = AXIsProcessTrusted()
+        if trusted && statusIsAccessHint { say("") }
         access.isHidden = trusted
         targetRow.isHidden = !trusted
         renderPicker(trusted: trusted)
@@ -254,6 +254,9 @@ final class HandoffBar: NSViewController {
         add.title = destination.map { "Add to \($0)" } ?? "Add"
         add.toolTip = composer.map { "Adds this conversation to \($0.choice.displayLabel(limit: 60)) without sending it" }
         add.isEnabled = prepared.map { $0.markdown.utf8.count <= maximumTextBytes } == true && composer != nil && !busy
+        // Accent only when it can act; a disabled accent button reads as pale text on blue.
+        add.bezelColor = add.isEnabled ? .controlAccentColor : nil
+        add.contentTintColor = add.isEnabled ? .white : nil
     }
 
     /// Rebuilt only when its rows change, so page updates never disturb an open menu.
@@ -280,6 +283,7 @@ final class HandoffBar: NSViewController {
 
     private func say(_ text: String, glyph name: String? = nil, result: Bool = false) {
         statusIsResult = result
+        statusIsAccessHint = false
         statusText.stringValue = text
         statusGlyph.image = name.flatMap { glyph($0, size: 14) }
         statusGlyph.isHidden = name == nil
@@ -337,6 +341,7 @@ final class HandoffBar: NSViewController {
     @objc private func allowAccess() {
         _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
         say("Turn on Add to Claude in System Settings → Privacy & Security → Accessibility, then reopen this panel.")
+        statusIsAccessHint = true
     }
 
     // MARK: context

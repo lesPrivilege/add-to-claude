@@ -116,48 +116,54 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       return `/backend-api/conversation/${encodeURIComponent(conversationId)}/interpreter/download?${new URLSearchParams({ message_id: file.messageId, sandbox_path: path })}`;
     return null;
   };
+  // Up to four links at a time, so a conversation with many files answers well within the wait.
   const resolveFiles = async (files) => {
     const conversationId = surface()?.id;
-    for (const file of Array.isArray(files) ? files.slice(0, 200) : []) {
-      let path = null;
-      try {
-        path = typeof file?.id === 'string' ? linkRequest(file, conversationId) : null;
-      } catch {
-        /* An id the page would not accept is reported as unsupported. */
-      }
-      let status = 'unsupported';
-      if (path && apiHeaders)
-        try {
-          const response = await Reflect.apply(originalFetch, window, [
-            path,
-            { headers: apiHeaders, credentials: 'include' },
-          ]);
-          status = String(response.status);
-          const value = response.ok ? await response.json() : null;
-          const url = value?.download_url ? new URL(value.download_url, location.origin) : null;
-          if (url?.protocol === 'https:') {
-            post({
-              kind: 'file',
-              pageUrl: location.origin + location.pathname,
-              id: file.id,
-              messageId: file.messageId,
-              url: url.href,
-              name: typeof value.file_name === 'string' ? value.file_name : '',
-            });
-            continue;
-          }
-        } catch {
-          status = 'failed';
-        }
-      else if (path) status = 'no-session';
-      post({
-        kind: 'file-missing',
-        pageUrl: location.origin + location.pathname,
-        id: String(file?.id),
-        messageId: String(file?.messageId ?? ''),
-        status,
-      });
+    const queue = Array.isArray(files) ? files.slice(0, 200) : [];
+    const worker = async () => {
+      while (queue.length) await resolveOne(queue.shift(), conversationId);
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+  };
+  const resolveOne = async (file, conversationId) => {
+    let path = null;
+    try {
+      path = typeof file?.id === 'string' ? linkRequest(file, conversationId) : null;
+    } catch {
+      /* An id the page would not accept is reported as unsupported. */
     }
+    let status = 'unsupported';
+    if (path && apiHeaders)
+      try {
+        const response = await Reflect.apply(originalFetch, window, [
+          path,
+          { headers: apiHeaders, credentials: 'include' },
+        ]);
+        status = String(response.status);
+        const value = response.ok ? await response.json() : null;
+        const url = value?.download_url ? new URL(value.download_url, location.origin) : null;
+        if (url?.protocol === 'https:') {
+          post({
+            kind: 'file',
+            pageUrl: location.origin + location.pathname,
+            id: file.id,
+            messageId: file.messageId,
+            url: url.href,
+            name: typeof value.file_name === 'string' ? value.file_name : '',
+          });
+          return;
+        }
+      } catch {
+        status = 'failed';
+      }
+    else if (path) status = 'no-session';
+    post({
+      kind: 'file-missing',
+      pageUrl: location.origin + location.pathname,
+      id: String(file?.id),
+      messageId: String(file?.messageId ?? ''),
+      status,
+    });
   };
   port.onmessage = ({ data }) => {
     if (data?.kind === 'resolve') void resolveFiles(data.files);
@@ -172,11 +178,28 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     if (!keepBase) cached = null;
     post({ kind: 'changed', pageUrl: location.href });
   };
+  // The website keeps conversations it has shown in memory and does not load them again when the
+  // user goes back to one. Keep the last few this document published, so returning to one
+  // publishes it again. Memory only, capped by count and size, gone with the page.
+  const recent = new Map();
+  const remember = (value, bytes) => {
+    recent.delete(value.id);
+    recent.set(value.id, { value, bytes });
+    let total = 0;
+    for (const entry of recent.values()) total += entry.bytes;
+    for (const [id, entry] of recent) {
+      if (recent.size <= 8 && total <= 3 * maxBytes) break;
+      recent.delete(id);
+      total -= entry.bytes;
+    }
+  };
   const publish = (value) => {
     const selected = surface();
     if (!selected?.id || value.id !== selected.id) return false;
-    if (encoder.encode(value.body).byteLength > maxBytes) throw new Error('size');
+    const bytes = encoder.encode(value.body).byteLength;
+    if (bytes > maxBytes) throw new Error('size');
     snapshot = value;
+    remember(value, bytes);
     post({
       kind: 'response',
       pageUrl: selected.pageUrl,
@@ -675,6 +698,9 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     if (snapshot && before.split('#')[0] === location.href.split('#')[0] && publish(snapshot))
       return;
     invalidate();
+    // Back to a conversation the website shows from memory: publish what it last loaded.
+    const seen = selected?.id && recent.get(selected.id);
+    if (seen) publish(seen.value);
   };
   for (const name of ['pushState', 'replaceState']) {
     const original = history[name];

@@ -544,9 +544,34 @@ test('file links are requested with the page session only when the app asks, and
     false,
     'the session token is never posted',
   );
-  assert.equal(h.messages.at(-1).status, 'unsupported');
+  // Links resolve in parallel, so the unsupported id answers without waiting for the others.
+  assert.equal(
+    h.messages.find(
+      (message) => message.kind === 'file-missing' && message.id === 'https://example.com/x',
+    )?.status,
+    'unsupported',
+  );
 });
 
 function window_fetch(h, url, headers) {
   return h.fetchWith(url, { headers });
 }
+
+test('returning to a conversation the website shows from memory publishes it again', async () => {
+  const h = harness();
+  const loaded = h.request('a');
+  h.reply(0, 'conversation a');
+  await loaded;
+  await tick();
+  h.navigate('/c/b');
+  h.navigate('/c/a');
+  const responses = h.messages.filter((packet) => packet.kind === 'response');
+  assert.deepEqual(
+    responses.map((packet) => [packet.pageUrl, packet.body]),
+    [
+      ['https://chatgpt.com/c/a', 'conversation a'],
+      ['https://chatgpt.com/c/a', 'conversation a'],
+    ],
+  );
+  assert.equal(h.messages.at(-1).kind, 'response', 'the replay follows the change notice');
+});

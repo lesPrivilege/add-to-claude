@@ -4,8 +4,8 @@
 // compiled packets here over IPC.
 import { BrowserWindow, app, ipcMain, shell, session as sessions } from 'electron';
 import { createHash, randomUUID } from 'node:crypto';
-import { createReadStream, existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { createReadStream, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import {
   CHAT_HOSTS,
   START_URL,
@@ -21,7 +21,7 @@ import { folderName, freeName, linkFiles, safeFileName, safeLabel } from '../sha
 
 /** The window's own persistent session; its ChatGPT login survives restarts. */
 export const PARTITION = 'persist:add-to-claude';
-const LINK_WAIT_MS = 10_000;
+const LINK_WAIT_MS = 30_000;
 const LINK_FRESH_MS = 240_000;
 const STALL_MS = 120_000;
 const START_MS = 30_000;
@@ -450,8 +450,15 @@ export class ChatWindow {
         );
       }
       let sha256;
+      let kept = path;
       try {
         sha256 = await sha256File(path);
+        // The same file downloaded again lands as "name 2.ext"; keep the earlier copy instead.
+        const earlier = join(folder, safeFileName(suggested, 'download'));
+        if (earlier !== path && existsSync(earlier) && (await sha256File(earlier)) === sha256) {
+          rmSync(path, { force: true });
+          kept = earlier;
+        }
       } catch {
         return expected?.resolve('the download could not be read');
       }
@@ -460,8 +467,8 @@ export class ChatWindow {
         : own
           ? this.uniqueKey(prepared, item.getFilename())
           : null;
-      if (prepared && key) this.saved.set(`${prepared.page}|${key}`, { path, sha256 });
-      if (!expected) this.message = `Saved ${name} to the files folder.`;
+      if (prepared && key) this.saved.set(`${prepared.page}|${key}`, { path: kept, sha256 });
+      if (!expected) this.message = `Saved ${basename(kept)} to the files folder.`;
       this.changed();
       expected?.resolve(null);
     });

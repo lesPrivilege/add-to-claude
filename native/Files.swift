@@ -53,6 +53,15 @@ func freePath(in folder: URL, for name: String) -> URL {
     return candidate
 }
 
+/// A file just saved as "name 2.ext" because "name.ext" was there: when both hold the same bytes
+/// (the same file downloaded again), keep the earlier one and remove the new copy.
+func reuseIdentical(_ path: URL, sha256 hash: String, name: String) -> URL {
+    let earlier = path.deletingLastPathComponent().appendingPathComponent(name)
+    guard earlier.standardizedFileURL != path.standardizedFileURL, sha256(of: earlier) == hash else { return path }
+    try? FileManager.default.removeItem(at: path)
+    return earlier
+}
+
 func sha256(of path: URL) -> String? {
     guard let data = try? Data(contentsOf: path, options: .mappedIfSafe) else { return nil }
     return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
@@ -155,10 +164,11 @@ final class FileFetcher: NSObject, WKDownloadDelegate {
 
     func downloadDidFinish(_ download: WKDownload) {
         guard download === active else { return }
-        guard let path = current, let hash = sha256(of: path) else {
+        guard let path = current, let hash = sha256(of: path), let batch = batches.first, index < batch.items.count else {
             return finish(Outcome(path: nil, sha256: nil, problem: "the download could not be read"))
         }
-        finish(Outcome(path: path, sha256: hash, problem: nil))
+        finish(Outcome(path: reuseIdentical(path, sha256: hash, name: safeFileName(batch.items[index].link.name)),
+                       sha256: hash, problem: nil))
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {

@@ -245,7 +245,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     private var waiters: [(id: UUID, keys: Set<String>, done: () -> Void)] = []
 
     /// Asks the page for fresh links to these files, the way it asks when the user opens one.
-    /// Calls back when each has answered, or after 10 s.
+    /// Calls back when each has answered, or after 30 s.
     private func resolveLinks(_ files: [Attachment], done: @escaping () -> Void) {
         let missing = files.filter { link(for: $0) == nil }
         guard !missing.isEmpty else { return done() }
@@ -258,7 +258,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             web.callAsyncJavaScript("addToClaudeResolve(files)", arguments: ["files": ask.map { ["id": $0.id, "messageId": $0.messageId] }],
                                     in: nil, in: .defaultClient) { _ in }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
             guard let self, let index = self.waiters.firstIndex(where: { $0.id == waiter }) else { return }
             let late = self.waiters.remove(at: index)
             self.requested.subtract(late.keys)
@@ -419,8 +419,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     }
 
     func downloadDidFinish(_ download: WKDownload) {
-        guard let (path, name, prepared) = pageDownloads.removeValue(forKey: ObjectIdentifier(download)),
-              let hash = sha256(of: path) else { return }
+        guard let (written, name, prepared) = pageDownloads.removeValue(forKey: ObjectIdentifier(download)),
+              let hash = sha256(of: written) else { return }
+        let path = reuseIdentical(written, sha256: hash, name: safeFileName(name, fallback: "download"))
         if let prepared, case let matches = prepared.attachments.filter({ $0.name == name }), matches.count == 1 {
             saved[prepared.page + "|" + matches[0].key] = (path, hash)
         }
