@@ -1,8 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-  <!-- D3 Negative-space Inlet, menu-bar glyph. Template-ready: black + alpha only.
-       A solid composer. The arriving line is cut into it (even-odd): it opens through the left edge, widens
-       as it travels in and stops before a cut caret. Nothing is drawn outside the composer. -->
-  <path fill="#000" fill-rule="evenodd" d="M6.4 5.6h11.2a4 4 0 0 1 4 4v4.8a4 4 0 0 1-4 4H6.4a4 4 0 0 1-4-4V9.6a4 4 0 0 1 4-4Z
-    M16.6 10.6a0.85 0.85 0 0 1 1.7 0v4.2a0.85 0.85 0 0 1-1.7 0Z
-    M1.64 10.08L2.21 10.54L2.81 10.98L3.43 11.39L4.07 11.77L4.74 12.13L5.44 12.45L6.16 12.75L6.90 13.02L7.66 13.25L8.45 13.46L9.26 13.64L10.09 13.79L10.95 13.91L11.82 14.01L12.72 14.07L13.64 14.10A1.30 1.30 0 0 0 13.56 11.50L12.73 11.55L11.91 11.58L11.11 11.58L10.33 11.56L9.57 11.50L8.83 11.42L8.11 11.32L7.40 11.18L6.71 11.02L6.04 10.84L5.39 10.62L4.75 10.38L4.13 10.11L3.52 9.81L2.93 9.48L2.36 9.12Z"/>
+  <!-- D3 Negative-space Inlet, menu-bar glyph (rev. 2 after review: window proportion, not a capsule, so it no
+       longer shares the battery silhouette). Template-ready: black + alpha only. A solid composer; a settled
+       line, the arriving line and the caret are cut into it (even-odd). The arriving line opens through the
+       left edge, widens as it travels in and stops before the caret. -->
+  <path fill="#000" fill-rule="evenodd" d="M7 4.8h10a4.4 4.4 0 0 1 4.4 4.4v5.6a4.4 4.4 0 0 1-4.4 4.4H7a4.4 4.4 0 0 1-4.4-4.4V9.2A4.4 4.4 0 0 1 7 4.8Z
+    M7.4 8.2h4.8a0.8 0.8 0 0 1 0 1.6H7.4a0.8 0.8 0 0 1 0-1.6Z
+    M16.5 11.2a0.9 0.9 0 0 1 1.8 0v4.6a0.9 0.9 0 0 1-1.8 0Z
+    M1.37 9.96L1.97 10.45L2.59 10.92L3.23 11.35L3.89 11.76L4.57 12.13L5.28 12.47L6.01 12.78L6.76 13.06L7.53 13.31L8.32 13.52L9.13 13.70L9.97 13.84L10.82 13.96L11.69 14.04L12.58 14.08L13.49 14.10A1.50 1.50 0 0 0 13.31 11.10L12.51 11.18L11.73 11.24L10.96 11.26L10.21 11.26L9.47 11.22L8.75 11.16L8.04 11.06L7.34 10.94L6.66 10.79L5.99 10.60L5.33 10.39L4.69 10.14L4.05 9.87L3.43 9.56L2.82 9.22L2.23 8.84Z"/>
 </svg>

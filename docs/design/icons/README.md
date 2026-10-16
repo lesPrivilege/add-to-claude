@@ -62,11 +62,11 @@ xcrun swiftc -O scripts/icons/render.swift -o /tmp/icon-render && /tmp/icon-rend
 - **v2 (trail through the corner into a flat tray):** read as a **spoon in a bowl**, a **straw in a box**, or a **sled or bathtub**. Fixed by making the composer taller (window, not tray) and adding the caret, so the trail ends as text.
 
 **Remaining risks**
-- At 16 pt the glyph can still read as a **sled or bathtub**.
-- The app-icon trail has a **Nike-swoosh or comet** echo.
+- **Hard misreading confirmed by the independent review:** at 16 pt the glyph reads as a **handle lifted off a tray**, which is close to the rejected handbag, or as a **sled, bathtub or slipper**. The owner's lead works in the app icon but **not as a menu-bar glyph** at this size. Not recommended for the menu bar.
+- The app-icon trail has a **Nike-swoosh or comet** echo. Keep the swoosh restrained; do not make it bolder.
 
 **Checks**
-- **16 pt:** holds at @2x. At @1x the thin tip fades, as designed, and what is left is a box, a curved line and a caret.
+- **16 pt:** fails the first-glance test (see above). At @1x what is left is "a box with a bent stick".
 - **32 px:** recognisable.
 
 ### D2 · Cursor Arrival
@@ -83,11 +83,12 @@ xcrun swiftc -O scripts/icons/render.swift -o /tmp/icon-render && /tmp/icon-rend
 - **v1:** a single bar plus caret in a wide box read as a **battery**, right next to the battery reference.
 - **v2:** a full-width first line over the caret formed a **"T" (text tool)**.
 - Both were fixed: the box is taller and the first line is shortened.
+- **After review (rev. 3):** the arriving line's head was thickened from 2.2 to 2.8 units and the gap before the caret widened to about 3 units, so "arrival" survives at @1x.
 
 **Remaining risks**
 - The glyph is generic. It could be a **captions or subtitles** symbol, or "a text field".
-- The arrival is carried by the taper alone, which is weak at @1x.
-- The app icon sits close to **Terminal** in the Dock: a dark slab with lines on it.
+- The arrival is carried by the taper alone. Rev. 3 strengthened it, but it is still the subtlest cue at @1x.
+- The app icon: I had worried it sits close to **Terminal**. The reviewer found the white tile separates it well, but the icon is anonymous and could pass as a card or small screen.
 
 **Checks**
 - **16 pt:** the best of the three.
@@ -95,7 +96,7 @@ xcrun swiftc -O scripts/icons/render.swift -o /tmp/icon-render && /tmp/icon-rend
 
 ### D3 · Negative-space Inlet (alternative to "Negative-space Insert")
 
-**Glyph.** A solid composer. The arriving line is *cut into* it: it opens through the left edge, widens as it travels in and stops before a cut caret. Nothing is drawn outside the composer, so there is no handle, antenna or printer path.
+**Glyph.** A solid composer. A settled line, the arriving line and the caret are *cut into* it: the arriving line opens through the left edge, widens as it travels in and stops before the caret. Nothing is drawn outside the composer, so there is no handle or antenna.
 
 **App icon.** A warm terracotta plate with a single porcelain slab. The channel and caret are cut through the slab and show the plate.
 
@@ -103,28 +104,32 @@ xcrun swiftc -O scripts/icons/render.swift -o /tmp/icon-render && /tmp/icon-rend
 
 **Strengths**
 - The strongest presence in the menu bar.
-- The warmest, most "Claude-adjacent" app icon.
+- The warmest app icon.
 - Very simple, just two layers.
 
 **Remaining risks**
 - The glyph is about one step heavier than outline neighbours.
-- At a glance it can read as a **pill, cassette or VHS tape**.
+- **Hard misreading found by the review:** rev. 1 was a wide filled capsule that read as a **battery**, right beside the system battery. Rev. 2, now committed, uses window proportions and an extra cut line, so it no longer shares the battery silhouette. My own read of rev. 2 at 16 pt: a filled box with a slot, which could pass for a **printer or toaster**. It has not been re-reviewed independently.
+- **Brand colour:** the terracotta plate sits near Anthropic's Claude palette. For a third-party utility that risks brand confusion or implied endorsement. If D3 is kept, move the plate off that orange.
 - The app icon can read as a **mouth or smile**, or as a **band-aid**.
 - The inlet's opening at the left edge is subtle at 32 px.
 
 **Checks**
-- **16 pt:** silhouette solid, but the meaning is weaker.
+- **16 pt:** silhouette solid, but the meaning is the weakest of the three.
 - **32 px:** recognisable by colour.
 
-## Recommended order (author's view, before review)
+## Recommended order (after independent review)
 
-1. **D1 app icon + D2 glyph.**
+1. **D1 app icon + D2 glyph (rev. 3).**
    - Same metaphor: a line arrives in the composer and stops at the caret, and the warm caret is the brand accent.
-   - Each half is the strongest of its track: D1 is the most memorable app icon, D2 the most native glyph.
+   - Each half is the strongest of its track: D1 is the most memorable and refined app icon at 32 px, D2 the only glyph that sits natively beside SF-style symbols.
    - WO-02 allows this, because the tracks share only the metaphor.
-2. **D1 pair as drawn.** Choose this if the owner wants the swept trail in the menu bar too. Check it for "sled" in the real menu bar.
-3. **D2 pair.** The safest and least ownable.
-4. **D3 pair.** Warm and bold, but the readings are the weakest at real size.
+   - The reviewer agrees.
+2. **D2 pair.** Safe and coherent, but the least ownable app icon.
+3. **D1 pair.** The glyph reads as a handle, sled or bathtub at 16 pt. Use it only if the owner wants the swept trail in the menu bar despite that.
+4. **D3 pair.** Not recommended. The glyph reads as a battery (rev. 1) or possibly a printer (rev. 2), and the plate colour raises the brand concern.
+
+On colour: the warm caret accent (#FFB27A) continues the current icon's peach. Keep it a small accent, not a plate colour, so no candidate imitates the Claude brand palette.
 
 ## Adopting a chosen pair
 
@@ -141,4 +146,29 @@ xcrun swiftc -O scripts/icons/render.swift -o /tmp/icon-render && /tmp/icon-rend
 
 ## Independent review
 
-_Pending. Filled in below after a fresh reviewer has looked only at the PNGs and this README._
+A fresh reviewer (Claude Opus, separate context) looked only at menubar-compare.png, appicon-compare.png, board.png and the local Dock strip. They recorded first-glance readings before reading this README.
+
+**Readings at real size, before reading the brief**
+
+| Artifact | Reading | Severity |
+|---|---|---|
+| D1 glyph | Bathtub, sled or slipper; a handle lifted off a tray | Moderate hard misread |
+| D1 app icon | A comet or shooting star landing in a frosted tray; Nike-swoosh echo | Mild to moderate |
+| D2 glyph | A text field, form or captions box | None |
+| D2 app icon | A dark card or screen with a glowing cursor | None |
+| D3 glyph (rev. 1) | Battery, USB stick, pill or cassette | Severe |
+| D3 app icon | Mouth or smile, band-aid, mail slot | Moderate |
+
+**Other findings**
+- **Licence:** no concerns beyond the brand-colour point. The geometry is original, third-party images are only linked, and the Dock strip with Apple artwork is uncommitted.
+
+**Verdict summary (verbatim):**
+
+> Independent first-glance review at real size: D2's glyph is the only menu-bar mark that sits natively beside SF-style symbols and reads as a text field without misreadings, though its "arrival" taper is lost at @1x and should be strengthened. D1's glyph reads as a handle, sled or bathtub at 16 pt; D3's filled capsule reads as a battery beside the system battery. D1's app icon is the most memorable and refined at 32 px; keep its swoosh restrained to avoid a Nike echo. D3's orange should not be pitched as "Claude-adjacent" (brand-confusion risk). Recommendation: D1 app icon with D2 glyph, then the D2 pair, then the D1 pair, then D3.
+
+**Changes made after the review**
+- D2 glyph rev. 3: a stronger arrival head and a wider gap before the caret.
+- D3 glyph rev. 2: window proportions instead of a capsule, to get away from the battery silhouette.
+- The "Claude-adjacent" framing was removed, and the brand-colour caution was added.
+- D1 glyph: marked as not recommended for the menu bar. Not redrawn.
+- The previews were re-rendered. The revised D2 and D3 glyphs have **not** been re-reviewed.

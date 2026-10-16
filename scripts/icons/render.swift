@@ -137,7 +137,7 @@ do {
         for (j, a) in [appearances[0], appearances[2]].enumerated() {
             let x = 20 + colW * CGFloat(j)
             let tinted = appearances[j == 0 ? 1 : 3]
-            c.text("\(a.name) / \(tinted.name)", x + 200, y0 + 6, size: 13, color: sub)
+            c.text("\(a.name) / \(tinted.name)", x + 340, y0 + 6, size: 13, color: sub)
             strip(c, x: x, y: y0 + 40, scale: 2, glyph: cand.glyph, a: a)
             strip(c, x: x, y: y0 + 100, scale: 1, glyph: cand.glyph, a: a)
             strip(c, x: x + stripWidth + 20, y: y0 + 100, scale: 1, glyph: cand.glyph, a: tinted)
