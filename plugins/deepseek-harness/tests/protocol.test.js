@@ -74,6 +74,7 @@ test('helper state is projected without anything the client should not get', () 
   const state = helperState({
     type: 'state',
     visible: true,
+    focused: true,
     pinned: 'yes',
     source: 'ready',
     conversation: {
@@ -89,6 +90,7 @@ test('helper state is projected without anything the client should not get', () 
   });
   assert.deepEqual(state, {
     visible: true,
+    focused: true,
     pinned: false,
     source: 'ready',
     conversation: {

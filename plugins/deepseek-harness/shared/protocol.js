@@ -95,6 +95,7 @@ export function helperState(message) {
       : null;
   return {
     visible: message.visible === true,
+    focused: message.focused === true,
     pinned: message.pinned === true,
     source: conversation ? 'ready' : source === 'ready' ? 'waiting' : source,
     conversation,

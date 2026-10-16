@@ -33,10 +33,10 @@ export function locateElectron(options = {}, exists = existsSync) {
   return electronCandidates(options).find((path) => exists(path));
 }
 
-/** The child's environment: the host's own, without the flag that would make Electron plain Node. */
+/** The child's environment: the host's own, without what would make Electron plain Node or load code. */
 export function helperEnv(env = process.env) {
   const next = { ...env };
-  delete next.ELECTRON_RUN_AS_NODE;
+  for (const name of ['ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS', 'NODE_PATH']) delete next[name];
   return next;
 }
 
@@ -67,6 +67,7 @@ export class HelperProcess {
         helper: 'running',
         ...(this.state ?? {
           visible: false,
+          focused: false,
           pinned: false,
           source: 'waiting',
           conversation: null,
@@ -105,13 +106,14 @@ export class HelperProcess {
   }
 
   start() {
+    // Every start is a fresh attempt: a reason kept from an earlier failure is for display only.
+    this.unavailable = '';
     const electron = this.locate();
     if (!electron) {
       this.unavailable =
         'Electron was not found. Install the dsh-pet plugin once (it keeps Electron in ~/.dsh/electron) or set DSH_CHATGPT_PANEL_ELECTRON.';
       throw new Error(this.unavailable);
     }
-    this.unavailable = '';
     this.state = null;
     const child = this.launch(electron, [this.helperDir], {
       cwd: this.helperDir,

@@ -9,9 +9,30 @@ export function safeLabel(text, limit = 90) {
   return Array.from(visible).slice(0, limit).join('');
 }
 
+const MAX_NAME_BYTES = 200;
+const bytes = (text) => Buffer.byteLength(text, 'utf8');
+
+/** The longest prefix of `text` that fits `limit` UTF-8 bytes without splitting a code point. */
+function capBytes(text, limit) {
+  let used = 0;
+  let out = '';
+  for (const char of text) {
+    used += bytes(char);
+    if (used > limit) break;
+    out += char;
+  }
+  return out;
+}
+
 /** A file name that stays inside its folder: no separators, never `.`, `..` or hidden. */
 export function safeFileName(raw, fallback = 'file') {
-  const name = safeLabel(raw, 120).replaceAll('/', '-').replaceAll(':', '-').trim();
+  let name = safeLabel(raw, 120).replaceAll('/', '-').replaceAll(':', '-').trim();
+  if (bytes(name) > MAX_NAME_BYTES) {
+    // Cap by UTF-8 bytes (file systems count bytes), whole code points, keeping a short extension.
+    const dot = name.lastIndexOf('.');
+    const ext = dot > 0 && bytes(name.slice(dot)) <= 32 ? name.slice(dot) : '';
+    name = capBytes(name.slice(0, ext ? dot : name.length), MAX_NAME_BYTES - bytes(ext)) + ext;
+  }
   if (name === '' || name === '.' || name === '..') return fallback;
   return name.startsWith('.') ? `_${name.slice(1)}` : name;
 }
@@ -77,6 +98,6 @@ export function linkFiles(prepared, copies) {
       ? ''
       : linked.size === total
         ? `${total} file${total === 1 ? '' : 's'} linked.`
-        : `${linked.size} of ${total} files linked; the rest are references (open them once in the ChatGPT window, then Add again).`;
+        : `${linked.size} of ${total} files linked; the rest are references (download them from the Files list).`;
   return { markdown: lines.join('\n'), note };
 }

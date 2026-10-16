@@ -47,7 +47,13 @@ test('Electron comes from the explicit path or dsh-pet’s landing folder, never
     locateElectron({ env: {}, home: '/h', platform: 'darwin' }, () => false),
     undefined,
   );
-  assert.equal(helperEnv({ ELECTRON_RUN_AS_NODE: '1', A: 'b' }).ELECTRON_RUN_AS_NODE, undefined);
+  const env = helperEnv({
+    ELECTRON_RUN_AS_NODE: '1',
+    NODE_OPTIONS: '-r x',
+    NODE_PATH: '/x',
+    A: 'b',
+  });
+  assert.deepEqual(env, { A: 'b' });
 });
 
 test('the helper channel is the inherited IPC pipe: no port, no socket, stdout unused', () => {
@@ -72,6 +78,20 @@ test('a missing Electron reports why, and Open fails without spawning', () => {
   });
   assert.throws(() => helper.open(), /Electron was not found/);
   assert.equal(helper.status().helper, 'unavailable');
+});
+
+test('Open retries after a helper reported fatal and exited', () => {
+  const { helper, launches, child } = helperWithFake();
+  helper.open();
+  child.emit('message', { type: 'fatal', reason: 'Another window is running.' });
+  child.emit('exit', 0, null);
+  assert.deepEqual(helper.status(), {
+    helper: 'unavailable',
+    reason: 'Another window is running.',
+  });
+  helper.open();
+  assert.equal(launches.length, 2);
+  assert.equal(helper.status().helper, 'running');
 });
 
 test('state from the helper is validated before the client sees it', () => {

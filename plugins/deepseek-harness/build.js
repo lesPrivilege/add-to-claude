@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundle } from '../../scripts/build-webkit.js';
@@ -38,16 +38,36 @@ export async function client() {
   return `;(() => {\n${await inline('shared/append.js')}\n${await inline('client/panel.js')}\nwindow.__ModuleLoader__.load({ id: '${id}', factory: (require) => createClient(require) });\n})();\n`;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  await rm(out, { recursive: true, force: true });
-  await mkdir(path.join(out, 'client'), { recursive: true });
-  await mkdir(path.join(out, 'helper'), { recursive: true });
+/** Writes the whole package into `dir`, which must not exist yet. */
+async function write(dir) {
+  await mkdir(path.join(dir, 'client'), { recursive: true });
+  await mkdir(path.join(dir, 'helper'), { recursive: true });
   for (const entry of ['package.json', 'cordis.patch.yml', 'README.md', 'locale', 'host', 'shared'])
-    await cp(path.join(here, entry), path.join(out, entry), { recursive: true });
+    await cp(path.join(here, entry), path.join(dir, entry), { recursive: true });
   for (const entry of ['package.json', 'main.js', 'chat.js'])
-    await cp(path.join(here, 'helper', entry), path.join(out, 'helper', entry));
-  await cp(path.join(root, 'artifacts/app-icon.png'), path.join(out, 'icon.png'));
-  await writeFile(path.join(out, 'helper/preload.cjs'), await preload());
-  await writeFile(path.join(out, 'client/client.js'), await client());
+    await cp(path.join(here, 'helper', entry), path.join(dir, 'helper', entry));
+  await cp(path.join(root, 'artifacts/app-icon.png'), path.join(dir, 'icon.png'));
+  await writeFile(path.join(dir, 'helper/preload.cjs'), await preload());
+  await writeFile(path.join(dir, 'client/client.js'), await client());
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  // An installed harness profile may link `out`: build beside it, then swap the folders, so the
+  // link never points at a half-written package.
+  const next = `${out}.next-${process.pid}`;
+  const previous = `${out}.previous-${process.pid}`;
+  await rm(next, { recursive: true, force: true });
+  try {
+    await write(next);
+  } catch (error) {
+    await rm(next, { recursive: true, force: true });
+    throw error;
+  }
+  const had = await rename(out, previous).then(
+    () => true,
+    (error) => (error.code === 'ENOENT' ? false : Promise.reject(error)),
+  );
+  await rename(next, out);
+  if (had) await rm(previous, { recursive: true, force: true });
   process.stdout.write(`Built ${out}\n`);
 }

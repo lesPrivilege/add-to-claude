@@ -33,12 +33,12 @@ Evidence for Add to Claude 0.5.0 on macOS 27.0.1 (arm64), recorded 2026-10-16. A
 
 ## DeepSeek Harness plugin (`dsh-chatgpt-panel` 0.1.0)
 
-| Check                                                                                                                                                                                                                     | Result           |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| Node unit tests in `npm test`: navigation policy, payload validation, file names and the `linkFiles` port, appending to the draft, host routes, helper channel, built preload, client bundle                              | 37 pass          |
-| `npm run test:dsh-electron`: the ChatGPT window in real Electron 43.3.0, throwaway profile, synthetic chatgpt.com served in memory; observer, compiled text, file link, download with SHA-256, verified text, link policy | 16 checks        |
-| Inside DeepSeek Harness 0.2.0-rc.2: loading, routes, the sidebar tab, appending into the real composer                                                                                                                    | **Not verified** |
-| Real ChatGPT sign-in and a live conversation in the plugin's window                                                                                                                                                       | **Not verified** |
+| Check                                                                                                                                                                                                                                                    | Result           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| Node unit tests in `npm test`: navigation policy, payload validation, file names and the `linkFiles` port, appending to the draft, host routes, helper channel, built preload, client bundle (composer button, tab, page)                                | 41 pass          |
+| `npm run test:dsh-electron`: the ChatGPT window in real Electron 43.3.0, throwaway profile, synthetic chatgpt.com served in memory; observer, compiled text, file link, download with SHA-256, verified text, link policy                                | 16 checks        |
+| Inside DeepSeek Harness 0.2.0-rc.2: installed in the owner's `desktop` profile (linked); the guide entry and tab rendered. The restyled tab, composer button, left-bar page, routes and appending into the real composer are not yet verified end to end | **Partly seen**  |
+| Real ChatGPT sign-in and a live conversation in the plugin's window                                                                                                                                                                                      | **Not verified** |
 
 ## Review
 

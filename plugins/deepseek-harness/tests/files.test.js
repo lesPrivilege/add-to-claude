@@ -21,7 +21,11 @@ test('file names stay inside their folder', () => {
   assert.equal(safeFileName('..'), 'file');
   assert.equal(safeFileName('  '), 'file');
   assert.equal(safeFileName('x\u0000y‮z'), 'xyz');
-  assert.equal(Array.from(safeFileName('界'.repeat(300))).length, 120);
+  assert.equal(Array.from(safeFileName('界'.repeat(300))).length, 66);
+  assert.equal(Buffer.byteLength(safeFileName('界'.repeat(300)), 'utf8'), 198);
+  const long = safeFileName(`${'😀'.repeat(100)}.pdf`);
+  assert.ok(long.endsWith('.pdf') && Buffer.byteLength(long, 'utf8') <= 200);
+  assert.ok(!long.includes('\uFFFD'));
   assert.equal(folderName(''), 'conversation');
   assert.equal(Array.from(folderName('t'.repeat(200))).length, 80);
   assert.equal(safeLabel('a\nb\tc', 90), 'abc');
@@ -53,7 +57,10 @@ test('linkFiles: one of two same-name files keeps the other reference and the ch
   assert.ok(one.markdown.includes('- chart.png — download-needed'));
   assert.ok(one.markdown.includes('## Content checks'));
   assert.ok(one.markdown.includes('verification: partial'));
-  assert.equal(one.note.startsWith('1 of 2 files linked'), true);
+  assert.equal(
+    one.note,
+    '1 of 2 files linked; the rest are references (download them from the Files list).',
+  );
 
   const both = linkFiles(
     prepared,
