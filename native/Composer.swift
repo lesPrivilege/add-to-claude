@@ -164,25 +164,32 @@ func targetConversationId(_ text: String) -> String? {
 /// The target's own conversation id, when the window shows a web page that names one in its URL
 /// (Claude for Mac is a web app: its inner AXWebArea carries `AXURL`, e.g. https://claude.ai/epitaxy/local_<uuid>).
 /// Several web areas naming different conversations is ambiguous: no id. Bounded walk, no activation.
-func conversationIdentity(in window: AXUIElement) -> String? {
-    var found = Set<String>()
+func conversationIdentity(in window: AXUIElement) -> String? { conversationPage(in: window)?.id }
+
+/// The conversation a window shows: its id and, when the page has one, its title (for the picker only).
+func conversationPage(in window: AXUIElement) -> (id: String, title: String?)? {
+    var found: [String: String?] = [:]
     var queue: [(AXUIElement, Int)] = [(window, 0)], visited = 0
     let deadline = Date().addingTimeInterval(1) // A slow app reads as unidentified, never as the same conversation.
-    if let document = axString(window, kAXDocumentAttribute), let id = targetConversationId(document) { found.insert(id) }
+    if let document = axString(window, kAXDocumentAttribute), let id = targetConversationId(document) { found[id] = .some(nil) }
     while !queue.isEmpty && visited < 2000 && Date() < deadline {
         let (element, depth) = queue.removeFirst()
         visited += 1
         if axString(element, kAXRoleAttribute) == "AXWebArea" {
             let value = attribute(element, kAXURLAttribute)
             let text = (value as? URL)?.absoluteString ?? value as? String
-            if let text, let id = targetConversationId(text) { found.insert(id) }
+            if let text, let id = targetConversationId(text) {
+                let title = axString(element, kAXTitleAttribute).map { safeLabel($0, limit: 60) }
+                found[id] = .some(title?.isEmpty == false ? title : nil)
+            }
             continue // A web area's page is not searched further; its URL is what names it.
         }
         if depth < 12, let children = attribute(element, kAXChildrenAttribute) as? [AXUIElement] {
             queue.append(contentsOf: children.map { ($0, depth + 1) })
         }
     }
-    return found.count == 1 ? found.first : nil
+    guard found.count == 1, let (id, title) = found.first else { return nil }
+    return (id, title)
 }
 
 /// Appends at the end of the chosen composer while its app stays in the background.
@@ -383,8 +390,13 @@ final class ComposerRegistry {
             choice.identityOrdinal = ordinals[key]!
             choice.needsIdentityCue = counts[key]! > 1
             choices[id] = choice
-            return Target(id: id, app: safeLabel(choice.app.localizedName ?? "App", limit: 48),
-                          window: choice.displayLabel(limit: 60), icon: choice.app.icon)
+            let app = safeLabel(choice.app.localizedName ?? "App", limit: 48)
+            // An app that titles every window with its own name (Claude for Mac) says which
+            // conversation it shows only inside its page; use that title to tell windows apart.
+            let page = choice.title == choice.app.localizedName ? conversationPage(in: choice.window)?.title : nil
+            let label = page.map { $0.replacingOccurrences(of: #" - Claude( Code)?$"#, with: "", options: .regularExpression) }
+                ?? (choice.title == choice.app.localizedName && !choice.needsIdentityCue ? nil : choice.displayLabel(limit: 60))
+            return Target(id: id, app: app, window: label ?? "", icon: choice.app.icon)
         }
         return Discovery(targets: targets, choices: choices)
     }

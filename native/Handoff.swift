@@ -137,6 +137,17 @@ final class ClosureButton: NSButton {
         action = #selector(fire)
     }
     @objc private func fire() { run() }
+
+    /// A borderless-until-hover glyph button with a tooltip, for actions whose meaning is stable.
+    static func icon(_ name: String, _ help: String, run: @escaping () -> Void) -> ClosureButton {
+        let button = ClosureButton(title: "", glyph: name, run: run)
+        button.bezelStyle = .accessoryBarAction
+        button.showsBorderOnlyWhileMouseInside = true
+        button.imagePosition = .imageOnly
+        button.toolTip = help
+        button.setAccessibilityLabel(help)
+        return button
+    }
 }
 
 /// The strip under the chat: what will be handed off, to which window, and Add.
@@ -190,7 +201,6 @@ final class HandoffBar: NSViewController {
     }()
     private let picker = NSPopUpButton(frame: .zero, pullsDown: false)
     private let targetRow = NSStackView()
-    private lazy var refresh = iconButton("refresh", "Find open windows", #selector(findWindows), self)
     private lazy var add = NSButton(title: "Add", target: self, action: #selector(addContext))
     private lazy var allow = NSButton(title: "Allow…", target: self, action: #selector(allowAccess))
     private let access = NSStackView()
@@ -208,8 +218,7 @@ final class HandoffBar: NSViewController {
 
     override func loadView() {
         let chatIcon = NSImageView(image: glyph("chat") ?? NSImage())
-        let agentIcon = NSImageView(image: glyph("agent") ?? NSImage())
-        for icon in [chatIcon, agentIcon, statusGlyph] { icon.contentTintColor = .secondaryLabelColor }
+        for icon in [chatIcon, statusGlyph] { icon.contentTintColor = .secondaryLabelColor }
 
         let facts = NSStackView(views: [sourceDetail, tag, NSView()])
         facts.spacing = 6
@@ -233,9 +242,9 @@ final class HandoffBar: NSViewController {
         scopeButton.toolTip = "Which turns Add puts into the draft"
         scopeButton.setContentHuggingPriority(.required, for: .horizontal)
         scopeButton.setContentCompressionResistancePriority(.required, for: .horizontal)
-        targetRow.setViews([agentIcon, picker, refresh, scopeButton, add], in: .leading)
+        targetRow.setViews([picker, scopeButton, add], in: .leading)
         targetRow.spacing = 6
-        targetRow.setCustomSpacing(10, after: refresh)
+        targetRow.setCustomSpacing(8, after: picker)
         targetRow.setCustomSpacing(4, after: scopeButton)
         bindButton.bezelStyle = .accessoryBarAction
         bindButton.controlSize = .small
@@ -347,7 +356,6 @@ final class HandoffBar: NSViewController {
         targetRow.isHidden = !trusted
         renderPicker(trusted: trusted)
         picker.isEnabled = !targets.isEmpty && !busy && !discovering
-        refresh.isEnabled = !busy && !discovering
         let destination = composer.map { safeLabel($0.choice.app.localizedName ?? "app", limit: 24) }
         add.title = destination.map { "Add to \($0)" } ?? "Add"
         let scope = currentScope
@@ -405,10 +413,16 @@ final class HandoffBar: NSViewController {
         guard signature != scopeSignature else { return }
         scopeSignature = signature
         let menu = NSMenu()
+        // Each scope keeps one glyph wherever it appears: the button, its menu, the picker.
+        let scopeGlyph = { (mode: String) in glyph(mode.hasPrefix("new") ? "scope-new" : mode == "all" ? "scope-all" : "scope-choose", size: 14) }
         menu.addItem(withTitle: scope.label, action: nil, keyEquivalent: "") // A pull-down's title item.
+        menu.items[0].image = scopeGlyph(scope.mode)
         let auto = resolveScope(.auto, turns: prepared.turnList, analysis: analysis)
         let item = { (title: String, choice: ScopeChoice?, enabled: Bool, action: Selector) in
             let entry = NSMenuItem(title: title, action: enabled ? action : nil, keyEquivalent: "")
+            entry.image = choice.map { choice -> String in
+                switch choice { case .new, .newAndChanged: return "new"; case .all: return "all"; case .chosen, .again: return "chosen"; case .auto: return "" }
+            }.flatMap { $0.isEmpty ? nil : scopeGlyph($0) }
             entry.target = self
             entry.isEnabled = enabled
             entry.representedObject = choice.map { ScopeBox($0) }
@@ -424,6 +438,7 @@ final class HandoffBar: NSViewController {
         item("All turns · \(prepared.turnList.count)", .all, true, #selector(pickScope(_:)))
         let chosen: Bool = { if case .chosen = scopeChoice { return true }; return false }()
         let choose = NSMenuItem(title: "Choose turns…", action: #selector(chooseTurns), keyEquivalent: "")
+        choose.image = scopeGlyph("chosen")
         choose.target = self
         choose.state = chosen ? .on : .off
         menu.addItem(choose)
@@ -528,7 +543,7 @@ final class HandoffBar: NSViewController {
         picker.addItem(withTitle: discovering ? "Finding windows…" : targets.isEmpty ? "No open windows" : "Choose a window…")
         picker.item(at: 0)?.isEnabled = false
         for target in targets {
-            picker.addItem(withTitle: "\(target.app) — \(target.window)")
+            picker.addItem(withTitle: target.window.isEmpty ? target.app : "\(target.app) · \(target.window)")
             picker.lastItem?.representedObject = target.id
             picker.lastItem?.image = target.icon.map { icon in
                 let copy = icon.copy() as! NSImage
@@ -536,6 +551,10 @@ final class HandoffBar: NSViewController {
                 return copy
             }
         }
+        picker.menu?.addItem(.separator())
+        picker.addItem(withTitle: "Refresh Window List")
+        picker.lastItem?.representedObject = "refresh"
+        picker.lastItem?.image = glyph("refresh", size: 14)
         if let selected, let index = targets.firstIndex(where: { $0.id == selected }) { picker.selectItem(at: index + 1) }
         else { picker.selectItem(at: 0) }
     }
@@ -582,6 +601,10 @@ final class HandoffBar: NSViewController {
 
     @objc private func choose() {
         guard let id = picker.selectedItem?.representedObject as? String else { return }
+        if id == "refresh" {
+            pickerSignature = "" // Re-render restores the selection the refresh item displaced.
+            return findWindows()
+        }
         let (chosen, problem) = registry.composer(id)
         if let chosen { remember(chosen) }
         if chosen == nil {
@@ -608,6 +631,8 @@ final class HandoffBar: NSViewController {
     }
 
     @objc private func allowAccess() {
+        // macOS shows its prompt in an ordinary window; the floating panel would cover it.
+        view.window?.orderOut(nil)
         _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
         say("Turn on Add to Claude in System Settings → Privacy & Security → Accessibility, then reopen this panel.")
         statusIsAccessHint = true

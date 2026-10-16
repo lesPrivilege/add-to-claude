@@ -50,8 +50,8 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
         let headerIcon = NSImageView(image: glyph("chat", size: 14) ?? NSImage())
         headerIcon.contentTintColor = .secondaryLabelColor
         let header = NSStackView(views: [headerIcon, label("Choose turns to add", size: 12, weight: .semibold), NSView(),
-                                         ClosureButton(title: "All") { [weak self] in self?.setAll(true) },
-                                         ClosureButton(title: "None") { [weak self] in self?.setAll(false) }])
+                                         ClosureButton.icon("select-all", "Select all turns") { [weak self] in self?.setAll(true) },
+                                         ClosureButton.icon("select-none", "Select no turns") { [weak self] in self?.setAll(false) }])
         header.spacing = 6
         for button in header.arrangedSubviews.compactMap({ $0 as? NSButton }) { button.controlSize = .small }
         let doneButton = ClosureButton(title: "Done") { [weak self] in self?.done() }
