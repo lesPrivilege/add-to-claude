@@ -789,16 +789,21 @@ final class HandoffBar: NSViewController {
     /// Prepares the text for these turns, downloads their files, appends to the draft, and records each
     /// step: prepared → insertion_attempted → composer_inserted, failed or unknown.
     private func run(_ scope: ResolvedScope) {
-        guard !busy, let chosen = composer, let frozen = prepared, !scope.turns.isEmpty else { return }
-        // Web editors (Claude's among them) rebuild their message box; take the window's current one,
-        // checked exactly as choosing the window again would check it.
-        let (field, problem) = inspectComposer(chosen.choice)
-        guard let field else {
-            say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error", result: true)
-            return render()
+        guard !busy, var current = composer, let frozen = prepared, !scope.turns.isEmpty else { return }
+        // Web editors (Claude's among them) rebuild their message box. Only when the chosen one is gone,
+        // take the window's current one, checked exactly as choosing the window again would check it;
+        // a box that still exists is never swapped for another, such as an open edit field.
+        var role: CFTypeRef?
+        if AXUIElementCopyAttributeValue(current.editor, kAXRoleAttribute as CFString, &role) == .invalidUIElement {
+            let (field, problem) = inspectComposer(current.choice)
+            guard let field else {
+                say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error", result: true)
+                return render()
+            }
+            current = Composer(choice: current.choice, editor: field)
+            composer = current
         }
-        let selected = Composer(choice: chosen.choice, editor: field)
-        composer = selected
+        let selected = current
         // The target is read again right before writing: a window that now shows another conversation is
         // not the one the scope was worked out for.
         let identity = identify(selected)

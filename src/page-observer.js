@@ -119,13 +119,15 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
   // Up to four links at a time, so a conversation with many files answers well within the wait.
   const resolveFiles = async (files) => {
     const conversationId = surface()?.id;
+    // The page the links were asked for, even if the user has moved on when they arrive.
+    const pageUrl = location.origin + location.pathname;
     const queue = Array.isArray(files) ? files.slice(0, 200) : [];
     const worker = async () => {
-      while (queue.length) await resolveOne(queue.shift(), conversationId);
+      while (queue.length) await resolveOne(queue.shift(), conversationId, pageUrl);
     };
     await Promise.all([worker(), worker(), worker(), worker()]);
   };
-  const resolveOne = async (file, conversationId) => {
+  const resolveOne = async (file, conversationId, pageUrl) => {
     let path = null;
     try {
       path = typeof file?.id === 'string' ? linkRequest(file, conversationId) : null;
@@ -145,7 +147,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
         if (url?.protocol === 'https:') {
           post({
             kind: 'file',
-            pageUrl: location.origin + location.pathname,
+            pageUrl,
             id: file.id,
             messageId: file.messageId,
             url: url.href,
@@ -159,7 +161,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     else if (path) status = 'no-session';
     post({
       kind: 'file-missing',
-      pageUrl: location.origin + location.pathname,
+      pageUrl,
       id: String(file?.id),
       messageId: String(file?.messageId ?? ''),
       status,
@@ -313,6 +315,8 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       active.socketReply = null;
       snapshot = null;
       cached = active.base;
+      // The replay already published for this conversation failed; returning must not publish it again.
+      if (active.boundId) recent.delete(active.boundId);
       unavailable(active.version);
     }
   };
@@ -576,6 +580,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     } catch {
       /* Observing must never prevent the website's request. */
     }
+    const fileLinkPage = location.origin + location.pathname;
     const promise = Reflect.apply(originalFetch, this, args);
     if (fileLink)
       void promise
@@ -585,7 +590,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
           if (url.protocol === 'https:')
             post({
               kind: 'file',
-              pageUrl: location.origin + location.pathname,
+              pageUrl: fileLinkPage,
               id: fileLink,
               url: url.href,
               name: typeof value.file_name === 'string' ? value.file_name : '',

@@ -253,10 +253,14 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             // change before reading it back, for up to two seconds.
             confirmWrite(current, old: old, expected: expected, attempts: 20, rich: beforeFinalBreak) { message, success in
                 guard success == .failed, message == ignoredMessage, operationValid() else { return completion(message, success) }
-                rememberIgnoresInsertion(selected.choice.app)
-                // Some web editors (Claude's ProseMirror prompt) take no AX text writes at all.
+                // Some web editors (Claude's ProseMirror prompt) take no AX text writes at all. Remember the
+                // app only once a paste has reached it: a field that took nothing at all (read-only for a
+                // moment, say) says nothing about the app.
                 fallBack(selected, field: current, old: old, blank: blank, text: text, suffix: suffix,
-                         operationValid: operationValid, completion: completion)
+                         operationValid: operationValid) { message, outcome in
+                    if outcome != .failed { rememberIgnoresInsertion(selected.choice.app) }
+                    completion(message, outcome)
+                }
             }
         }
     }
@@ -291,9 +295,14 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
         return normalizedReadback(written) == normalizedReadback(blank ? text : old + suffix)
     }
     func paste() {
-        // The last check before a keystroke: the source, the target conversation and the draft are unchanged.
+        // The last check before a keystroke: the source, the target conversation, the draft and the caret
+        // at its end (or just before a rich editor's final paragraph mark) are unchanged.
+        let units = Array(old.utf16)
+        let caretAtEnd = blank || selectedRange(field).map {
+            $0.length == 0 && ($0.location == units.count || (units.last == 10 && $0.location == units.count - 1))
+        } == true
         guard operationValid(), focusedComposer(selected.choice).map({ CFEqual($0, field) }) == true,
-              sameTextUnits(axString(field, kAXValueAttribute), old) else {
+              sameTextUnits(axString(field, kAXValueAttribute), old), caretAtEnd else {
             return completion("The target or its draft changed. Nothing was added; choose the composer again.", .failed)
         }
         let board = NSPasteboard.general

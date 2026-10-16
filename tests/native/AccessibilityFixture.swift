@@ -33,6 +33,7 @@ final class FixtureTextView: NSTextView {
 final class AccessibilityFixture: NSObject, NSApplicationDelegate {
     var windows: [String: NSWindow] = [:]
     var editors: [String: FixtureTextView] = [:]
+    var focused = "A"
     func editor(_ key: String) {
         let view = FixtureTextView(frame: NSRect(x: 0, y: 0, width: 460, height: 240))
         view.isRichText = false
@@ -44,6 +45,14 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
         windows[key]?.contentView = container
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Like Claude's window, take ⌘V while in the background: an inactive AppKit app has no key window,
+        // so the menu's Paste would go nowhere. The paste goes to the last focused message box.
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, !NSApp.isActive, event.modifierFlags.contains(.command),
+                  event.charactersIgnoringModifiers == "v", let view = self.editors[self.focused] else { return event }
+            view.paste(nil)
+            return nil
+        }
         for (index, key) in ["A", "B"].enumerated() {
             let window = NSWindow(contentRect: NSRect(x: 100 + index * 490, y: 180, width: 460, height: 240),
                                   styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -107,6 +116,7 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
         default: break
         }
         if packet["focus"] as? Bool == true, let view = editors[key] {
+            focused = key
             window.makeKeyAndOrderFront(nil)
             window.makeFirstResponder(view)
             NSApp.activate()

@@ -8,6 +8,8 @@ import ApplicationServices
     var checks = 0
     var finished = false
     var fixture: NSRunningApplication!
+    /// The user's clipboard as it was before the run; paste checks borrow it and it is put back on exit.
+    var clipboard: [[(NSPasteboard.PasteboardType, Data)]] = []
 
     func end(_ code: Int32, _ message: String) {
         guard !finished else { return }
@@ -31,6 +33,14 @@ import ApplicationServices
             }
         }
         try? output?.close()
+        UserDefaults.standard.removeObject(forKey: ignoringKey)
+        let board = NSPasteboard.general
+        board.clearContents()
+        board.writeObjects(clipboard.map { pairs in
+            let item = NSPasteboardItem()
+            for (type, data) in pairs { item.setData(data, forType: type) }
+            return item
+        })
         print(message); fflush(stdout)
         exit(finalCode)
     }
@@ -60,6 +70,8 @@ import ApplicationServices
         }
     }
     func select() async -> Composer {
+        // Each case starts with nothing remembered about the synthetic app.
+        UserDefaults.standard.removeObject(forKey: ignoringKey)
         _ = await command("reset", focus: true)
         // Under cooperative activation only a LaunchServices open can bring a yielded app back to front.
         let configuration = NSWorkspace.OpenConfiguration()
@@ -128,10 +140,13 @@ import ApplicationServices
     }
 
     @MainActor func run() async {
+        clipboard = NSPasteboard.general.pasteboardItems?.map { item in
+            item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
+        } ?? []
         var selected = await select()
         var result = await append(selected)
         var drafts = await command("snapshot")
-        check(result.1, "real AX insertion and exact readback")
+        check(result.1, "real AX insertion and exact readback (\(result.0))")
         check(NSWorkspace.shared.frontmostApplication?.processIdentifier != fixture.processIdentifier, "append never activates the target app")
         check(exact(drafts["A"], "Synthetic draft A.\n\nOriginal **Markdown** 中文 ✓\n"), "fixture independently confirms preserved draft and exact Unicode Markdown")
         check(drafts["B"] == "Synthetic draft B.", "same-title other window unchanged")
@@ -171,13 +186,12 @@ import ApplicationServices
         _ = await command("select-start", focus: true)
         let bundle = fixture.bundleIdentifier ?? ""
         UserDefaults.standard.set([bundle], forKey: ignoringKey)
-        let clipboard = NSPasteboard.general.string(forType: .string)
+        let before = NSPasteboard.general.string(forType: .string)
         result = await append(selected)
-        UserDefaults.standard.removeObject(forKey: ignoringKey)
         drafts = await command("snapshot")
         check(drafts["A"]?.hasPrefix("Synthetic draft A.\n\nOriginal **Markdown**") == true,
-              "a remembered paste-only app gets the text at the end, the selection kept")
-        check(NSPasteboard.general.string(forType: .string) == clipboard, "the clipboard is restored after pasting")
+              "a remembered paste-only app gets the text at the end, the selection kept (\(result.0))")
+        check(NSPasteboard.general.string(forType: .string) == before, "the clipboard is put back after pasting")
 
         selected = await select()
         result = await append(selected, text: String(repeating: "x", count: maximumTextBytes + 1))
@@ -205,6 +219,8 @@ import ApplicationServices
         result = await append(selected)
         drafts = await command("snapshot")
         check(!result.1 && drafts["A"] == "Synthetic draft A.", "read-only editor rejects mutation")
+        check(UserDefaults.standard.stringArray(forKey: ignoringKey)?.contains(fixture.bundleIdentifier ?? "") != true,
+              "a field that took nothing does not mark its app as paste-only")
 
         selected = await select()
         result = await append(selected, source: false)
