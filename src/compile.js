@@ -32,6 +32,6 @@ export function compile(packet) {
       })(),
     })),
     verification: model.verification.status,
-    issues: model.verification.issues.slice(0, 5).map((issue) => issue.message),
+    issues: [...new Set(model.verification.issues.map((issue) => issue.message))].slice(0, 5),
   };
 }

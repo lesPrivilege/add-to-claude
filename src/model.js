@@ -221,13 +221,12 @@ export function validateConversation(data) {
     }
     if (turn.sourceMessageId !== undefined)
       output.sourceMessageId = id(turn.sourceMessageId, 'Rendered source message ID');
-    if (turn.originalParts !== undefined) {
+    // The source's raw text parts, as stored. `markdown` is their readable form: the same text
+    // with ChatGPT's rendering markup (citation markers, layout tags) resolved.
+    if (turn.originalParts !== undefined)
       output.originalParts = array(turn.originalParts, 'Original text parts', 10000).map((part) =>
         string(part, 'Original text part', LIMITS.maxTextBytes, { empty: true }),
       );
-      if (output.originalParts.join('\n\n') !== markdown)
-        throw new TypeError('Original text parts must reproduce the turn Markdown.');
-    }
     if (turn.code !== undefined) {
       record(turn.code, 'Structured code');
       const language = count(string(turn.code.language, 'Code language', 128, { empty: true }));
@@ -583,7 +582,8 @@ export function projectMarkdown(input) {
     );
   if (model.verification.issues.length) {
     lines.push('', '## Content checks', '');
-    for (const issue of model.verification.issues) lines.push(projectIssueLine(issue));
+    // Each distinct check once: the same finding on many turns or sources is one thing to review.
+    lines.push(...new Set(model.verification.issues.map(projectIssueLine)));
   }
   const files = new Map(model.turns.map((turn) => [turn.id, []]));
   const loose = [];

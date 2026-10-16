@@ -230,3 +230,232 @@ test('reasoning and memory entries are hidden, not reported as unsupported turns
   );
   assert.equal(model.verification.status, 'verified');
 });
+
+// A live-style paged load: the selected branch as a list of messages.
+function paged(answers) {
+  const messages = [];
+  answers.forEach((answer, index) => {
+    messages.push({
+      id: `u${index}`,
+      author: { role: 'user' },
+      status: 'finished_successfully',
+      content: { content_type: 'text', parts: [`Question ${index + 1}`] },
+    });
+    messages.push({
+      id: `a${index}`,
+      author: { role: 'assistant' },
+      status: 'finished_successfully',
+      end_turn: true,
+      content: { content_type: 'text', parts: [answer.text] },
+      metadata: answer.metadata ?? {},
+    });
+  });
+  return importBrowserResponse(
+    JSON.stringify({
+      conversation_id: 'searched',
+      title: 'Searched',
+      current_node: messages.at(-1).id,
+      page_info: { has_previous_page: false },
+      messages,
+    }),
+    {
+      pageUrl: 'https://chatgpt.com/c/searched',
+      responseUrl: 'https://chatgpt.com/backend-api/conversations/searched?num_turns=40',
+      capturedAt: '2026-10-16T09:00:00.000Z',
+    },
+  );
+}
+const ref = (turn_index, ref_index, ref_type = 'search') => ({ turn_index, ref_type, ref_index });
+const cite = (...ids) => `cite${ids.join('')}`;
+
+test('an ordinary web-search answer reads cleanly, lists its sources and is verified', () => {
+  const urlMarker = 'urlCC Switchturn5search11';
+  const entity = 'entity["software","CC Switch","a provider switcher"]';
+  const text = `${entity} switches providers. ${cite('turn5search0', 'turn5search2')}\n\nSee ${urlMarker} for setup. ${cite('turn5search3')}`;
+  const webpage = (title, url, refs) => ({
+    title,
+    url,
+    pub_date: 1760000000.0,
+    snippet: 'Synthetic snippet.',
+    attribution_segments: null,
+    supporting_websites: [],
+    refs,
+    hue: null,
+    attributions: null,
+    attribution: new URL(url).hostname,
+  });
+  const at = (marker) => ({
+    start_idx: text.indexOf(marker),
+    end_idx: text.indexOf(marker) + marker.length,
+  });
+  const model = paged([
+    {
+      text,
+      metadata: {
+        content_references: [
+          {
+            matched_text: entity,
+            ...at(entity),
+            refs: [],
+            alt: 'CC Switch',
+            prompt_text: '',
+            type: 'entity',
+            name: 'CC Switch',
+            category: 'software',
+            extra_params: { disambiguation: 'a provider switcher' },
+          },
+          {
+            matched_text: cite('turn5search0', 'turn5search2'),
+            ...at(cite('turn5search0', 'turn5search2')),
+            safe_urls: ['https://example.com/a', 'https://example.org/b'],
+            refs: [ref(5, 0), ref(5, 2)],
+            alt: '([Example](https://example.com/a))',
+            prompt_text: null,
+            type: 'grouped_webpages',
+            items: [
+              {
+                ...webpage('Example A', 'https://example.com/a', [ref(5, 0)]),
+                supporting_websites: [webpage('Example B', 'https://example.org/b', [ref(5, 2)])],
+              },
+            ],
+            fallback_items: null,
+            status: 'done',
+            error: null,
+            style: null,
+          },
+          {
+            matched_text: urlMarker,
+            ...at(urlMarker),
+            type: 'webpage_extended',
+            ...webpage('CC Switch docs', 'https://example.net/docs', [ref(5, 11)]),
+            alt: '[CC Switch](https://example.net/docs)',
+            prompt_text: null,
+          },
+          {
+            matched_text: cite('turn5search3'),
+            ...at(cite('turn5search3')),
+            type: 'hidden',
+            refs: [ref(5, 3)],
+            alt: '',
+            prompt_text: null,
+          },
+          {
+            matched_text: ' ',
+            start_idx: text.length,
+            end_idx: text.length,
+            refs: [],
+            alt: '',
+            prompt_text: '',
+            type: 'sources_footnote',
+            sources: [
+              { title: 'Example A', url: 'https://example.com/a', attribution: 'example.com' },
+            ],
+            has_images: false,
+          },
+        ],
+        search_result_groups: [
+          {
+            type: 'search_result_group',
+            domain: 'example.com',
+            entries: [
+              {
+                type: 'search_result',
+                url: 'https://example.com/setup',
+                title: 'Setup notes',
+                snippet: 'Synthetic.',
+                ref_id: ref(5, 3),
+                pub_date: null,
+                attribution: 'example.com',
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ]);
+  const answer = model.turns[1];
+  assert.equal(answer.markdown, 'CC Switch switches providers.\n\nSee CC Switch for setup.');
+  assert.deepEqual(answer.originalParts, [text]);
+  assert.deepEqual(
+    answer.citations.map((item) => [item.title, item.url]),
+    [
+      ['Example A', 'https://example.com/a'],
+      ['Example B', 'https://example.org/b'],
+      ['CC Switch docs', 'https://example.net/docs'],
+      ['Setup notes', 'https://example.com/setup'],
+    ],
+  );
+  assert.deepEqual(model.verification.issues, []);
+  assert.equal(model.verification.status, 'verified');
+  const text_ = projectMarkdown(model);
+  assert.ok(!/[-]/u.test(text_));
+  assert.ok(text_.includes('- [Setup notes](<https://example.com/setup>)'));
+});
+
+test('a laid-out answer unwraps its tags and resolves Cite refs through the search results', () => {
+  const model = paged([
+    {
+      text: [
+        '<box gap={3}>',
+        '  <row align="start" gap={3}>',
+        '    <box flex="1" gap={1}>',
+        '      **1. <Entity category="software" value="Field Notes" disambig="a writing app"/>**',
+        '      <text size="sm"><Link url="https://example.com/notes" title="Site"/> <Cite ref="turn407140search0"/></text>',
+        '    </box>',
+        '  </row>',
+        '  <divider color="subtle"/>',
+        '</box>',
+      ].join('\n'),
+      metadata: {
+        search_result_groups: [
+          {
+            type: 'search_result_group',
+            domain: 'example.com',
+            entries: [
+              {
+                type: 'search_result',
+                url: 'https://example.com/review',
+                title: 'A review',
+                ref_id: ref(407140, 0),
+              },
+              {
+                type: 'search_result',
+                url: 'https://example.com/uncited',
+                title: 'Not cited',
+                ref_id: ref(407140, 1),
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ]);
+  const answer = model.turns[1];
+  assert.equal(answer.markdown, '**1. Field Notes**\n[Site](https://example.com/notes)');
+  assert.deepEqual(
+    answer.citations.map((item) => item.url),
+    ['https://example.com/review'],
+  );
+  assert.equal(model.verification.status, 'verified');
+});
+
+test('unresolvable citations, left-out images and unknown sources are each reported once', () => {
+  const unknown = { type: 'product_carousel', products: [{ url: 'https://example.com/p' }] };
+  const answers = Array.from({ length: 3 }, (_, index) => ({
+    text: `Answer ${index}. ${cite(`turn${index}search9`)}\nimage_group{"layout":"carousel"}`,
+    metadata: { content_references: [unknown, unknown] },
+  }));
+  const model = paged(answers);
+  assert.equal(model.verification.status, 'partial');
+  assert.equal(model.turns[1].markdown, 'Answer 0.');
+  assert.equal(model.turns[1].contentFidelity, 'partial');
+  const codes = model.verification.issues.map((issue) => issue.code);
+  assert.equal(codes.filter((code) => code === 'unresolved-citations').length, 3);
+  assert.equal(codes.filter((code) => code === 'omitted-inline-content').length, 3);
+  assert.equal(codes.filter((code) => code === 'unrecognized-citation').length, 6);
+  const checks = projectMarkdown(model).split('## Turn 1')[0];
+  const lines = checks.split('\n').filter((line) => line.startsWith('- '));
+  assert.equal(lines.length, 3);
+  assert.equal(new Set(lines).size, 3);
+  assert.ok(lines.some((line) => line.includes('unfamiliar structure')));
+});
