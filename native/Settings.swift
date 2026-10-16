@@ -271,8 +271,8 @@ private struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480)
-        .fixedSize(horizontal: false, vertical: true)
+        // Shorter than the panel (760) it opens over; the grouped form scrolls, as System Settings does.
+        .frame(width: 480, height: 560)
         .onChange(of: shortcut) { taken = shortcut != .none && shortcutTaken() }
         .onReceive(tick) { _ in
             trusted = AXIsProcessTrusted()
