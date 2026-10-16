@@ -179,12 +179,16 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     post({ kind: 'changed', pageUrl: location.href });
   };
   // The website keeps conversations it has shown in memory and does not load them again when the
-  // user goes back to one. Keep the last few this document published, so returning to one
-  // publishes it again. Memory only, capped by count and size, gone with the page.
+  // user goes back to one. Keep the last few this document published, with the base a later reply
+  // merges onto, so returning to one publishes it again and its next reply keeps the history.
+  // Memory only, capped by count and size, gone with the page.
   const recent = new Map();
   const remember = (value, bytes) => {
+    const id = cached?.conversation?.conversation_id ?? cached?.conversation?.id;
+    const base = id === value.id ? cached : null;
     recent.delete(value.id);
-    recent.set(value.id, { value, bytes });
+    // The base is about the size of the published body.
+    recent.set(value.id, { value, base, bytes: base ? 2 * bytes : bytes });
     let total = 0;
     for (const entry of recent.values()) total += entry.bytes;
     for (const [id, entry] of recent) {
@@ -702,7 +706,10 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     invalidate();
     // Back to a conversation the website shows from memory: publish what it last loaded.
     const seen = selected?.id && recent.get(selected.id);
-    if (seen) publish(seen.value);
+    if (seen) {
+      cached = seen.base;
+      publish(seen.value);
+    }
   };
   for (const name of ['pushState', 'replaceState']) {
     const original = history[name];

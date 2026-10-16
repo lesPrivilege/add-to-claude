@@ -72,6 +72,19 @@ struct FileLink {
     let url: URL
     let name: String
     let seen: Date
+    /// The conversation page the link was fetched on: a link is only ever used for that conversation.
+    var page: String = ""
+}
+
+/// The link for a file among those the page fetched: by file id and message, then by file id, then by
+/// name when the name is unique in the conversation. Only fresh links fetched on this conversation's
+/// page count, since sandbox paths and names repeat across conversations.
+func chooseLink(_ links: [String: FileLink], for file: Attachment, on page: String, nameIsUnique: Bool,
+                now: Date = Date()) -> FileLink? {
+    let fresh = links.filter { $0.value.page == page && now.timeIntervalSince($0.value.seen) < 240 }
+    if let link = fresh[file.id + "|" + file.messageId] ?? fresh[file.id + "|"] { return link }
+    guard nameIsUnique else { return nil }
+    return fresh.values.filter { $0.name == file.name }.max { $0.seen < $1.seen }
 }
 
 /// Downloads files one at a time through the chat's own WebKit session (no credentials are read or

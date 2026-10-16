@@ -50,7 +50,19 @@ import Foundation
         acceptanceMatrix()
         identities()
         persistence()
+        readback()
         print("PASS: \(checks) delivery-log and scope checks")
+    }
+
+    /// How a pasted draft is compared with what was meant: layout may differ, indentation may not.
+    static func readback() {
+        let code = "Intro\n\n```python\ndef f():\n    return 1\n```"
+        check(normalizedReadback("Intro\n```python\ndef f():\n    return 1\n```\n") == normalizedReadback(code),
+              "collapsed blank lines and a trailing newline still read back as the same text")
+        check(normalizedReadback("Intro  \n\n```python\ndef f():\n    return 1\n```") == normalizedReadback(code),
+              "trailing spaces still read back as the same text")
+        check(normalizedReadback("Intro\n\n```python\ndef f():\nreturn 1\n```") != normalizedReadback(code),
+              "code that lost its indentation does not read back as added")
     }
 
     static func stateMachine() {

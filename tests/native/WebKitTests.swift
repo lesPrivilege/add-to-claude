@@ -72,6 +72,27 @@ import WebKit
               && !both.contains("\n\n\n"), "both linked: each its own copy, the check gone, verified")
     }
 
+    static func fileLinkChoice() {
+        let report = Attachment(key: "1:b", id: "sandbox:/mnt/data/report.md", name: "report.md", label: "report.md", turn: 2,
+                                messageId: "b1", line: 9, check: -1)
+        let now = Date()
+        let a = "https://chatgpt.com/c/a", b = "https://chatgpt.com/c/b"
+        let fromA = FileLink(url: URL(string: "https://chatgpt.com/a.md")!, name: "report.md", seen: now, page: a)
+        check(chooseLink(["file-a|": fromA], for: report, on: b, nameIsUnique: true, now: now) == nil,
+              "a same-name link fetched in another conversation is never used")
+        check(chooseLink(["sandbox:/mnt/data/report.md|a1": fromA], for: report, on: b, nameIsUnique: true, now: now) == nil,
+              "a sandbox path repeated in another conversation is never used")
+        let fromB = FileLink(url: URL(string: "https://chatgpt.com/b.md")!, name: "report.md", seen: now, page: b)
+        check(chooseLink(["file-a|": fromA, "file-b|": fromB], for: report, on: b, nameIsUnique: true, now: now)?.url == fromB.url,
+              "the same-name link from this conversation is used")
+        check(chooseLink(["file-b|": fromB], for: report, on: b, nameIsUnique: false, now: now) == nil,
+              "a name shared by two files in this conversation is not enough")
+        check(chooseLink(["sandbox:/mnt/data/report.md|b1": fromB], for: report, on: b, nameIsUnique: false, now: now)?.url == fromB.url,
+              "an exact file and message match is used")
+        check(chooseLink(["sandbox:/mnt/data/report.md|b1": fromB], for: report, on: b, nameIsUnique: true,
+                         now: now.addingTimeInterval(300)) == nil, "a stale link is not used")
+    }
+
     static func main() {
         _ = NSApplication.shared
         // The real observer and bridge, with the page's fetch stubbed in front of the observer so it
@@ -153,6 +174,7 @@ import WebKit
         check(chat.prepared == nil, "a response for a conversation no longer shown is not prepared")
 
         linkedFiles()
+        fileLinkChoice()
         diagnostics()
         print("PASS: \(checks) WebKit checks in a real WKWebView")
         exit(0)

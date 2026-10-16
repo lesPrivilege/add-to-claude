@@ -42,13 +42,15 @@ What carried over unchanged from the menu-bar app: the page observer, the compil
 
 ## What would reopen it
 
-Any one of these, offered by DeepSeek Harness as a stable plugin interface:
+**Worth a fresh look** when DeepSeek Harness documents any plugin interface for web content, windows or isolated scripts: a release note, a typed API, or a reference plugin that uses one.
+
+**Enough to build it** takes all three of these as a stable plugin interface:
 
 1. A plugin-owned `<webview>` or `WebContentsView` with a **persistent partition** the plugin names, **popups** allowed for sign-in, and **downloads** delegated to the plugin.
 2. A **content script in an isolated world** for that view (a preload, or `executeJavaScriptInIsolatedWorld`), so the observer and bridge keep their trust boundary.
-3. Or a **child window** API: a frameless window owned by the harness and parented to its main window, positioned against a slot's rectangle.
+3. A **slot to put it in**, such as a right-sidebar tab, that the view can fill and follow.
 
-With 1 and 2, the plugin becomes a right-sidebar tab holding ChatGPT itself, which is the form the owner asked for.
+Alternatively, a **child window** API (a frameless window owned by the harness, parented to its main window and positioned against a slot's rectangle) would do on its own, since the plugin's helper already provides 1 and 2.
 
 ## Restoring the code
 

@@ -207,8 +207,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             guard let id = body["id"] as? String, let text = body["url"] as? String, let url = URL(string: text),
                   url.scheme == "https", let host = url.host,
                   chatHosts.contains(host) || host.hasSuffix(".oaiusercontent.com") else { return }
+            guard let page = pageKey(URL(string: body["page"] as? String ?? "")) else { return }
             let key = id + "|" + (body["messageId"] as? String ?? "")
-            fileLinks[key] = FileLink(url: url, name: body["name"] as? String ?? "", seen: Date())
+            fileLinks[key] = FileLink(url: url, name: body["name"] as? String ?? "", seen: Date(), page: page)
             settle(key)
         case "file-missing":
             settle((body["id"] as? String ?? "") + "|" + (body["messageId"] as? String ?? ""))
@@ -262,13 +263,13 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     }
 
     /// The page's link for a file: the one fetched for this file in this message, or the page's own
-    /// fetch by its file id, or by name when only one file in the conversation has that name.
+    /// fetch by its file id, or by name when only one file in the conversation has that name. Only links
+    /// fetched on this conversation's page count: sandbox paths and names repeat across conversations.
     /// Links last minutes.
     private func link(for file: Attachment) -> FileLink? {
-        let fresh = fileLinks.filter { Date().timeIntervalSince($0.value.seen) < 240 }
-        if let link = fresh[file.id + "|" + file.messageId] ?? fresh[file.id + "|"] { return link }
-        guard prepared?.attachments.filter({ $0.name == file.name }).count == 1 else { return nil }
-        return fresh.values.filter { $0.name == file.name }.max { $0.seen < $1.seen }
+        guard let prepared else { return nil }
+        return chooseLink(fileLinks, for: file, on: prepared.page,
+                          nameIsUnique: prepared.attachments.filter { $0.name == file.name }.count == 1)
     }
 
     private func fileRows() -> [FileRow] {

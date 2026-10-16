@@ -576,6 +576,33 @@ test('returning to a conversation the website shows from memory publishes it aga
   assert.equal(h.messages.at(-1).kind, 'response', 'the replay follows the change notice');
 });
 
+test('a reply sent after returning to a conversation keeps its history', async () => {
+  const h = harness();
+  const loading = h.request('a');
+  h.reply(0, JSON.stringify(sourceRecord()));
+  await loading;
+  await tick();
+  h.navigate('/c/b');
+  h.navigate('/c/a');
+  const sending = h.post({
+    action: 'next',
+    conversation_id: 'a',
+    parent_message_id: 'a0',
+    messages: [originalMessage('u1', 'user', 'New exact question.')],
+  });
+  h.reply(1, streamWire('a'), 'text/event-stream');
+  await sending;
+  await tick();
+  const packet = h.messages.filter((item) => item.kind === 'response').at(-1);
+  assert.equal(packet.method, 'POST');
+  const model = importBrowserResponse(packet.body, packet);
+  assert.deepEqual(
+    model.turns.map((turn) => turn.id),
+    ['u0', 'a0', 'u1', 'a1'],
+  );
+  assert.equal(model.verification.status, 'verified');
+});
+
 test('sending a message tells the app a reply is in progress, before any answer arrives', () => {
   const h = harness();
   void h.post({ action: 'next', messages: [] });

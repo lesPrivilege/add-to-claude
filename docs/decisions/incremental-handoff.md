@@ -36,7 +36,7 @@ Work order: [WO-01](../workorders/WO-01-incremental-handoff.md). Decided by the 
 - **States:** `prepared` → `insertion_attempted` → `composer_inserted` | `failed` | `unknown`. Only `composer_inserted` advances the cursor.
 - **Inserted** means the text was read back from the draft.
   - When the draft changed but cannot be confirmed (for example, Claude's editor reformats pasted Markdown), the state is `unknown`. The bar says "Could not confirm" and asks: **It's There** moves it to `composer_inserted` (marked `confirmed_by_user`); **It's Not** moves it to `failed`. Nothing else moves an unknown receipt.
-  - A receipt a previous run left in `prepared` or `insertion_attempted` becomes `unknown` at launch.
+  - Receipts in `prepared` or `insertion_attempted` are not written to disk. An Add cut off by a quit or crash therefore leaves no receipt, and its turns count as not added, exactly as an `unknown` one would: the next Add offers them again. A receipt found in either state at launch (a file from an older build) becomes `unknown`.
 - **Where it is kept:** in memory, plus `~/Library/Application Support/add-to-claude/delivery-log.json` (folder 0700, file 0600, from FileManager's application-support URL). Only finished receipts for **verified** targets are written.
 - **What a record holds:** handoff id, source provider and conversation id, target app bundle id, target conversation id and confidence, mode, message ids with positions and hashes, file keys, state, times. **Never message text.**
 - **Retention:** Settings → History.

@@ -164,6 +164,21 @@ import ApplicationServices
         check(exact(drafts["A"], "Synthetic draft A.\n\né"), "fixture normalizes inserted text")
         check(!result.1 && result.0.contains("Check the draft"), "normalization cannot receive an exact insertion receipt")
 
+        // An app remembered as ignoring AX writes is pasted into, still at the end: a selection at the
+        // start of the draft is neither replaced nor pasted over.
+        selected = await select()
+        _ = await command("ignore-insertion")
+        _ = await command("select-start", focus: true)
+        let bundle = fixture.bundleIdentifier ?? ""
+        UserDefaults.standard.set([bundle], forKey: ignoringKey)
+        let clipboard = NSPasteboard.general.string(forType: .string)
+        result = await append(selected)
+        UserDefaults.standard.removeObject(forKey: ignoringKey)
+        drafts = await command("snapshot")
+        check(drafts["A"]?.hasPrefix("Synthetic draft A.\n\nOriginal **Markdown**") == true,
+              "a remembered paste-only app gets the text at the end, the selection kept")
+        check(NSPasteboard.general.string(forType: .string) == clipboard, "the clipboard is restored after pasting")
+
         selected = await select()
         result = await append(selected, text: String(repeating: "x", count: maximumTextBytes + 1))
         drafts = await command("snapshot")

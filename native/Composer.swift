@@ -222,9 +222,6 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             // A blank draft is replaced as a selection; otherwise the caret goes to the end.
             var end = CFRange(location: blank ? 0 : old.utf16.count, length: blank ? old.utf16.count : 0)
             guard operationValid() else { completion("The handoff expired or changed. Nothing was added.", .failed); return }
-            if ignoresInsertion(selected.choice.app) {
-                return fallBack(selected, field: current, old: old, blank: blank, text: text, suffix: suffix, completion: completion)
-            }
             let setRange = AXValueCreate(.cfRange, &end).map {
                 AXUIElementSetAttributeValue(current, kAXSelectedTextRangeAttribute as CFString, $0)
             }
@@ -243,6 +240,11 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             let head = String(utf16CodeUnits: Array(units[..<range.location]), count: range.location)
             let tail = String(utf16CodeUnits: Array(units[(range.location + range.length)...]), count: units.count - range.location - range.length)
             let expected = beforeFinalBreak ? (blank ? text : head + suffix) + tail : combined
+            // An app known to ignore AX writes is pasted into, but only once the caret is at the end, as above.
+            if ignoresInsertion(selected.choice.app) {
+                return fallBack(selected, field: current, old: old, blank: blank, text: text, suffix: suffix,
+                                operationValid: operationValid, completion: completion)
+            }
             let result = AXUIElementSetAttributeValue(current, kAXSelectedTextAttribute as CFString, suffix as CFString)
             guard result == .success else {
                 completion("The app refused the text. Nothing was added.", .failed); return
@@ -253,7 +255,8 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
                 guard success == .failed, message == ignoredMessage, operationValid() else { return completion(message, success) }
                 rememberIgnoresInsertion(selected.choice.app)
                 // Some web editors (Claude's ProseMirror prompt) take no AX text writes at all.
-                fallBack(selected, field: current, old: old, blank: blank, text: text, suffix: suffix, completion: completion)
+                fallBack(selected, field: current, old: old, blank: blank, text: text, suffix: suffix,
+                         operationValid: operationValid, completion: completion)
             }
         }
     }
@@ -271,25 +274,33 @@ private func rememberIgnoresInsertion(_ app: NSRunningApplication) {
     UserDefaults.standard.set((UserDefaults.standard.stringArray(forKey: ignoringKey) ?? []) + [id], forKey: ignoringKey)
 }
 
-/// Line breaks and blank lines as a rich editor keeps them: runs of newlines become one, ends trimmed.
-private func normalized(_ text: String) -> String {
-    text.replacingOccurrences(of: #"\n[\n\s]*"#, with: "\n", options: .regularExpression)
+/// Line breaks as a rich editor keeps them: trailing spaces dropped, blank lines collapsed, ends trimmed.
+/// Leading indentation counts, so code that lost its indentation does not read back as added.
+func normalizedReadback(_ text: String) -> String {
+    text.replacingOccurrences(of: #"[ \t]+\n"#, with: "\n", options: .regularExpression)
+        .replacingOccurrences(of: #"\n{2,}"#, with: "\n", options: .regularExpression)
         .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 /// After an ignored AX write: set the whole value of an empty box, then paste with ⌘V sent to that app
 /// alone. The app is never activated and nothing is sent. Unconfirmed, the text stays on the clipboard.
 private func fallBack(_ selected: Composer, field: AXUIElement, old: String, blank: Bool, text: String, suffix: String,
-                      completion: @escaping (String, AddOutcome) -> Void) {
+                      operationValid: @escaping () -> Bool, completion: @escaping (String, AddOutcome) -> Void) {
     let landed: (String?) -> Bool = { written in
         guard let written, !sameTextUnits(written, old) else { return false }
-        return normalized(written) == normalized(blank ? text : old + suffix)
+        return normalizedReadback(written) == normalizedReadback(blank ? text : old + suffix)
     }
     func paste() {
+        // The last check before a keystroke: the source, the target conversation and the draft are unchanged.
+        guard operationValid(), focusedComposer(selected.choice).map({ CFEqual($0, field) }) == true,
+              sameTextUnits(axString(field, kAXValueAttribute), old) else {
+            return completion("The target or its draft changed. Nothing was added; choose the composer again.", .failed)
+        }
         let board = NSPasteboard.general
         let saved = board.pasteboardItems?.map { item in item.types.compactMap { type in item.data(forType: type).map { (type, $0) } } } ?? []
         board.clearContents()
         board.setString(blank ? text : suffix, forType: .string)
+        let ours = board.changeCount
         let source = CGEventSource(stateID: .hidSystemState)
         for down in [true, false] {
             let event = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: down) // V
@@ -300,12 +311,15 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
             guard let written, !sameTextUnits(written, old) else {
                 return completion("This app takes text only by pasting. The conversation is on the clipboard: click its message box and press ⌘V.", .failed)
             }
-            board.clearContents()
-            board.writeObjects(saved.map { pairs in
-                let item = NSPasteboardItem()
-                for (type, data) in pairs { item.setData(data, forType: type) }
-                return item
-            })
+            // Restore what was there, unless something else was copied in the meantime.
+            if board.changeCount == ours {
+                board.clearContents()
+                board.writeObjects(saved.map { pairs in
+                    let item = NSPasteboardItem()
+                    for (type, data) in pairs { item.setData(data, forType: type) }
+                    return item
+                })
+            }
             // Editors that turn pasted Markdown into formatting (Claude's does) cannot read back exactly,
             // so the draft changed but whether all of it landed is not known.
             if landed(written) { return completion("Added by pasting into the app. Review the draft there; nothing was sent.", .inserted) }
@@ -313,6 +327,7 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
         }
     }
     guard blank, axSettable(field, kAXValueAttribute) else { return paste() }
+    guard operationValid() else { return completion("The handoff expired or changed. Nothing was added.", .failed) }
     // An empty box has no rich content to lose, so replacing its whole value is safe here.
     AXUIElementSetAttributeValue(field, kAXValueAttribute as CFString, text as CFString)
     waitForChange(field, old: old, attempts: 10) { written in

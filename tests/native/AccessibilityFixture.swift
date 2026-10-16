@@ -5,7 +5,10 @@ final class FixtureTextView: NSTextView {
     var selectDuringValueRead = false
     var selectionRaceTriggered = false
     var normalizeInsertedText = false
+    /// Like Claude's prompt: accepts AX text writes without applying them, takes pasted text.
+    var ignoreInsertion = false
     override func setAccessibilitySelectedText(_ text: String?) {
+        if ignoreInsertion { return }
         super.setAccessibilitySelectedText(text)
         if normalizeInsertedText { string = string.precomposedStringWithCanonicalMapping }
     }
@@ -85,6 +88,8 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
         case "draft": current.string = packet["text"] as? String ?? ""
         case "selection-race": current.armSelectionRace = true
         case "normalize-insertion": current.normalizeInsertedText = true
+        case "ignore-insertion": current.ignoreInsertion = true
+        case "select-start": current.setSelectedRange(NSRange(location: 0, length: 9))
         case "rich":
             current.isRichText = true
             current.textStorage?.addAttributes([.link: URL(string: "https://example.invalid/synthetic")!,
@@ -132,6 +137,12 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
         let delegate = AccessibilityFixture()
         app.delegate = delegate
         app.setActivationPolicy(.regular)
+        // An Edit menu, so ⌘V reaches the text view as it does in a real app.
+        let menu = NSMenu(), edit = NSMenuItem(), items = NSMenu(title: "Edit")
+        items.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.submenu = items
+        menu.addItem(edit)
+        app.mainMenu = menu
         app.run()
     }
 }

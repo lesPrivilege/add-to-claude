@@ -190,7 +190,7 @@ final class HandoffBar: NSViewController {
     private let sourceTitle = label(size: 12, weight: .semibold)
     private let sourceDetail = label(size: 11, color: .secondaryLabelColor)
     private let tag = Tag()
-    private lazy var preview = iconButton("preview", "Preview context", #selector(showPreview), self)
+    private lazy var preview = iconButton("preview", "Preview the whole conversation as read", #selector(showPreview), self)
     private lazy var save = iconButton("save", "Save Markdown…", #selector(saveMarkdown), self)
     private lazy var copy = iconButton("copy", "Copy conversation", #selector(copyMarkdown), self)
     private lazy var filesButton: NSButton = {
@@ -789,7 +789,16 @@ final class HandoffBar: NSViewController {
     /// Prepares the text for these turns, downloads their files, appends to the draft, and records each
     /// step: prepared → insertion_attempted → composer_inserted, failed or unknown.
     private func run(_ scope: ResolvedScope) {
-        guard !busy, let selected = composer, let frozen = prepared, !scope.turns.isEmpty else { return }
+        guard !busy, let chosen = composer, let frozen = prepared, !scope.turns.isEmpty else { return }
+        // Web editors (Claude's among them) rebuild their message box; take the window's current one,
+        // checked exactly as choosing the window again would check it.
+        let (field, problem) = inspectComposer(chosen.choice)
+        guard let field else {
+            say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error", result: true)
+            return render()
+        }
+        let selected = Composer(choice: chosen.choice, editor: field)
+        composer = selected
         // The target is read again right before writing: a window that now shows another conversation is
         // not the one the scope was worked out for.
         let identity = identify(selected)
@@ -809,7 +818,8 @@ final class HandoffBar: NSViewController {
         }
         let valid: () -> Bool = { [weak self] in
             guard let self, self.operation == id, let current = self.prepared else { return false }
-            return current.revision == frozen.revision && self.isCurrent(frozen)
+            // Files can take a while: the target window may show another conversation by the time we write.
+            return current.revision == frozen.revision && self.isCurrent(frozen) && self.identify(selected) == identity
         }
         let app = safeLabel(selected.choice.app.localizedName ?? "the app", limit: 24)
         let what = scope.everything ? "all \(scope.turns.count) turn\(scope.turns.count == 1 ? "" : "s")"
