@@ -4,6 +4,7 @@
 # grant across updates instead of asking again. It is self-signed and only for this Mac: it does
 # not notarize anything and is not trusted by other Macs. Run it once, yourself.
 set -euo pipefail
+# The system LibreSSL writes the PKCS#12 format the keychain imports; OpenSSL 3 defaults do not.
 name="add-to-claude Local"
 if security find-identity -p codesigning 2>/dev/null | grep -q "\"$name\""; then
   echo "\"$name\" already exists."; exit 0
@@ -22,10 +23,10 @@ basicConstraints = critical, CA:false
 keyUsage = critical, digitalSignature
 extendedKeyUsage = critical, codeSigning
 EOF
-openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -config "$work/cert.conf" \
+/usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -config "$work/cert.conf" \
   -keyout "$work/key.pem" -out "$work/cert.pem" 2>/dev/null
-password="$(openssl rand -hex 16)"
-openssl pkcs12 -export -inkey "$work/key.pem" -in "$work/cert.pem" -name "$name" \
+password="$(/usr/bin/openssl rand -hex 16)"
+/usr/bin/openssl pkcs12 -export -inkey "$work/key.pem" -in "$work/cert.pem" -name "$name" \
   -passout "pass:$password" -out "$work/identity.p12" 2>/dev/null
 # Only codesign may use the key without asking.
 security import "$work/identity.p12" -k "$HOME/Library/Keychains/login.keychain-db" \
