@@ -1,26 +1,26 @@
-# Release checklist (0.4.0)
+# Release checklist (0.5.0)
 
-## Done on 2026-10-14 (synthetic data, plus the owner's own login)
+## Done
 
-- [x] `npm test`, `npm run test:browser` and the WebKit half of `npm run test:native` pass. Counts are in [support-matrix.md](support-matrix.md).
-- [x] The owner ran the Accessibility half: 49 checks, including "append never activates the target app".
-- [x] The owner's ChatGPT login works in the embedded `WKWebView` and survives restart.
-- [x] Live conversations (including long, paged ones) project in order with original Markdown; Add places the text into an empty Claude prompt without sending or activating Claude.
-- [x] The unsigned app builds for macOS 14 or later on arm64.
-- [x] No Praxis file or remote is modified; no runtime npm dependency; no history, telemetry or credential access.
+- [x] `npm test` (99/99) and the WebKit half of `npm run test:native` (21 checks) pass at the release source.
+- [x] The owner's ChatGPT login works in the panel and survives restart.
+- [x] Live conversations, including long paged ones, project in order with original Markdown and references.
+- [x] Add places the text into an empty Claude prompt without sending or activating Claude.
+- [x] Add downloads a generated file and puts its local path and SHA-256 into the text.
+- [x] Temporary diagnostics are removed.
+- [x] Independent review of all changes since `902166b`; its nine defects are fixed with tests.
+- [x] The app builds unsigned for macOS 14 or later on arm64, with its app icon.
+- [x] No runtime npm dependency; no history, telemetry or credential collection. The page's session token stays in the page.
 
-## Required before release
+## Before release
 
-- [ ] Owner's Mac:
-  - Open the panel from the menu bar and confirm that hiding and reopening keeps the page and a streaming reply.
-  - Check that the bar shows the open conversation.
-  - Add it to a real Claude window and a second app; confirm the draft is preserved, nothing is sent, and no window moves or flickers.
-  - Repeat with the composer unfocused, the conversation changed during Add, and Accessibility revoked.
-- [ ] Attachments: the chat's own file card download in the panel, and downloading from the Files list into the files folder with paths and SHA-256 in the hand-off text.
-- [ ] Owner checks the panel controls and Settings: pin, click-away hide, global shortcut, login item, sign out.
-- [ ] Add into a non-empty Claude prompt (Command-V fallback) and into a second app.
-- [ ] Remove the temporary diagnostics (request shapes, message types, window text elements, append checks, navigation).
-- [ ] Uploads, downloads, external links, the sign-in popup, Escape, keyboard use, VoiceOver and dark appearance.
-- [ ] The owner confirms the service-terms question.
+- [ ] Owner's Mac, renamed build:
+  - Sign in again and grant Accessibility to Add to Claude.
+  - Add a conversation that has rendering markup (cards, entities, citations) and check that the text reads cleanly.
+  - Add a conversation with an uploaded file or image, and one with two same-name generated files.
+  - Add into a non-empty Claude prompt and into a second app; confirm nothing is sent and no window moves.
+  - Try the global shortcut, open at login, sign out, Escape and ⌘W.
+- [ ] Run `npm run test:browser` and the Accessibility half of `npm run test:native` from a terminal that has the browser and Accessibility.
+- [ ] Dark appearance and VoiceOver pass over the bar, the Files popover and Settings.
+- [ ] The owner decides the service-terms question.
 - [ ] Signing, hardened runtime, notarization and Gatekeeper, or an explicit decision to ship unsigned.
-- [ ] Independent review of the embedded design: security, functionality and rendered UX.
