@@ -46,6 +46,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         settings.signOut = { [weak self] in self?.chat.signOut() }
         settings.clearWebCache = { [weak self] in self?.chat.clearWebCache() }
         settings.shortcutTaken = { [weak self] in !(self?.hotkey.use(.current) ?? true) }
+        settings.closed = { [weak self] in
+            guard let self, self.returnToPanel else { return }
+            self.returnToPanel = false
+            self.show()
+        }
         hotkey.use(.current)
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) {
             [weak self] _ in
@@ -85,13 +90,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return menu
     }
 
-    /// One window at a time: the panel steps aside for Settings (its page keeps running) and comes back with
-    /// the next click on the menu-bar icon.
+    /// One window at a time, as one popover: Settings takes the panel's place under the icon (the page keeps
+    /// running) and closing it brings the panel back, like going back. Opened with the panel hidden, it
+    /// opens centred and closing it leaves the panel hidden.
     @objc private func openSettings() {
+        returnToPanel = panel.isVisible
+        guard returnToPanel else { return settings.show() }
+        let corner = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
         panel.orderOut(nil)
-        item.button?.highlight(false)
-        settings.show()
+        settings.show(at: corner)
     }
+    private var returnToPanel = false
     @objc private func reloadPage() { chat.reload() }
     @objc private func goBack() { chat.goBack() }
 
@@ -109,7 +118,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         toggle()
     }
 
-    private func toggle() { panel.isVisible ? hide() : show() }
+    private func toggle() {
+        // Settings standing in for the panel: the icon goes back, as closing Settings does.
+        if returnToPanel && settings.isVisible { return settings.close() }
+        panel.isVisible ? hide() : show()
+    }
 
     /// At launch the menu bar has not placed the icon yet; wait for it (up to 2 s) so the panel opens under it.
     private func showWhenPlaced(attempts: Int) {

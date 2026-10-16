@@ -88,11 +88,16 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var signOut: () -> Void = {}
     var clearWebCache: () -> Void = {}
     var shortcutTaken: () -> Bool = { false }
+    /// Called when the window closes, so whatever it stood in for can come back.
+    var closed: () -> Void = {}
     private var window: NSPanel?
 
     var isKey: Bool { window?.isKeyWindow == true }
+    var isVisible: Bool { window?.isVisible == true }
+    func close() { window?.close() }
 
-    func show() {
+    /// Shows Settings with its top-left corner at `topLeft` (screen coordinates), or centred.
+    func show(at topLeft: NSPoint? = nil) {
         if window == nil {
             let view = SettingsView(reload: { [weak self] in self?.reload() }, signOut: { [weak self] in self?.signOut() },
                                     clearWebCache: { [weak self] in self?.clearWebCache() },
@@ -113,9 +118,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             window.center()
             self.window = window
         }
+        if let topLeft { window?.setFrameTopLeftPoint(topLeft) }
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
     }
+
+    func windowWillClose(_ notification: Notification) { closed() }
 }
 
 /// How this copy is signed: a stable identity keeps macOS permissions across updates; ad-hoc does not.
