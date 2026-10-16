@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- D2 Cursor Arrival, menu-bar glyph. Template-ready: black + alpha only. 24 grid, 1.6 stroke.
+       A composer with one settled line; the second line arrives thin to thick and stops at the caret. -->
+  <rect x="2.6" y="4.8" width="18.8" height="14.4" rx="4" fill="none" stroke="#000" stroke-width="1.6"/>
+  <path d="M6.6 9.6H12.6" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
+  <path fill="#000" d="M6.22 14.90L6.98 14.91L7.76 14.94L8.54 14.98L9.33 15.02L10.12 15.07L10.93 15.13L11.74 15.19L12.56 15.26L13.39 15.33L14.23 15.40A1.10 1.10 0 0 0 14.17 13.20L13.34 13.32L12.51 13.43L11.69 13.55L10.88 13.66L10.08 13.78L9.28 13.89L8.49 14.00L7.72 14.11L6.95 14.21L6.18 14.30Z"/>
+  <path d="M17.2 11.6v5.2" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round"/>
+</svg>
