@@ -8,15 +8,18 @@
 
 // Containers lay out blocks: their own lines go, a closing one separates what follows, and the
 // content they indent is dedented.
-const containers = new Set(['box', 'row', 'grid', 'grid-item', 'WritingBlock']);
-const inline = new Set(['text', 'caption']);
+const containers = new Set(['box', 'row', 'grid', 'grid-item', 'WritingBlock', 'radio-group']);
+// Controls keep their visible label; their handlers and state are dropped with the attributes.
+const inline = new Set(['text', 'caption', 'radio', 'button']);
 const decoration = new Set(['icon', 'divider']);
 const tagNames = [...containers, ...inline, ...decoration, 'AsyncImage', 'Entity', 'Link', 'Cite'];
 const tagPattern = new RegExp(
-  `([ \\t]*)<(/?)(${tagNames.join('|')})((?:\\s+[A-Za-z_][\\w-]*(?:=(?:"[^"]*"|'[^']*'|\\{[^{}]*\\}))?)*)\\s*(/?)>`,
+  `([ \\t]*)<(/?)(${tagNames.join('|')})((?:\\s+[A-Za-z_][\\w-]*(?:=(?:"[^"]*"|'[^']*'|\\{[^{}]*\\}|[^\\s"'{}<>/=\`]+))?)*)\\s*(/?)>`,
   'gu',
 );
-const attributePattern = /([A-Za-z_][\w-]*)(?:=(?:"([^"]*)"|'([^']*)'|\{([^{}]*)\}))?/gu;
+// Values may be quoted, braced or bare (`align=start`).
+const attributePattern =
+  /([A-Za-z_][\w-]*)(?:=(?:"([^"]*)"|'([^']*)'|\{([^{}]*)\}|([^\s"'{}<>/=`]+)))?/gu;
 const markerPattern = /([ \t]*)\ue200([a-z_]+)((?:\ue202[^\ue200-\ue202]*)*)\ue201/gu;
 const refIdPattern = /^turn\d+[a-z_]+\d+$/u;
 const inlineCode = /(`+).*?(?<!`)\1(?!`)/gu;
@@ -24,8 +27,8 @@ const fenceOpen = /^[ \t]*(`{3,}|~{3,})/u;
 
 function attributes(text) {
   const values = {};
-  for (const [, name, double, single, braced] of text.matchAll(attributePattern))
-    values[name] = double ?? single ?? braced ?? true;
+  for (const [, name, double, single, braced, bare] of text.matchAll(attributePattern))
+    values[name] = double ?? single ?? braced ?? bare ?? true;
   return values;
 }
 

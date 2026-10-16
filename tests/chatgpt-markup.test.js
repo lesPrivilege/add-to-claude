@@ -162,3 +162,20 @@ test('text without markup is returned exactly, trailing spaces and blank lines i
   for (const text of ['  **Exact** 中文 ✓  \n\n\n', 'a < b and c > d', ''])
     assert.deepEqual(readableMarkdown(text), { markdown: text, cites: [], omitted: 0 });
 });
+
+test('bare attribute values and form controls unwrap like the other layout tags', () => {
+  const { markdown } = readableMarkdown(
+    [
+      '<row align=start gap={3}>',
+      '  <box gap=0>',
+      '    **A · 负形穿槽**',
+      '  </box>',
+      '</row>',
+      '<radio-group direction="col" value={scope} onChange={setScope}>',
+      '  <radio value="all">全部消息</radio>',
+      '</radio-group>',
+      '<button block onClick={()=>GenUI.issueNewTurn("x")}>查看细节</button>',
+    ].join('\n'),
+  );
+  assert.equal(markdown, ['**A · 负形穿槽**', '', '全部消息', '', '查看细节'].join('\n'));
+});

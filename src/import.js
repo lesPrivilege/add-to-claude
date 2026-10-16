@@ -809,6 +809,25 @@ export function importConversation(raw, id, leafId) {
       ...(code ? { code } : {}),
     });
   }
+  // A generated file linked in a turn as sandbox:/mnt/data/<name> may also be attached, outside any
+  // turn, under ChatGPT's internal name "…_mnt_data_<name>". They are one file: the attached copy
+  // (fetchable by its file id) takes the turn's place and short name, and the sandbox reference goes.
+  for (const reference of attachments.filter((file) => file.id.includes(':sandbox:'))) {
+    const attached = attachments.find(
+      (file) =>
+        !file.turnId &&
+        !file.id.includes(':sandbox:') &&
+        (file.name === reference.name || file.name.endsWith(`_mnt_data_${reference.name}`)),
+    );
+    if (!attached) continue;
+    const own = issues.find((item) => item.sourceLocator === attached.sourceLocator);
+    if (own) own.message = own.message.replace(attached.name, reference.name);
+    attached.turnId = reference.turnId;
+    attached.name = reference.name;
+    attachments.splice(attachments.indexOf(reference), 1);
+    const raised = issues.findIndex((item) => item.sourceLocator === reference.sourceLocator);
+    if (raised >= 0) issues.splice(raised, 1);
+  }
   if (!turns.length)
     issue(
       'no-turns',

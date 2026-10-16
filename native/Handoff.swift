@@ -153,8 +153,6 @@ final class HandoffBar: NSViewController {
         picker.action = #selector(choose)
         picker.setContentHuggingPriority(.defaultLow, for: .horizontal)
         picker.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        add.image = glyph("brand")
-        add.imagePosition = .imageTrailing
         add.bezelStyle = .rounded
         add.bezelColor = .controlAccentColor
         add.contentTintColor = .white

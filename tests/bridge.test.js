@@ -141,3 +141,48 @@ test('each file gets its own line, even when two turns make files with the same 
   assert.equal(result.verification, 'partial');
   assert.equal(result.verifiedWithFiles, true);
 });
+
+test("a generated image linked by sandbox path and attached under ChatGPT's long name is one file", () => {
+  const message = (id, role, text, metadata = {}) => ({
+    id,
+    author: { role },
+    status: 'finished_successfully',
+    end_turn: role === 'assistant',
+    metadata,
+    content: { content_type: 'text', parts: [text] },
+  });
+  const body = JSON.stringify({
+    conversation_id: 'img',
+    title: 'Icons',
+    current_node: 'a',
+    mapping: {
+      root: { parent: null, children: ['u'], message: null },
+      u: { parent: 'root', children: ['t'], message: message('u', 'user', 'Draw it.') },
+      t: {
+        parent: 'u',
+        children: ['a'],
+        message: message('t', 'tool', '', {
+          attachments: [{ id: 'file-abc', name: 'user-x_123_mnt_data_preview.png' }],
+        }),
+      },
+      a: {
+        parent: 't',
+        children: [],
+        message: message('a', 'assistant', '![Preview](sandbox:/mnt/data/preview.png)'),
+      },
+    },
+  });
+  const result = compile({
+    ...packet,
+    pageUrl: 'https://chatgpt.com/c/img',
+    responseUrl: 'https://chatgpt.com/backend-api/conversation/img',
+    body,
+  });
+  assert.equal(result.attachments.length, 1);
+  const [file] = result.attachments;
+  assert.equal(file.id, 'file-abc');
+  assert.equal(file.name, 'preview.png');
+  assert.equal(file.turn, 2);
+  assert.match(result.markdown.split('\n')[file.line], /^- preview\.png — download-needed/);
+  assert.doesNotMatch(result.markdown, /mnt_data_preview|^## Files/mu);
+});
