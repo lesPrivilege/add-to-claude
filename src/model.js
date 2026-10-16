@@ -535,7 +535,7 @@ export function headingText(value) {
     .replace(/[\r\n]/gu, ' ')
     .replace(/[<>]/gu, (char) => (char === '<' ? '&lt;' : '&gt;'));
 }
-function labelText(value) {
+export function labelText(value) {
   return headingText(value).replace(/[\\[\]]/gu, '\\$&');
 }
 
@@ -565,48 +565,76 @@ export function projectIssueLine(issue) {
   return `- ${headingText(issue.message)}`;
 }
 
-export function projectMarkdown(input) {
+/**
+ * `lines`, when given, receives where each file line and each check line lands (0-based line numbers):
+ * `lines.files` by attachment id and `lines.checks` by issue message, so the app can replace exactly those.
+ */
+export function projectMarkdown(input, lines = null) {
   const model = validateConversation(input);
+  const marks = [];
   const comment = (text) => `<!-- ${headingText(text).replaceAll('--', '- -')} -->`;
-  const fileLine = projectFileLine;
+
   const source = model.source.url ? `<${model.source.url}>` : headingText(model.source.locator);
-  const lines = [
+  const out = [
     `# ${headingText(model.source.title)}`,
     '',
     `Source: ${source} · ${model.turns.length} turns · verification: ${model.verification.status}`,
     comment(`selected branch: ${model.branches.selectedLeaf}`),
   ];
   if (model.branches.availableLeaves.length > 1)
-    lines.push(
+    out.push(
       `Selected branch only; ${model.branches.availableLeaves.length} branch variants exist.`,
     );
   if (model.verification.issues.length) {
-    lines.push('', '## Content checks', '');
+    out.push('', '## Content checks', '');
     // Each distinct check once: the same finding on many turns or sources is one thing to review.
-    lines.push(...new Set(model.verification.issues.map(projectIssueLine)));
+    for (const message of new Set(model.verification.issues.map((issue) => issue.message))) {
+      marks.push(['checks', message, out.length]);
+      out.push(projectIssueLine({ message }));
+    }
   }
+  const pushFile = (file) => {
+    marks.push(['files', file.id, out.length]);
+    out.push(projectFileLine(file));
+  };
   const files = new Map(model.turns.map((turn) => [turn.id, []]));
   const loose = [];
   for (const file of model.attachments) (files.get(file.turnId) ?? loose).push(file);
   for (const [index, turn] of model.turns.entries()) {
-    lines.push(
+    out.push(
       '',
       `## Turn ${index + 1} — ${turn.role === 'user' ? 'User' : 'Assistant'}`,
       comment(`source: ${turn.sourceLocator}`),
     );
     if (turn.contentFidelity !== 'original-markdown')
-      lines.push(`_Content: ${headingText(turn.contentFidelity)}_`);
-    lines.push('', turn.code ? projectCode(turn.code) : turn.markdown);
+      out.push(`_Content: ${headingText(turn.contentFidelity)}_`);
+    out.push('', turn.code ? projectCode(turn.code) : turn.markdown);
     if (turn.citations.length) {
-      lines.push('', '### References', '');
+      out.push('', '### References', '');
       for (const citation of turn.citations)
-        lines.push(`- [${labelText(citation.title)}](<${citation.url}>)`);
+        out.push(`- [${labelText(citation.title)}](<${citation.url}>)`);
     }
-    if (files.get(turn.id).length)
-      lines.push('', '### Files', '', ...files.get(turn.id).map(fileLine));
+    if (files.get(turn.id).length) {
+      out.push('', '### Files', '');
+      for (const file of files.get(turn.id)) pushFile(file);
+    }
   }
-  if (loose.length) lines.push('', '## Files', '', ...loose.map(fileLine));
-  return `${lines.join('\n')}\n`;
+  if (loose.length) {
+    out.push('', '## Files', '');
+    for (const file of loose) pushFile(file);
+  }
+  if (lines) {
+    // Elements may hold several lines (a turn's Markdown); convert element indexes to line numbers.
+    const start = [];
+    for (let index = 0, line = 0; index < out.length; index++) {
+      start.push(line);
+      line += out[index].split('\n').length;
+    }
+    lines.files = new Map();
+    lines.checks = new Map();
+    for (const [kind, key, index] of marks) lines[kind].set(key, start[index]);
+  }
+  return `${out.join('\n')}\n`;
 }
 
 /** Synthetic fixture. Never represents, retrieves, or transmits an actual user's conversation. */

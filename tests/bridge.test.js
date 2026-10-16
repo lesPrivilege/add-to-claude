@@ -96,3 +96,48 @@ test('only the first port is used; page-posted packets and foreign or later port
     ['changed', 'invalid'],
   );
 });
+
+test('each file gets its own line, even when two turns make files with the same name', () => {
+  const turn = (id, parent, children, role, text) => ({
+    parent,
+    children,
+    message: {
+      id,
+      author: { role },
+      status: 'finished_successfully',
+      end_turn: role === 'assistant',
+      content: { content_type: 'text', parts: [text] },
+    },
+  });
+  const twoCharts = JSON.stringify({
+    conversation_id: 'two',
+    title: 'Charts',
+    current_node: 'a2',
+    mapping: {
+      root: { parent: null, children: ['u1'], message: null },
+      u1: turn('u1', 'root', ['a1'], 'user', 'First chart.'),
+      a1: turn('a1', 'u1', ['u2'], 'assistant', '[chart.png](sandbox:/mnt/data/chart.png)'),
+      u2: turn('u2', 'a1', ['a2'], 'user', 'Second chart.'),
+      a2: turn('a2', 'u2', [], 'assistant', '[chart.png](sandbox:/mnt/data/chart.png)'),
+    },
+  });
+  const result = compile({
+    ...packet,
+    pageUrl: 'https://chatgpt.com/c/two',
+    responseUrl: 'https://chatgpt.com/backend-api/conversation/two',
+    body: twoCharts,
+  });
+  const lines = result.markdown.split('\n');
+  assert.equal(result.attachments.length, 2);
+  const [first, second] = result.attachments;
+  assert.notEqual(first.key, second.key);
+  assert.deepEqual([first.messageId, second.messageId], ['a1', 'a2']);
+  assert.notEqual(first.line, second.line);
+  for (const file of result.attachments)
+    assert.match(lines[file.line], /^- chart\.png — download-needed/);
+  // One check line for both, since the message is the same.
+  assert.equal(first.check, second.check);
+  assert.match(lines[first.check], /^- chart\.png: download this file/);
+  assert.equal(result.verification, 'partial');
+  assert.equal(result.verifiedWithFiles, true);
+});

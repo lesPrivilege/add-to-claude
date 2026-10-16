@@ -799,7 +799,12 @@ export function importConversation(raw, id, leafId) {
       markdown,
       originalParts: parts,
       sourceLocator: `${base}.message`,
-      contentFidelity: issues.length > beforeIssues ? 'partial' : 'original-markdown',
+      // A file reference leaves the text whole; the file itself is accounted for under Files.
+      contentFidelity: issues
+        .slice(beforeIssues)
+        .some((issue) => !issue.code.startsWith('attachment-'))
+        ? 'partial'
+        : 'original-markdown',
       citations,
       ...(code ? { code } : {}),
     });

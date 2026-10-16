@@ -30,6 +30,7 @@ if (handler && window === top) {
           kind: 'file',
           page: String(packet.pageUrl),
           id: String(packet.id),
+          messageId: String(packet.messageId ?? ''),
           url: String(packet.url),
           name: String(packet.name),
         });
@@ -38,6 +39,7 @@ if (handler && window === top) {
           kind: 'file-missing',
           page: String(packet.pageUrl),
           id: String(packet.id),
+          messageId: String(packet.messageId ?? ''),
           status: String(packet.status),
         });
       if (packet?.kind === 'changed' || packet?.kind === 'unavailable')

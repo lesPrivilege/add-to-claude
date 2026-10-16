@@ -115,6 +115,8 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     func signOut() {
         let store = WKWebsiteDataStore.default()
         store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { [weak self] in
+            self?.fileLinks.removeAll()
+            self?.saved.removeAll()
             self?.set(nil, .waiting)
             self?.web.load(URLRequest(url: URL(string: "https://chatgpt.com/")!))
         }
@@ -167,22 +169,26 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                                     verification: body["verification"] as? String ?? "",
                                     issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) },
                                     attachments: (body["attachments"] as? [[String: Any]] ?? []).compactMap { file in
-                                        guard let id = file["id"] as? String, let line = file["line"] as? String else { return nil }
-                                        return Attachment(id: id, name: safeLabel(file["name"] as? String ?? "", limit: 200),
+                                        guard let key = file["key"] as? String, let id = file["id"] as? String,
+                                              let line = file["line"] as? Int else { return nil }
+                                        return Attachment(key: key, id: id, name: safeLabel(file["name"] as? String ?? "", limit: 200),
+                                                          label: file["label"] as? String ?? "",
                                                           turn: file["turn"] as? Int ?? 0,
                                                           messageId: file["messageId"] as? String ?? "", line: line,
-                                                          issue: file["issue"] as? String ?? "")
-                                    })
+                                                          check: file["check"] as? Int ?? -1)
+                                    },
+                                    verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false)
             set(prepared, .ready(prepared))
         case "file":
             // A link the page itself requested for one of its files; only https on ChatGPT's own hosts.
             guard let id = body["id"] as? String, let text = body["url"] as? String, let url = URL(string: text),
                   url.scheme == "https", let host = url.host,
                   chatHosts.contains(host) || host.hasSuffix(".oaiusercontent.com") else { return }
-            fileLinks[id] = FileLink(url: url, name: body["name"] as? String ?? "", seen: Date())
-            settle(id)
+            let key = id + "|" + (body["messageId"] as? String ?? "")
+            fileLinks[key] = FileLink(url: url, name: body["name"] as? String ?? "", seen: Date())
+            settle(key)
         case "file-missing":
-            settle(body["id"] as? String ?? "")
+            settle((body["id"] as? String ?? "") + "|" + (body["messageId"] as? String ?? ""))
         case "changed": set(nil, .waiting)
         case "invalid": set(nil, .unavailable(safeLabel(body["message"] as? String ?? "", limit: 160)))
         case "unavailable": set(nil, .unavailable("This page did not expose its original messages."))
@@ -192,97 +198,92 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
 
     // MARK: files
 
-    /// Files saved for each conversation page, by file name: from the files list or the page's own download.
-    private var saved: [String: [String: (path: URL, sha256: String)]] = [:]
+    /// Local copies, by conversation page and the file's own key (its place in that conversation).
+    private var saved: [String: (path: URL, sha256: String)] = [:]
 
-    private func savedFile(_ name: String) -> (path: URL, sha256: String)? {
-        prepared.flatMap { saved[$0.page]?[name.lowercased()] }
+    private func savedFile(_ file: Attachment, on page: String) -> (path: URL, sha256: String)? {
+        saved[page + "|" + file.key]
     }
 
-    private func record(_ path: URL, sha256: String, name: String) {
-        guard let page = prepared?.page ?? pageKey(web.url) else { return }
-        saved[page, default: [:]][name.lowercased()] = (path, sha256)
-    }
-
-    /// Each saved file's line points at its local copy and its "download this file" check goes; the
-    /// rest stay references. When no check is left, the hand-off is verified.
     private func withFiles(_ prepared: Prepared) -> (String, String) {
-        var markdown = prepared.markdown, linked = 0
-        for file in prepared.attachments {
-            guard let copy = saved[prepared.page]?[file.name.lowercased()] else { continue }
-            markdown = markdown.replacingOccurrences(of: file.line, with: "- \(file.name) — `\(copy.path.path)` · sha256 \(copy.sha256)")
-            if !file.issue.isEmpty { markdown = markdown.replacingOccurrences(of: "\n" + file.issue + "\n", with: "\n") }
-            linked += 1
-        }
-        if linked > 0, let checks = markdown.range(of: "\n\n## Content checks\n\n"),
-           markdown[checks.upperBound...].hasPrefix("\n## ") {
-            markdown.removeSubrange(checks.lowerBound..<markdown.index(before: checks.upperBound))
-            markdown = markdown.replacingOccurrences(of: " · verification: partial\n", with: " · verification: verified\n")
-        }
-        let total = prepared.attachments.count
-        return (markdown, total == 0 ? "" : linked == total ? "\(linked) file\(linked == 1 ? "" : "s") linked."
-                : "\(linked) of \(total) files linked; the rest are references (download them from the Files list).")
+        linkFiles(prepared, copies: Dictionary(uniqueKeysWithValues: prepared.attachments.compactMap { file in
+            savedFile(file, on: prepared.page).map { (file.key, $0) }
+        }))
     }
 
-    /// The page's link for a file: by its id, or by name, since generated files are referred to by
-    /// their sandbox path in the conversation but fetched by an internal file id. Links last minutes.
+    /// The page's link for a file: the one fetched for this file in this message, or the page's own
+    /// fetch by its file id, or by name when only one file in the conversation has that name.
+    /// Links last minutes.
     private func link(for file: Attachment) -> FileLink? {
         let fresh = fileLinks.filter { Date().timeIntervalSince($0.value.seen) < 240 }
-        return fresh[file.id] ?? fresh.values.filter { $0.name == file.name }.max { $0.seen < $1.seen }
+        if let link = fresh[file.id + "|" + file.messageId] ?? fresh[file.id + "|"] { return link }
+        guard prepared?.attachments.filter({ $0.name == file.name }).count == 1 else { return nil }
+        return fresh.values.filter { $0.name == file.name }.max { $0.seen < $1.seen }
     }
 
     private func fileRows() -> [FileRow] {
-        (prepared?.attachments ?? []).map { file in
-            FileRow(id: file.id, name: file.name, turn: file.turn, saved: savedFile(file.name)?.path)
+        guard let prepared else { return [] }
+        return prepared.attachments.map { file in
+            FileRow(id: file.key, name: file.name, turn: file.turn, saved: savedFile(file, on: prepared.page)?.path)
         }
     }
 
-    /// Files whose link is being requested by the page, and what runs when all have answered.
-    private var resolving: (pending: Set<String>, done: () -> Void)?
+    /// Links the page has been asked for, and who is waiting on which of them.
+    private var requested = Set<String>()
+    private var waiters: [(id: UUID, keys: Set<String>, done: () -> Void)] = []
 
-    /// Asks the page for fresh links to these files, the way it asks when the user opens one. Waits at most 10 s.
+    /// Asks the page for fresh links to these files, the way it asks when the user opens one.
+    /// Calls back when each has answered, or after 10 s.
     private func resolveLinks(_ files: [Attachment], done: @escaping () -> Void) {
         let missing = files.filter { link(for: $0) == nil }
-        guard !missing.isEmpty, resolving == nil else { return done() }
-        resolving = (Set(missing.map(\.id)), done)
-        web.callAsyncJavaScript("addToClaudeResolve(files)", arguments: ["files": missing.map { ["id": $0.id, "messageId": $0.messageId] }],
-                                in: nil, in: .defaultClient) { _ in }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in self?.settle(nil) }
+        guard !missing.isEmpty else { return done() }
+        let keys = Set(missing.map { $0.id + "|" + $0.messageId })
+        let ask = missing.filter { !requested.contains($0.id + "|" + $0.messageId) }
+        requested.formUnion(keys)
+        let waiter = UUID()
+        waiters.append((waiter, keys, done))
+        if !ask.isEmpty {
+            web.callAsyncJavaScript("addToClaudeResolve(files)", arguments: ["files": ask.map { ["id": $0.id, "messageId": $0.messageId] }],
+                                    in: nil, in: .defaultClient) { _ in }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self, let index = self.waiters.firstIndex(where: { $0.id == waiter }) else { return }
+            let late = self.waiters.remove(at: index)
+            self.requested.subtract(late.keys)
+            late.done()
+        }
     }
 
-    /// One file answered, or (nil) time ran out.
-    private func settle(_ id: String?) {
-        guard var current = resolving else { return }
-        if let id { current.pending.remove(id) } else { current.pending.removeAll() }
-        resolving = current.pending.isEmpty ? nil : current
-        if current.pending.isEmpty { current.done() }
+    /// One file's link arrived, or the page could not get it.
+    private func settle(_ key: String) {
+        requested.remove(key)
+        for index in waiters.indices { waiters[index].keys.remove(key) }
+        let ready = waiters.filter(\.keys.isEmpty)
+        waiters.removeAll { $0.keys.isEmpty }
+        ready.forEach { $0.done() }
     }
 
     /// Downloads the chosen files that are not saved yet into the conversation's folder.
-    private func downloadSelected(_ ids: [String], done: @escaping () -> Void) {
+    private func downloadSelected(_ keys: [String], done: @escaping () -> Void) {
         guard let prepared else { return done() }
-        let wanted = prepared.attachments.filter { ids.contains($0.id) && savedFile($0.name) == nil }
+        let wanted = prepared.attachments.filter { keys.contains($0.key) && savedFile($0, on: prepared.page) == nil }
         guard !wanted.isEmpty else { return done() }
         resolveLinks(wanted) { [weak self] in self?.download(wanted, of: prepared, done: done) ?? done() }
     }
 
     private func download(_ wanted: [Attachment], of prepared: Prepared, done: @escaping () -> Void) {
-        let files = wanted.filter { link(for: $0) != nil }
-        guard !files.isEmpty else {
+        let items = wanted.compactMap { file in link(for: file).map { FileFetcher.Item(key: file.key, link: FileLink(url: $0.url, name: file.name, seen: $0.seen)) } }
+        guard !items.isEmpty else {
             bar.filesChanged("No download link for \(wanted.count == 1 ? wanted[0].name : "\(wanted.count) files"). Open it once in the chat, then try again.")
             return done()
         }
-        let links = files.map { file in
-            let link = link(for: file)!
-            return FileLink(url: link.url, name: file.name, seen: link.seen)
-        }
-        fetcher.fetch(links, into: FilesFolder.folder(for: prepared.title)) { [weak self] outcomes in
+        fetcher.fetch(items, into: FilesFolder.folder(for: prepared.title)) { [weak self] outcomes in
             guard let self else { return }
-            for (file, outcome) in zip(files, outcomes) {
-                if let path = outcome.path, let hash = outcome.sha256 { self.record(path, sha256: hash, name: file.name) }
+            for (key, outcome) in outcomes {
+                if let path = outcome.path, let hash = outcome.sha256 { self.saved[prepared.page + "|" + key] = (path, hash) }
             }
-            let failed = outcomes.compactMap(\.problem)
-            let unlinked = wanted.count - files.count
+            let failed = outcomes.values.compactMap(\.problem)
+            let unlinked = wanted.count - items.count
             self.bar.filesChanged((failed.isEmpty ? "\(outcomes.count) file\(outcomes.count == 1 ? "" : "s") saved."
                                    : "\(outcomes.count - failed.count) saved; \(failed.count) failed: \(failed[0]).")
                                   + (unlinked > 0 ? " \(unlinked) had no download link." : ""))
@@ -384,8 +385,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { download.delegate = self }
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { download.delegate = self }
 
-    /// The page's own downloads go straight into the conversation's folder, and Add can then point at them.
-    private var pageDownloads: [ObjectIdentifier: (path: URL, name: String)] = [:]
+    /// The page's own downloads go straight into the conversation's folder. When exactly one file in
+    /// that conversation has the downloaded name, Add can then point at it.
+    private var pageDownloads: [ObjectIdentifier: (path: URL, name: String, prepared: Prepared?)] = [:]
 
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
                   completionHandler: @escaping (URL?) -> Void) {
@@ -394,20 +396,17 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             bar.filesChanged("The files folder is not writable. Choose another in Settings.")
             return completionHandler(nil)
         }
-        let name = safeLabel(suggestedFilename, limit: 120).replacingOccurrences(of: "/", with: "-")
-        var path = folder.appendingPathComponent(name.isEmpty ? "download" : name), index = 2
-        while FileManager.default.fileExists(atPath: path.path) {
-            path = folder.appendingPathComponent("\((name as NSString).deletingPathExtension) \(index)" + ((name as NSString).pathExtension.isEmpty ? "" : ".\((name as NSString).pathExtension)"))
-            index += 1
-        }
-        pageDownloads[ObjectIdentifier(download)] = (path, suggestedFilename)
+        let path = freePath(in: folder, for: safeFileName(suggestedFilename, fallback: "download"))
+        pageDownloads[ObjectIdentifier(download)] = (path, suggestedFilename, prepared)
         completionHandler(path)
     }
 
     func downloadDidFinish(_ download: WKDownload) {
-        guard let (path, name) = pageDownloads.removeValue(forKey: ObjectIdentifier(download)),
-              let data = try? Data(contentsOf: path, options: .mappedIfSafe) else { return }
-        record(path, sha256: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(), name: name)
+        guard let (path, name, prepared) = pageDownloads.removeValue(forKey: ObjectIdentifier(download)),
+              let hash = sha256(of: path) else { return }
+        if let prepared, case let matches = prepared.attachments.filter({ $0.name == name }), matches.count == 1 {
+            saved[prepared.page + "|" + matches[0].key] = (path, hash)
+        }
         bar.filesChanged("Saved \(path.lastPathComponent) to the files folder.")
     }
 

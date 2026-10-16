@@ -37,6 +37,30 @@ import WebKit
             """)
     }
 
+    /// Two turns made files with the same name; each line gets its own copy, and the shared check goes
+    /// only when both have one.
+    static func linkedFiles() {
+        let markdown = ["# Charts", "", "Source: <https://chatgpt.com/c/two> · 4 turns · verification: partial", "<!-- b -->",
+                        "", "## Content checks", "", "- chart.png: download this file…", "", "## Turn 2 — Assistant", "",
+                        "### Files", "", "- chart.png — download-needed", "", "## Turn 4 — Assistant", "", "### Files", "",
+                        "- chart.png — download-needed", ""].joined(separator: "\n")
+        let files = [Attachment(key: "1:a", id: "sandbox:/mnt/data/chart.png", name: "chart.png", label: "chart.png", turn: 2,
+                                messageId: "a1", line: 13, check: 7),
+                     Attachment(key: "2:b", id: "sandbox:/mnt/data/chart.png", name: "chart.png", label: "chart.png", turn: 4,
+                                messageId: "a2", line: 19, check: 7)]
+        let prepared = Prepared(revision: UUID(), page: "https://chatgpt.com/c/two", markdown: markdown, title: "Charts", turns: 4,
+                                files: 2, verification: "partial", issues: [], attachments: files, verifiedWithFiles: true)
+        let one = linkFiles(prepared, copies: ["1:a": (URL(fileURLWithPath: "/f/chart.png"), "aa")]).0
+        check(one.contains("- chart.png — `/f/chart.png` · sha256 aa") && one.contains("- chart.png — download-needed")
+              && one.contains("## Content checks") && one.contains("verification: partial"),
+              "one of two same-name files linked keeps the other reference and the check")
+        let both = linkFiles(prepared, copies: ["1:a": (URL(fileURLWithPath: "/f/chart.png"), "aa"),
+                                                "2:b": (URL(fileURLWithPath: "/f/chart 2.png"), "bb")]).0
+        check(both.contains("`/f/chart.png` · sha256 aa") && both.contains("`/f/chart 2.png` · sha256 bb")
+              && !both.contains("Content checks") && both.contains("verification: verified")
+              && !both.contains("\n\n\n"), "both linked: each its own copy, the check gone, verified")
+    }
+
     static func main() {
         _ = NSApplication.shared
         // The real observer and bridge, with the page's fetch stubbed in front of the observer so it
@@ -99,6 +123,7 @@ import WebKit
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
         check(chat.prepared == nil, "a response for a conversation no longer shown is not prepared")
 
+        linkedFiles()
         print("PASS: \(checks) WebKit checks in a real WKWebView")
         exit(0)
     }

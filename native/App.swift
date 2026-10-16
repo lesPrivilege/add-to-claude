@@ -5,6 +5,8 @@ final class ChatPanel: NSPanel {
     var onEscape: () -> Void = {}
     override var canBecomeKey: Bool { true }
     override func cancelOperation(_ sender: Any?) { onEscape() }
+    /// ⌘W on the panel hides it, like Escape; it never closes.
+    override func performClose(_ sender: Any?) { onEscape() }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -65,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let menu = NSMenu()
         let app = NSMenu()
         app.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
-        app.addItem(withTitle: "Hide Panel", action: #selector(hidePanel), keyEquivalent: "w").target = self
+        app.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         app.addItem(withTitle: "Quit Add to Claude", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let edit = NSMenu(title: "Edit")
         edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
@@ -82,7 +84,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc private func openSettings() { settings.show() }
-    @objc private func hidePanel() { hide() }
     @objc private func reloadPage() { chat.reload() }
     @objc private func goBack() { chat.goBack() }
 
@@ -139,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     /// Whether something of ours needs the panel to stay, or the user pinned it.
-    private var staysOpen: Bool { Preferences.pinned || chat.keepsPanelOpen || settings.isVisible }
+    private var staysOpen: Bool { Preferences.pinned || chat.keepsPanelOpen || settings.isKey }
 
     /// A popover's dismissal: a click in another app, or another app coming forward, hides the panel unless it
     /// is pinned. A nonactivating panel may never make this app active, so resign notifications alone miss it.

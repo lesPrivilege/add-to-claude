@@ -88,7 +88,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var shortcutTaken: () -> Bool = { false }
     private var window: NSWindow?
 
-    var isVisible: Bool { window?.isVisible == true }
+    var isKey: Bool { window?.isKeyWindow == true }
 
     func show() {
         if window == nil {
@@ -191,7 +191,8 @@ private struct SettingsView: View {
                     }
                 }
             } header: { sectionHeader("Access", glyph: "lock") } footer: {
-                Text("Add to Claude \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · reads only the page you are on, never sends for you")
+                Text((["Add to Claude", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String]
+                    .compactMap { $0 }.joined(separator: " ")) + " · reads only the page you are on, never sends for you")
                     .font(.caption).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
             }
         }

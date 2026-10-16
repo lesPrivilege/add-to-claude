@@ -30,10 +30,32 @@ enum FilesFolder {
     }
 
     static func folder(for title: String) -> URL {
-        let name = safeLabel(title, limit: 80).replacingOccurrences(of: "/", with: "-")
-            .replacingOccurrences(of: ":", with: "-").trimmingCharacters(in: .whitespaces)
-        return root.appendingPathComponent(name.isEmpty || name.hasPrefix(".") ? "conversation" : name, isDirectory: true)
+        root.appendingPathComponent(safeFileName(String(title.prefix(80)), fallback: "conversation"), isDirectory: true)
     }
+}
+
+/// A file name that stays inside its folder: no separators, never `.`, `..` or hidden.
+func safeFileName(_ raw: String, fallback: String = "file") -> String {
+    let name = safeLabel(raw, limit: 120).replacingOccurrences(of: "/", with: "-")
+        .replacingOccurrences(of: ":", with: "-").trimmingCharacters(in: .whitespaces)
+    if name.isEmpty || name == "." || name == ".." { return fallback }
+    return name.hasPrefix(".") ? "_" + name.dropFirst() : name
+}
+
+/// The first free name in `folder`: `name`, then `name 2`, `name 3`…
+func freePath(in folder: URL, for name: String) -> URL {
+    let base = (name as NSString).deletingPathExtension, ext = (name as NSString).pathExtension
+    var candidate = folder.appendingPathComponent(name), index = 2
+    while FileManager.default.fileExists(atPath: candidate.path) {
+        candidate = folder.appendingPathComponent("\(base) \(index)" + (ext.isEmpty ? "" : ".\(ext)"))
+        index += 1
+    }
+    return candidate
+}
+
+func sha256(of path: URL) -> String? {
+    guard let data = try? Data(contentsOf: path, options: .mappedIfSafe) else { return nil }
+    return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }
 
 /// A short-lived link the page itself asked for, seen by the observer.
@@ -44,57 +66,80 @@ struct FileLink {
 }
 
 /// Downloads files one at a time through the chat's own WebKit session (no credentials are read or
-/// copied) and reports each local path and SHA-256, or why it failed.
+/// copied) and reports each local path and SHA-256, or why it failed. Batches queue behind each other,
+/// and a download that stalls for two minutes is cancelled.
 final class FileFetcher: NSObject, WKDownloadDelegate {
+    struct Item {
+        let key: String
+        let link: FileLink
+    }
     struct Outcome {
         let path: URL?
         let sha256: String?
         let problem: String?
     }
+    private struct Batch {
+        let items: [Item]
+        let folder: URL
+        let done: ([String: Outcome]) -> Void
+    }
 
     private let web: WKWebView
-    private var queue: [(link: FileLink, folder: URL)] = []
-    private var outcomes: [Outcome] = []
+    private var batches: [Batch] = []
+    private var index = 0
+    private var outcomes: [String: Outcome] = [:]
     private var current: URL?
     private var active: WKDownload?
-    private var done: (([Outcome]) -> Void)?
+    private var attempt = 0
 
     init(web: WKWebView) { self.web = web }
 
-    func fetch(_ links: [FileLink], into folder: URL, completion: @escaping ([Outcome]) -> Void) {
-        do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
-        catch { return completion(links.map { _ in Outcome(path: nil, sha256: nil, problem: "the files folder is not writable") }) }
-        queue = links.map { ($0, folder) }
-        outcomes = []
-        done = completion
+    func fetch(_ items: [Item], into folder: URL, completion: @escaping ([String: Outcome]) -> Void) {
+        batches.append(Batch(items: items, folder: folder, done: completion))
+        if batches.count == 1 { start() }
+    }
+
+    private func start() {
+        guard let batch = batches.first else { return }
+        index = 0
+        outcomes = [:]
+        do { try FileManager.default.createDirectory(at: batch.folder, withIntermediateDirectories: true) }
+        catch {
+            for item in batch.items { outcomes[item.key] = Outcome(path: nil, sha256: nil, problem: "the files folder is not writable") }
+            return endBatch()
+        }
         next()
     }
 
     private func next() {
-        guard !queue.isEmpty else { let finish = done; done = nil; finish?(outcomes); return }
-        let (link, folder) = queue[0]
-        current = unique(folder.appendingPathComponent(link.name.isEmpty ? "file" : safeLabel(link.name, limit: 120)
-            .replacingOccurrences(of: "/", with: "-")))
-        web.startDownload(using: URLRequest(url: link.url)) { [weak self] download in
+        guard let batch = batches.first else { return }
+        guard index < batch.items.count else { return endBatch() }
+        let item = batch.items[index]
+        current = freePath(in: batch.folder, for: safeFileName(item.link.name))
+        attempt += 1
+        let this = attempt
+        web.startDownload(using: URLRequest(url: item.link.url)) { [weak self] download in
             self?.active = download
             download.delegate = self
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 120) { [weak self] in
+            guard let self, self.attempt == this, self.active != nil else { return }
+            self.active?.cancel { _ in }
+            self.finish(Outcome(path: nil, sha256: nil, problem: "the download stalled"))
+        }
     }
 
-    private func unique(_ url: URL) -> URL {
-        var candidate = url, index = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
-            let base = url.deletingPathExtension().lastPathComponent, ext = url.pathExtension
-            candidate = url.deletingLastPathComponent().appendingPathComponent("\(base) \(index)" + (ext.isEmpty ? "" : ".\(ext)"))
-            index += 1
-        }
-        return candidate
+    private func endBatch() {
+        let batch = batches.removeFirst()
+        batch.done(outcomes)
+        start()
     }
 
     private func finish(_ outcome: Outcome) {
+        guard let batch = batches.first, index < batch.items.count else { return }
         active = nil
-        outcomes.append(outcome)
-        queue.removeFirst()
+        outcomes[batch.items[index].key] = outcome
+        index += 1
         next()
     }
 
@@ -103,22 +148,21 @@ final class FileFetcher: NSObject, WKDownloadDelegate {
         guard download === active else { return completionHandler(nil) }
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             completionHandler(nil)
-            return finish(Outcome(path: nil, sha256: nil, problem: "the link expired; open the file once in the chat"))
+            return finish(Outcome(path: nil, sha256: nil, problem: "the link expired; try again"))
         }
         completionHandler(current)
     }
 
     func downloadDidFinish(_ download: WKDownload) {
         guard download === active else { return }
-        guard let path = current, let data = try? Data(contentsOf: path, options: .mappedIfSafe) else {
+        guard let path = current, let hash = sha256(of: path) else {
             return finish(Outcome(path: nil, sha256: nil, problem: "the download could not be read"))
         }
-        let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         finish(Outcome(path: path, sha256: hash, problem: nil))
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         guard download === active else { return }
-        finish(Outcome(path: nil, sha256: nil, problem: "the download failed; open the file once in the chat"))
+        finish(Outcome(path: nil, sha256: nil, problem: "the download failed"))
     }
 }

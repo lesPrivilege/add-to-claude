@@ -12,18 +12,22 @@ struct Prepared {
     let verification: String
     let issues: [String]
     let attachments: [Attachment]
+    /// Whether only missing local files keep it partial.
+    let verifiedWithFiles: Bool
 }
 
-/// A file the conversation refers to: the page's id for it (file id or sandbox path), its name, the
-/// turn and message it belongs to, and its line in the Markdown, which a local copy replaces.
+/// A file the conversation refers to. `key` is unique in the conversation; `id` and `messageId` are how
+/// the page fetches it (a file id or sandbox path, and its message); `line` and `check` are the line
+/// numbers of its file line and of its "download this file" check (-1 for none) in the Markdown.
 struct Attachment {
+    let key: String
     let id: String
     let name: String
+    let label: String
     let turn: Int
     let messageId: String
-    let line: String
-    /// Its content check line ("download this file…"), dropped once the file is saved.
-    let issue: String
+    let line: Int
+    let check: Int
 }
 
 enum SourceState {
@@ -37,6 +41,33 @@ struct FileRow {
     let name: String
     let turn: Int
     let saved: URL?
+}
+
+/// Each saved file's line points at its local copy, and a "download this file" check goes once
+/// every file it was about has a copy. When only the files kept it partial, it reads verified.
+func linkFiles(_ prepared: Prepared, copies: [String: (path: URL, sha256: String)]) -> (String, String) {
+    var lines = prepared.markdown.components(separatedBy: "\n")
+    var linked = Set<String>(), dropped = Set<Int>()
+    for file in prepared.attachments where lines.indices.contains(file.line) {
+        guard let copy = copies[file.key] else { continue }
+        let path = copy.path.path.contains("`") ? "`` \(copy.path.path) ``" : "`\(copy.path.path)`"
+        lines[file.line] = "- \(file.label) — \(path) · sha256 \(copy.sha256)"
+        linked.insert(file.key)
+    }
+    for check in Set(prepared.attachments.map(\.check)) where check >= 0 {
+        if prepared.attachments.filter({ $0.check == check }).allSatisfy({ linked.contains($0.key) }) { dropped.insert(check) }
+    }
+    lines = lines.enumerated().filter { !dropped.contains($0.offset) }.map(\.element)
+    if let header = lines.firstIndex(of: "## Content checks"), header > 0, header + 2 < lines.count,
+       lines[header + 1].isEmpty, lines[header + 2].isEmpty {
+        lines.removeSubrange(header - 1...header + 1)
+    }
+    let total = prepared.attachments.count
+    if total > 0, linked.count == total, prepared.verifiedWithFiles, let source = lines.firstIndex(where: { $0.hasPrefix("Source: ") }) {
+        lines[source] = lines[source].replacingOccurrences(of: " · verification: partial", with: " · verification: verified")
+    }
+    return (lines.joined(separator: "\n"), total == 0 ? "" : linked.count == total ? "\(total) file\(total == 1 ? "" : "s") linked."
+            : "\(linked.count) of \(total) files linked; the rest are references (download them from the Files list).")
 }
 
 /// A push button that runs a closure; keeps small popover controls free of selector plumbing.
@@ -307,7 +338,7 @@ final class HandoffBar: NSViewController {
 
     @objc private func allowAccess() {
         _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-        say("Turn on Add to Claude in System Settings → Privacy & Security → Accessibility. This bar updates by itself.")
+        say("Turn on Add to Claude in System Settings → Privacy & Security → Accessibility, then reopen this panel.")
     }
 
     // MARK: context
@@ -451,7 +482,7 @@ final class HandoffBar: NSViewController {
         // Files first, so their lines can point at local copies.
         guard UserDefaults.standard.bool(forKey: Preferences.downloadOnAdd), !frozen.attachments.isEmpty else { return append() }
         say("Downloading files…", glyph: "waiting")
-        downloadFiles(frozen.attachments.map(\.id)) { append() }
+        downloadFiles(frozen.attachments.map(\.key)) { append() }
     }
 
     private func finish(_ message: String, _ success: Bool) {
