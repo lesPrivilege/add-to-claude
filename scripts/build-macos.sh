@@ -1,16 +1,16 @@
 #!/bin/bash
-# Builds an unsigned local add-to-claude.app: the menu-bar chat panel, its WebKit scripts and icons.
+# Builds a local "Add to Claude.app": the menu-bar chat panel, its WebKit scripts and icons.
 set -euo pipefail
 [[ "$(uname -s)" == "Darwin" ]] || { echo 'macOS with the Xcode command-line tools is required.' >&2; exit 1; }
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
-output="${1:-$project_root/dist/add-to-claude.app}"
+output="${1:-$project_root/dist/Add to Claude.app}"
 [[ "$output" == /*.app ]] || { echo 'Usage: bash scripts/build-macos.sh [/absolute/output.app]' >&2; exit 1; }
 [[ ! -e "$output" ]] || { echo "Move the existing $output aside first." >&2; exit 1; }
 
 mkdir -p "$(dirname "$output")"
 work="$(mktemp -d "$(dirname "$output")/.add-to-claude-build.XXXXXX")"
 trap 'rm -r "$work"' EXIT
-bundle="$work/add-to-claude.app"
+bundle="$work/Add to Claude.app"
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
 cp "$project_root/native/Info.plist" "$bundle/Contents/Info.plist"
 cp -R "$project_root/native/icons" "$bundle/Contents/Resources/icons"

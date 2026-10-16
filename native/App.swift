@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Preferences.register()
         DeliveryLog.shared.load() // Also drops what is past the retention period.
+        SavedFiles.shared.load()
         NSApp.mainMenu = mainMenu()
         panel = ChatPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 760),
                           styleMask: [.titled, .resizable, .nonactivatingPanel, .fullSizeContentView],

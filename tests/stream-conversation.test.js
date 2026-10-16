@@ -122,7 +122,7 @@ test('stream projection identifies its real POST provenance rather than inventin
   assert.equal(model.source.response.method, 'POST');
   assert.deepEqual(model.source.response.requestMessageIds, ['u1']);
   assert.equal(model.source.response.coverage, 'new-conversation');
-  assert.match(model.turns[0].sourceLocator, /^observed-stream\.conversation/u);
+  assert.match(model.turns[0].sourceLocators[0], /^observed-stream\.conversation/u);
 });
 
 test('wrong conversation, absent parents, conflicting IDs and response replays cannot overwrite saved history', () => {

@@ -6,6 +6,7 @@ import {
   originalSource,
 } from '../src/chatgpt-response.js';
 import { projectMarkdown, validateConversation } from '../src/model.js';
+import { handoff } from '../src/compile.js';
 
 const pageUrl = 'https://chatgpt.com/c/synthetic-original';
 const evidence = {
@@ -62,7 +63,7 @@ test('original response preserves exact Markdown, parent order and selected vari
     ['u', 'a'],
   );
   assert.equal(model.turns[1].markdown, raw.mapping.a.message.content.parts[0]);
-  assert.equal(model.turns[1].sourceLocator, 'response.mapping["a"].message');
+  assert.deepEqual(model.turns[1].sourceLocators, ['response.mapping["a"].message']);
   assert.equal(model.verification.status, 'verified');
   const text = projectMarkdown(model);
   assert.ok(text.includes(raw.mapping.a.message.content.parts[0]));
@@ -374,7 +375,11 @@ test('an ordinary web-search answer reads cleanly, lists its sources and is veri
     },
   ]);
   const answer = model.turns[1];
-  assert.equal(answer.markdown, 'CC Switch switches providers.\n\nSee CC Switch for setup.');
+  // Each citation stays in place as the number of its source below.
+  assert.equal(
+    answer.markdown,
+    'CC Switch switches providers. [1, 2]\n\nSee CC Switch[3] for setup. [4]',
+  );
   assert.deepEqual(answer.originalParts, [text]);
   assert.deepEqual(
     answer.citations.map((item) => [item.title, item.url]),
@@ -389,7 +394,7 @@ test('an ordinary web-search answer reads cleanly, lists its sources and is veri
   assert.equal(model.verification.status, 'verified');
   const text_ = projectMarkdown(model);
   assert.ok(!/[-]/u.test(text_));
-  assert.ok(text_.includes('- [Setup notes](<https://example.com/setup>)'));
+  assert.ok(text_.includes('4. [Setup notes](<https://example.com/setup>)'));
 });
 
 test('a laid-out answer unwraps its tags and resolves Cite refs through the search results', () => {
@@ -431,7 +436,7 @@ test('a laid-out answer unwraps its tags and resolves Cite refs through the sear
     },
   ]);
   const answer = model.turns[1];
-  assert.equal(answer.markdown, '**1. Field Notes**\n[Site](https://example.com/notes)');
+  assert.equal(answer.markdown, '**1. Field Notes**\n[Site](https://example.com/notes) [1]');
   assert.deepEqual(
     answer.citations.map((item) => item.url),
     ['https://example.com/review'],
@@ -447,7 +452,7 @@ test('unresolvable citations, left-out images and unknown sources are each repor
   }));
   const model = paged(answers);
   assert.equal(model.verification.status, 'partial');
-  assert.equal(model.turns[1].markdown, 'Answer 0.');
+  assert.equal(model.turns[1].markdown, 'Answer 0. [?]');
   assert.equal(model.turns[1].contentFidelity, 'partial');
   const codes = model.verification.issues.map((issue) => issue.code);
   assert.equal(codes.filter((code) => code === 'unresolved-citations').length, 3);
@@ -458,4 +463,122 @@ test('unresolvable citations, left-out images and unknown sources are each repor
   assert.equal(lines.length, 3);
   assert.equal(new Set(lines).size, 3);
   assert.ok(lines.some((line) => line.includes('unfamiliar structure')));
+});
+
+test('an exchange is one turn: the note before a tool call and the answer after it', () => {
+  const said = (id, role, text, extra = {}) => ({
+    id,
+    author: { role },
+    status: 'finished_successfully',
+    content: { content_type: 'text', parts: [text] },
+    ...extra,
+  });
+  const messages = [
+    said('u1', 'user', 'Check the data.'),
+    said('note', 'assistant', 'I will look at the file first.', { end_turn: false }),
+    said('call', 'assistant', 'print(1)', { recipient: 'python' }),
+    said('out', 'tool', '1'),
+    said(
+      'answer',
+      'assistant',
+      `It holds one row ${cite('turn0search0')}. [table](sandbox:/mnt/data/t.csv)`,
+      {
+        end_turn: true,
+        metadata: {
+          search_result_groups: [
+            {
+              type: 'search_result_group',
+              entries: [
+                {
+                  type: 'search_result',
+                  url: 'https://example.com/s',
+                  title: 'S',
+                  ref_id: ref(0, 0),
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ),
+    said('u2', 'user', 'Thanks.'),
+    said('bye', 'assistant', 'Glad to help.', { end_turn: true }),
+  ];
+  const model = importBrowserResponse(
+    JSON.stringify({
+      conversation_id: 'searched',
+      title: 'Exchange',
+      current_node: 'bye',
+      page_info: { has_previous_page: false },
+      messages,
+    }),
+    {
+      ...evidence,
+      pageUrl: 'https://chatgpt.com/c/searched',
+      responseUrl: 'https://chatgpt.com/backend-api/conversations/searched',
+    },
+  );
+  assert.deepEqual(
+    model.turns.map((turn) => [turn.id, turn.role]),
+    [
+      ['u1', 'user'],
+      ['note', 'assistant'],
+      ['u2', 'user'],
+      ['bye', 'assistant'],
+    ],
+  );
+  const exchange = model.turns[1];
+  assert.equal(
+    exchange.markdown,
+    'I will look at the file first.\n\nIt holds one row [1]. [table](sandbox:/mnt/data/t.csv)',
+  );
+  assert.equal(exchange.sourceLocators.length, 2);
+  assert.match(exchange.sourceLocators[1], /\["answer"\]\.message$/u);
+  assert.deepEqual(
+    exchange.citations.map((item) => item.url),
+    ['https://example.com/s'],
+  );
+  // The file belongs to the exchange, and is fetched by the message it came from.
+  const [file] = model.attachments;
+  assert.equal(file.turnId, 'note');
+  assert.equal(file.messageId, 'answer');
+  assert.equal(handoff(model).attachments[0].messageId, 'answer');
+  // A check about the answer goes with the exchange's turn.
+  const subset = handoff(model, { turnIds: ['note'], note: 'chosen' });
+  assert.ok(subset.issues.some((message) => message.includes('t.csv')));
+  assert.match(
+    projectMarkdown(model),
+    /<!-- source: .*\["note"\]\.message, .*\["answer"\]\.message -->/u,
+  );
+});
+
+test('citation marks never rewrite other text, whatever characters it holds', () => {
+  const odd = '0 \u{f0000}1\u{f0000}';
+  const model = paged([
+    {
+      text: `Fact ${cite('turn0search9')}\n\n\`\`\`\n${odd}\n\`\`\`\n\nInline \`${odd}\` and ${odd}`,
+    },
+  ]);
+  assert.equal(model.turns[0].markdown, 'Question 1');
+  assert.equal(
+    model.turns[1].markdown,
+    `Fact [?]\n\n\`\`\`\n${odd}\n\`\`\`\n\nInline \`${odd}\` and ${odd}`,
+  );
+  const user = importBrowserResponse(
+    JSON.stringify({
+      ...fixture(),
+      mapping: {
+        ...fixture().mapping,
+        u: {
+          ...fixture().mapping.u,
+          message: {
+            ...fixture().mapping.u.message,
+            content: { content_type: 'text', parts: [`see ${odd} here`] },
+          },
+        },
+      },
+    }),
+    evidence,
+  );
+  assert.equal(user.turns[0].markdown, `see ${odd} here`);
 });

@@ -119,7 +119,7 @@ export function importBrowserResponse(body, { pageUrl, responseUrl, capturedAt, 
     },
   };
   for (const turn of model.turns) {
-    turn.sourceLocator = relocate(turn.sourceLocator);
+    turn.sourceLocators = turn.sourceLocators.map(relocate);
     for (const citation of turn.citations)
       citation.sourceLocator = relocate(citation.sourceLocator);
   }

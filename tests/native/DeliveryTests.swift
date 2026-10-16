@@ -51,7 +51,53 @@ import Foundation
         identities()
         persistence()
         readback()
+        savedFiles()
         print("PASS: \(checks) delivery-log and scope checks")
+    }
+
+    /// A copy Add saved is reused after a relaunch while its bytes are unchanged, and follows History.
+    static func savedFiles() {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("gh-saved-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("add-to-claude/saved-files.json")
+        let copy = folder.appendingPathComponent("table.csv")
+        try? Data("a,b\n".utf8).write(to: copy)
+        let clock = Clock()
+        var remember = true
+        let hashOf = { (url: URL) in (try? Data(contentsOf: url)).map { SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined() } }
+        let make = { SavedFiles(file: file, remember: { remember }, retentionDays: { 30 }, now: { clock.now }, hash: hashOf) }
+        let page = "https://chatgpt.com/c/synthetic"
+        let saved = make()
+        saved.saved(page: page, file: "file-1|m2", path: copy, sha256: hashOf(copy)!)
+        let text = String(decoding: (try? Data(contentsOf: file)) ?? Data(), as: UTF8.self)
+        check(text.contains("file-1|m2") && !text.contains("a,b"), "the record holds ids, paths and hashes, not file contents")
+
+        let relaunched = make()
+        relaunched.load()
+        check(relaunched.copy(page: page, file: "file-1|m2")?.path.path == copy.path, "after a relaunch a saved copy is reused")
+        check(relaunched.copy(page: "https://chatgpt.com/c/other", file: "file-1|m2") == nil, "only in its own conversation")
+
+        try? Data("a,b\nedited\n".utf8).write(to: copy)
+        let edited = make()
+        edited.load()
+        check(edited.copy(page: page, file: "file-1|m2") == nil, "a copy whose bytes changed is downloaded again")
+        check(!String(decoding: (try? Data(contentsOf: file)) ?? Data(), as: UTF8.self).contains("file-1"), "and forgotten")
+
+        saved.saved(page: page, file: "file-1|m2", path: copy, sha256: hashOf(copy)!)
+        clock.now = clock.now.addingTimeInterval(31 * 86400)
+        let later = make()
+        later.load()
+        check(later.copy(page: page, file: "file-1|m2") == nil, "copies past the history period are forgotten")
+
+        later.saved(page: page, file: "file-1|m2", path: copy, sha256: hashOf(copy)!)
+        remember = false
+        later.preferencesChanged()
+        check(!FileManager.default.fileExists(atPath: file.path), "turning off Remember removes the record")
+        check(later.copy(page: page, file: "file-1|m2") != nil, "while this run still knows the copy")
+        later.clear()
+        check(later.copy(page: page, file: "file-1|m2") == nil && FileManager.default.fileExists(atPath: copy.path),
+              "Clear history forgets copies and leaves the files")
     }
 
     /// How a pasted draft is compared with what was meant: layout may differ, indentation may not.

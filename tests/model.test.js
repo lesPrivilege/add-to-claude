@@ -63,7 +63,7 @@ test('current-node path preserves parent order and original Markdown', () => {
     ['u1', 'a1', 'u2', 'a2'],
   );
   assert.equal(model.turns[3].markdown, input[0].mapping.a2.message.content.parts[0]);
-  assert.equal(model.turns[3].sourceLocator, 'conversations[0].mapping["a2"].message');
+  assert.deepEqual(model.turns[3].sourceLocators, ['conversations[0].mapping["a2"].message']);
   assert.equal(model.verification.status, 'verified');
   assert.equal(model.branches.selection, 'current-node');
 });

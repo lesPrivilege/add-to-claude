@@ -218,19 +218,25 @@ private struct SettingsView: View {
 
             Section {
                 Toggle("Remember what was added", isOn: $rememberAdded)
-                    .onChange(of: rememberAdded) { DeliveryLog.shared.preferencesChanged() }
+                    .onChange(of: rememberAdded) {
+                        DeliveryLog.shared.preferencesChanged()
+                        SavedFiles.shared.preferencesChanged()
+                    }
                 Picker("Keep for", selection: $historyDays) {
                     Text("7 days").tag(7)
                     Text("30 days").tag(30)
                     Text("90 days").tag(90)
                 }
                 .disabled(!rememberAdded)
-                .onChange(of: historyDays) { DeliveryLog.shared.prune() }
+                .onChange(of: historyDays) {
+                    DeliveryLog.shared.prune()
+                    SavedFiles.shared.prune()
+                }
                 LabeledContent("History") {
                     Button("Clear History…") { confirmClear = true }
                 }
                 note(rememberAdded
-                     ? "So Add can offer only what is new in a conversation it can identify. Kept on this Mac: ids, positions, hashes and times, never message text."
+                     ? "So Add can offer only what is new in a conversation it can identify, and reuse files it already saved. Kept on this Mac: ids, positions, hashes, times and where files were saved, never message text."
                      : "Add remembers what was added only until you quit.")
             } header: { sectionHeader("History", glyph: "waiting") }
 
@@ -294,9 +300,12 @@ private struct SettingsView: View {
             pasteApps = SettingsView.pastedApps()
         }
         .confirmationDialog("Clear what Add to Claude remembers adding?", isPresented: $confirmClear) {
-            Button("Clear History", role: .destructive) { DeliveryLog.shared.clear() }
+            Button("Clear History", role: .destructive) {
+                DeliveryLog.shared.clear()
+                SavedFiles.shared.clear()
+            }
         } message: {
-            Text("The next Add into any conversation offers all turns again. Your conversations and drafts are not touched.")
+            Text("The next Add into any conversation offers all turns again and downloads its files again. Your conversations, drafts and saved files are not touched.")
         }
         .confirmationDialog("Sign out of ChatGPT in Add to Claude?", isPresented: $confirmSignOut) {
             Button("Sign Out", role: .destructive) { signOut() }

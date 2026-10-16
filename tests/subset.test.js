@@ -17,7 +17,7 @@ function conversation() {
     id,
     role,
     markdown,
-    sourceLocator: `${at(id)}.message`,
+    sourceLocators: [`${at(id)}.message`],
     contentFidelity: 'original-markdown',
     ...extra,
   });

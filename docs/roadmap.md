@@ -6,13 +6,13 @@ Recorded 2026-10-16 from the owner's plan. Order matters more than dates.
 
 The menu-bar app (0.6.0) is the form that ships. ChatGPT is the source, and the destination is any open app with a text box, reached through Accessibility.
 
-## 0.6.1 (collecting; fixed together)
+## 0.6.1
 
-- **Name the bundle "Add to Claude.app".** The zip unpacks to `add-to-claude.app`, so Finder and Launchpad show "add-to-claude".
-- **Skip files already downloaded.** Add downloads every file again and only then drops a copy whose SHA-256 matches the existing `name.ext`. Check the local file before downloading instead, so a repeated Add costs no transfer.
-- **One turn per exchange.** Consecutive assistant messages between two user messages (the "I'll look at…" note before a tool call and the answer after it) become one turn: text in source order, `source` listing every message id, New · N counting exchanges. A structural rule, not a judgement of which text matters.
-- **Cards and flowcharts keep order and hierarchy.** First confirm where the arrows go (suspected: arrow `<icon>` dropped as decoration, `row`/`grid` flattened to indented prose) on a synthetic sample of the raw markup. Then: arrow icons become `→`, a `row`'s items join with ` → ` (or `·`), each `box` is a paragraph with a bold title, `grid` items a list.
-- **Citations marked in place.** Every citation leaves `[n]`, matching the turn's source list, and one with no source leaves `[?]`; the notice at the top stays.
+Done in code (see [release/0.6.1.md](release/0.6.1.md)): the bundle is "Add to Claude.app"; saved files are reused across launches; one turn per exchange; citations marked in place.
+
+Still open:
+
+- **Cards and flowcharts keep order and hierarchy.** First confirm where the arrows go (suspected: arrow `<icon>` dropped as decoration, `row`/`grid` flattened to indented prose) on a synthetic sample of the raw markup. Then: arrow icons become `→`, a `row`'s items join with `→` (or `·`), each `box` is a paragraph with a bold title, `grid` items a list. Waits on that sample.
 
 ## Next forms
 

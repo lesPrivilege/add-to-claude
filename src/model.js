@@ -203,11 +203,16 @@ export function validateConversation(data) {
     const markdown = count(
       string(turn.markdown, 'Turn Markdown', LIMITS.maxTextBytes, { empty: true }),
     );
+    if (!Array.isArray(turn.sourceLocators) || !turn.sourceLocators.length)
+      throw new TypeError('A turn needs at least one source locator.');
     const output = {
       id: turnId,
       role: turn.role,
       markdown,
-      sourceLocator: string(turn.sourceLocator, 'Turn source locator'),
+      // Where the turn's messages are in the source, in order: one, or an exchange's assistant messages.
+      sourceLocators: array(turn.sourceLocators, 'Turn source locators', 1000).map((locator) =>
+        string(locator, 'Turn source locator'),
+      ),
       contentFidelity: turn.contentFidelity,
     };
     if (turn.renderedIndex !== undefined) {
@@ -467,6 +472,8 @@ export function validateConversation(data) {
           );
         output.sha256 = item.sha256;
       }
+      if (item.messageId !== undefined)
+        output.messageId = id(item.messageId, 'Attachment message ID');
       if (item.turnId !== undefined) {
         output.turnId = id(item.turnId, 'Attachment turn ID');
         if (!turnIds.has(output.turnId))
@@ -568,9 +575,9 @@ export const SCOPE_NOTES = Object.freeze([
   'added again',
 ]);
 
-/** Where a turn's own node is in the source: its locator without the trailing `.message`. */
-function nodeOf(turn) {
-  return turn.sourceLocator.replace(/\.message$/u, '');
+/** Where a turn's own nodes are in the source: its locators without the trailing `.message`. */
+function nodesOf(turn) {
+  return turn.sourceLocators.map((locator) => locator.replace(/\.message$/u, ''));
 }
 
 /** Whether `locator` is `base` or something inside it (`base.x`, `base[0]`, `base/x`). */
@@ -601,7 +608,9 @@ export function selectTurns(model, turnIds = null) {
     if (every || !issue.sourceLocator) return true;
     const file = model.attachments.find((item) => item.sourceLocator === issue.sourceLocator);
     if (file) return attachments.includes(file);
-    const turn = model.turns.find((item) => within(issue.sourceLocator, nodeOf(item)));
+    const turn = model.turns.find((item) =>
+      nodesOf(item).some((node) => within(issue.sourceLocator, node)),
+    );
     return !turn || wanted.has(turn.id);
   });
   let status = model.verification.status;
@@ -658,8 +667,10 @@ function turnBody(turn, files, marks = null) {
   out.push('', turn.code ? projectCode(turn.code) : turn.markdown);
   if (turn.citations.length) {
     out.push('', '### References', '');
-    for (const citation of turn.citations)
-      out.push(`- [${labelText(citation.title)}](<${citation.url}>)`);
+    // Numbered as the text's [n] marks.
+    turn.citations.forEach((citation, index) =>
+      out.push(`${index + 1}. [${labelText(citation.title)}](<${citation.url}>)`),
+    );
   }
   if (files.length) {
     out.push('', '### Files', '');
@@ -748,7 +759,7 @@ export function projectMarkdown(input, lines = null, { turnIds = null, note = ''
     out.push(
       '',
       `## Turn ${chosen.positions.get(turn.id)} — ${turn.role === 'user' ? 'User' : 'Assistant'}`,
-      comment(`source: ${turn.sourceLocator}`),
+      comment(`source: ${turn.sourceLocators.join(', ')}`),
     );
     const fileMarks = [];
     const body = turnBody(turn, files.get(turn.id), fileMarks);
@@ -800,7 +811,7 @@ export function demoConversation() {
         role: 'user',
         markdown:
           'Help me shape a small launch page for **Field Notes**, a local-first writing app.\n\nKeep it calm, clear, and useful.',
-        sourceLocator: 'synthetic:demo/1',
+        sourceLocators: ['synthetic:demo/1'],
         contentFidelity: 'original-markdown',
       },
       {
@@ -808,14 +819,14 @@ export function demoConversation() {
         role: 'assistant',
         markdown:
           '## A place for unfinished thoughts\n\nA quiet space to collect ideas, find a thread, and keep writing.\n\n- Your words stay on your device.\n- Start with a blank page.\n- Export whenever you like.\n\nUse a single primary action: **Start a note**.',
-        sourceLocator: 'synthetic:demo/2',
+        sourceLocators: ['synthetic:demo/2'],
         contentFidelity: 'original-markdown',
       },
       {
         id: 'demo-3',
         role: 'user',
         markdown: 'Add a tiny code example and a reference link. Keep the draft as Markdown.',
-        sourceLocator: 'synthetic:demo/3',
+        sourceLocators: ['synthetic:demo/3'],
         contentFidelity: 'original-markdown',
       },
       {
@@ -823,7 +834,7 @@ export function demoConversation() {
         role: 'assistant',
         markdown:
           '```js\nconst note = { title: "A small beginning", saved: true };\n```\n\nFor the implementation, start with [semantic HTML](https://developer.mozilla.org/en-US/docs/Glossary/Semantics).\n\nThe first screen should feel like an invitation to write.',
-        sourceLocator: 'synthetic:demo/4',
+        sourceLocators: ['synthetic:demo/4'],
         contentFidelity: 'original-markdown',
         citations: [
           {

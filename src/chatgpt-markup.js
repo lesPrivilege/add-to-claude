@@ -53,22 +53,24 @@ function dedent(lines, start) {
 }
 
 /**
- * Returns the readable Markdown, the citations it removed (each with its exact source text and
+ * Returns the readable Markdown, the citations it found (each with its exact source text and
  * reference ids, for resolving against the message metadata) and how many inline images or
- * widgets it had to leave out.
+ * widgets it had to leave out. `mark(cite)` gives the text that stands in a citation's place.
  */
-export function readableMarkdown(text) {
+export function readableMarkdown(text, mark = () => '') {
   const cites = [];
   let omitted = 0;
   const marker = (match, space, kind, rest) => {
     const fields = rest.split('\ue202').slice(1);
     if (kind === 'cite' || kind === 'url') {
-      cites.push({
+      const cite = {
         marker: match.slice(space.length),
         refs: fields.filter((field) => refIdPattern.test(field)),
-      });
-      if (kind === 'cite') return '';
-      return space + (fields.find((field) => !refIdPattern.test(field)) ?? '');
+      };
+      cites.push(cite);
+      const label = kind === 'url' ? (fields.find((field) => !refIdPattern.test(field)) ?? '') : '';
+      const stand = mark(cite);
+      return label || stand ? space + label + stand : '';
     }
     if (kind === 'entity') {
       try {
@@ -104,11 +106,13 @@ export function readableMarkdown(text) {
     if (name === 'Entity') return typeof values.value === 'string' ? space + values.value : match;
     if (name === 'Link') return space + link(values.title, values.url);
     // Cite
-    cites.push({
+    const cite = {
       marker: match.slice(space.length),
       refs: typeof values.ref === 'string' ? values.ref.split(/[\s,]+/u).filter(Boolean) : [],
-    });
-    return '';
+    };
+    cites.push(cite);
+    const stand = mark(cite);
+    return stand ? space + stand : '';
   };
   // Markup inside an inline code span stays as written. A tag is matched on the whole line first, since
   // its handler may itself contain backticks; it is left alone only if it starts inside a code span.

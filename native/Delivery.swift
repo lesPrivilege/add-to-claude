@@ -210,6 +210,120 @@ final class DeliveryLog {
     }
 }
 
+/// The copies Add saved, by conversation page and file (its id and message). With "Remember what was
+/// added" on they are kept for the history period in a small JSON file, so a later Add, after a relaunch
+/// too, reuses a copy instead of downloading it again, but only while the file at that path still has
+/// the SHA-256 it was saved with. Pages, file ids, paths and hashes only.
+final class SavedFiles {
+    struct Copy: Codable, Equatable {
+        var page: String
+        var file: String
+        var path: String
+        var sha256: String
+        var savedAt: Date
+    }
+
+    static let maximum = 2000
+
+    let file: URL?
+    private let remember: () -> Bool
+    private let retentionDays: () -> Int
+    private let now: () -> Date
+    private let hash: (URL) -> String?
+    private var copies: [String: Copy] = [:]
+    /// Copies whose bytes were checked against their hash in this run.
+    private var checked = Set<String>()
+
+    init(file: URL?, remember: @escaping () -> Bool, retentionDays: @escaping () -> Int,
+         now: @escaping () -> Date = Date.init, hash: @escaping (URL) -> String?) {
+        self.file = file
+        self.hash = hash
+        self.remember = remember
+        self.retentionDays = retentionDays
+        self.now = now
+    }
+
+    private static func key(_ page: String, _ file: String) -> String { page + "\n" + file }
+
+    /// At launch: read what earlier runs saved, dropping what is past retention.
+    func load() {
+        guard remember(), let file, let data = try? Data(contentsOf: file), data.count <= 4 * 1024 * 1024,
+              let stored = try? JSONDecoder.iso.decode([Copy].self, from: data) else { return prune() }
+        for copy in stored where copies[Self.key(copy.page, copy.file)] == nil { copies[Self.key(copy.page, copy.file)] = copy }
+        prune()
+    }
+
+    /// The saved copy of a file, if it is still there with the same bytes.
+    func copy(page: String, file: String) -> (path: URL, sha256: String)? {
+        let key = Self.key(page, file)
+        guard let copy = copies[key] else { return nil }
+        let path = URL(fileURLWithPath: copy.path)
+        if !checked.contains(key) {
+            guard hash(path) == copy.sha256 else {
+                copies[key] = nil
+                save()
+                return nil
+            }
+            checked.insert(key)
+        }
+        return (path, copy.sha256)
+    }
+
+    func saved(page: String, file: String, path: URL, sha256: String) {
+        let key = Self.key(page, file)
+        copies[key] = Copy(page: page, file: file, path: path.path, sha256: sha256, savedAt: now())
+        checked.insert(key)
+        if copies.count > Self.maximum, let oldest = copies.min(by: { $0.value.savedAt < $1.value.savedAt })?.key {
+            copies[oldest] = nil
+        }
+        save()
+    }
+
+    func prune() {
+        let cutoff = now().addingTimeInterval(-Double(max(1, retentionDays())) * 86400)
+        copies = copies.filter { $0.value.savedAt >= cutoff }
+        save()
+    }
+
+    /// Forgets every copy, in memory and on disk. The files themselves stay.
+    func clear() {
+        copies.removeAll()
+        checked.removeAll()
+        if let file { try? FileManager.default.removeItem(at: file) }
+    }
+
+    func preferencesChanged() {
+        if remember() { save() } else if let file { try? FileManager.default.removeItem(at: file) }
+    }
+
+    private func save() {
+        guard remember(), let file else { return }
+        do {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true,
+                                                    attributes: [.posixPermissions: 0o700])
+            try JSONEncoder.iso.encode(copies.values.sorted { $0.savedAt < $1.savedAt }).write(to: file, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        } catch {}
+    }
+}
+
+private extension JSONEncoder {
+    static let iso: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }()
+}
+
+private extension JSONDecoder {
+    static let iso: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+}
+
 // MARK: scope
 
 /// What the user picked in the scope menu. Never saved: it is reset after each Add and whenever the

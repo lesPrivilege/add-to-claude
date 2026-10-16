@@ -34,7 +34,7 @@ export function handoff(model, { turnIds = null, note = '' } = {}) {
         name: file.name,
         label: labelText(file.name),
         turn: turnNumber.get(file.turnId) ?? 0,
-        messageId: file.turnId ?? '',
+        messageId: file.messageId ?? '',
         line: lines.files.get(file.id),
         check: check ? lines.checks.get(check.message) : -1,
       };

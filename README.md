@@ -58,9 +58,10 @@ Today the source is ChatGPT. The destination can be any app with a text box.
 - The prepared conversation is held in memory only.
 - To get a file, it asks the page for the file's download link through the page's own session. The session token never leaves the page.
 - What stays on disk: the panel's ChatGPT login (WebKit's own data), your settings, and the files you download, in the folder you choose.
-- **What Add remembers** is the one other thing it writes, to `~/Library/Application Support/add-to-claude/delivery-log.json`.
-  - It holds which turns went into which identified conversation: message ids, positions, content hashes, states and times. It never holds message text.
-  - It is kept for 30 days by default. Settings → History turns it off, changes how long it is kept, or clears it.
+- **What Add remembers** is the one other thing it writes, to `~/Library/Application Support/add-to-claude/`.
+  - `delivery-log.json` holds which turns went into which identified conversation: message ids, positions, content hashes, states and times. It never holds message text.
+  - `saved-files.json` holds where Add saved each file and its SHA-256, so a later Add reuses the copy while its bytes are unchanged.
+  - Both are kept for 30 days by default. Settings → History turns it off, changes how long it is kept, or clears it.
 - No telemetry, no history archive, no server of its own.
 
 ### Install the beta
@@ -86,7 +87,7 @@ bash scripts/build-macos.sh
 ```
 
 ```bash
-open dist/add-to-claude.app
+open "dist/Add to Claude.app"
 ```
 
 1. Sign in to ChatGPT in the panel.
@@ -164,9 +165,10 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
 - 整理好的对话只保存在内存里。
 - 下载文件时，通过页面自己的会话向页面请求下载链接，会话令牌不会离开页面。
 - 留在磁盘上的只有：面板的 ChatGPT 登录数据（WebKit 自身保存）、你的设置，以及你下载到所选文件夹里的文件。
-- **Add 记住的内容**是它唯一另外写入的东西，位于 `~/Library/Application Support/add-to-claude/delivery-log.json`。
-  - 它记录哪些轮次进入了哪个已识别的对话：消息 ID、位置、内容哈希、状态和时间，从不保存消息正文。
-  - 默认保留 30 天。在 设置 → History 中可以关闭、改变保留时长或清除。
+- **Add 记住的内容**是它唯一另外写入的东西，位于 `~/Library/Application Support/add-to-claude/`。
+  - `delivery-log.json` 记录哪些轮次进入了哪个已识别的对话：消息 ID、位置、内容哈希、状态和时间，从不保存消息正文。
+  - `saved-files.json` 记录 Add 把每个文件存在哪里及其 SHA-256，之后再 Add 时只要文件内容未变就直接复用。
+  - 两者默认保留 30 天。在 设置 → History 中可以关闭、改变保留时长或清除。
 - 没有遥测，没有历史存档，也没有自己的服务器。
 
 ### 安装测试版

@@ -67,6 +67,14 @@ func sha256(of path: URL) -> String? {
     return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }
 
+extension SavedFiles {
+    static let shared = SavedFiles(file: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+                                       .appendingPathComponent("add-to-claude", isDirectory: true).appendingPathComponent("saved-files.json"),
+                                   remember: { UserDefaults.standard.bool(forKey: HistoryKeys.remember) },
+                                   retentionDays: { UserDefaults.standard.integer(forKey: HistoryKeys.days) },
+                                   hash: sha256(of:))
+}
+
 /// A short-lived link the page itself asked for, seen by the observer.
 struct FileLink {
     let url: URL

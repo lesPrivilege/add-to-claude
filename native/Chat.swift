@@ -139,7 +139,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         let store = WKWebsiteDataStore.default()
         store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { [weak self] in
             self?.fileLinks.removeAll()
-            self?.saved.removeAll()
+            self?.saved.clear()
             self?.set(nil, .waiting)
             self?.web.load(URLRequest(url: URL(string: "https://chatgpt.com/")!))
         }
@@ -249,11 +249,10 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
 
     // MARK: files
 
-    /// Local copies, by conversation page and the file's own key (its place in that conversation).
-    private var saved: [String: (path: URL, sha256: String)] = [:]
+    private let saved = SavedFiles.shared
 
     private func savedFile(_ file: Attachment, on page: String) -> (path: URL, sha256: String)? {
-        saved[page + "|" + file.key]
+        saved.copy(page: page, file: file.id + "|" + file.messageId)
     }
 
     private func withFiles(_ prepared: Prepared) -> (String, String) {
@@ -330,8 +329,10 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         }
         fetcher.fetch(items, into: FilesFolder.folder(for: prepared.title)) { [weak self] outcomes in
             guard let self else { return }
-            for (key, outcome) in outcomes {
-                if let path = outcome.path, let hash = outcome.sha256 { self.saved[prepared.page + "|" + key] = (path, hash) }
+            for file in wanted {
+                if let outcome = outcomes[file.key], let path = outcome.path, let hash = outcome.sha256 {
+                    self.saved.saved(page: prepared.page, file: file.id + "|" + file.messageId, path: path, sha256: hash)
+                }
             }
             let failed = outcomes.values.compactMap(\.problem)
             let unlinked = wanted.count - items.count
@@ -463,7 +464,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
               let hash = sha256(of: written) else { return }
         let path = reuseIdentical(written, sha256: hash, name: safeFileName(name, fallback: "download"))
         if let prepared, case let matches = prepared.attachments.filter({ $0.name == name }), matches.count == 1 {
-            saved[prepared.page + "|" + matches[0].key] = (path, hash)
+            saved.saved(page: prepared.page, file: matches[0].id + "|" + matches[0].messageId, path: path, sha256: hash)
         }
         bar.filesChanged("Saved \(path.lastPathComponent) to the files folder.")
     }

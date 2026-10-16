@@ -38,10 +38,10 @@ Use throwaway conversations. Mark each line PASS, FAIL, BLOCKED or NOT RUN. Item
 4. Build into a fresh folder (the script refuses to overwrite) and check the signature:
 
    ```bash
-   bash scripts/build-macos.sh "$PWD/dist/rc-N/add-to-claude.app"
-   codesign --verify --strict dist/rc-N/add-to-claude.app
-   codesign -dv dist/rc-N/add-to-claude.app   # Authority=add-to-claude Local
-   spctl -a -vv dist/rc-N/add-to-claude.app   # rejected until Developer ID and notarization
+   bash scripts/build-macos.sh "$PWD/dist/rc-N/Add to Claude.app"
+   codesign --verify --strict "dist/rc-N/Add to Claude.app"
+   codesign -dv "dist/rc-N/Add to Claude.app"   # Authority=add-to-claude Local
+   spctl -a -vv "dist/rc-N/Add to Claude.app"   # rejected until Developer ID and notarization
    ```
 
    The build signs with "add-to-claude Local" when that identity is in the login keychain (`bash scripts/make-signing-identity.sh` creates it, once per Mac), and ad-hoc otherwise. Do not ship an ad-hoc build: it loses the Accessibility grant on every update.
@@ -49,7 +49,7 @@ Use throwaway conversations. Mark each line PASS, FAIL, BLOCKED or NOT RUN. Item
 5. Archive and checksum:
 
    ```bash
-   ditto -c -k --keepParent dist/rc-N/add-to-claude.app dist/rc-N/add-to-claude-X.Y.Z-rc.N.zip
+   ditto -c -k --keepParent "dist/rc-N/Add to Claude.app" dist/rc-N/add-to-claude-X.Y.Z-rc.N.zip
    shasum -a 256 dist/rc-N/add-to-claude-X.Y.Z-rc.N.zip
    ```
 

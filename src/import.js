@@ -384,6 +384,10 @@ export function importConversation(raw, id, leafId) {
   issues.push(...graph.issues);
   const lastVisibleTurnId = path.findLast(({ node }) => isTurn(node))?.id;
   const turns = [];
+  // Assistant messages folded into the turn before them: message id → turn id.
+  const foldedInto = new Map();
+  // Inline citation marks across the whole branch: the links each resolves to, or null.
+  const slots = [];
   let excludedMessages = 0;
   const attachments = [];
   const attachmentKeys = new Set();
@@ -415,7 +419,8 @@ export function importConversation(raw, id, leafId) {
       sourceLocator,
       status,
     };
-    if (turnId) result.turnId = turnId;
+    // The message a file came from; its turn is that message's exchange (see the merge below).
+    if (turnId) result.turnId = result.messageId = turnId;
     const url = safeUrl(item.download_url ?? item.url);
     if (url) result.url = url;
     if (typeof (item.mime_type ?? item.media_type) === 'string')
@@ -525,12 +530,95 @@ export function importConversation(raw, id, leafId) {
         'This turn has no supported text content. Open the original conversation to recover it.',
         `${base}.message.content`,
       );
+    // An inline citation is resolved when the content reference that replaces its exact text has
+    // a link, or when every source id it names (turn, type, index) is a known search result.
+    const referenceId = (value) =>
+      typeof value === 'string'
+        ? value
+        : isRecord(value) &&
+            Number.isSafeInteger(value.turn_index) &&
+            typeof value.ref_type === 'string' &&
+            Number.isSafeInteger(value.ref_index)
+          ? `turn${value.turn_index}${value.ref_type}${value.ref_index}`
+          : null;
+    const linkedText = new Map();
+    const sourceById = new Map();
+    const noteSource = (entry, ids, sourceLocator) => {
+      const url = isRecord(entry) && safeUrl(entry.url);
+      if (!url || !Array.isArray(ids)) return;
+      for (const id of ids.map(referenceId))
+        if (id && !sourceById.has(id))
+          sourceById.set(id, { url, title: entry.title, sourceLocator });
+    };
+    // content_references entries that only shape the rendered text, never a source link.
+    const linklessReferences = ['hidden', 'entity', 'image_group'];
+    if (Array.isArray(metadata.content_references))
+      metadata.content_references.forEach((reference, referenceIndex) => {
+        if (!isRecord(reference)) return;
+        const path = `${base}.message.metadata.content_references[${referenceIndex}]`;
+        const items = Array.isArray(reference.items) ? reference.items : [];
+        noteSource(reference, reference.refs, path);
+        items.forEach((item, itemIndex) =>
+          noteSource(item, item?.refs, `${path}.items[${itemIndex}]`),
+        );
+        const links = [
+          reference.url,
+          ...items.map((item) => item?.url),
+          ...(Array.isArray(reference.sources) ? reference.sources.map((item) => item?.url) : []),
+          ...(Array.isArray(reference.safe_urls) ? reference.safe_urls : []),
+        ];
+        if (
+          typeof reference.matched_text === 'string' &&
+          !linklessReferences.includes(reference.type) &&
+          links.some(safeUrl)
+        )
+          linkedText.set(reference.matched_text, links.map(safeUrl).filter(Boolean));
+      });
+    if (Array.isArray(metadata.search_result_groups))
+      metadata.search_result_groups.forEach((group, groupIndex) => {
+        if (isRecord(group) && Array.isArray(group.entries))
+          group.entries.forEach((entry, entryIndex) =>
+            noteSource(
+              entry,
+              [entry?.ref_id],
+              `${base}.message.metadata.search_result_groups[${groupIndex}].entries[${entryIndex}]`,
+            ),
+          );
+      });
+    // Each inline citation leaves a mark in place, numbered once its turn's source list is final (a turn
+    // may span several messages): the links it resolves to, or none, read as [?].
+    // Marks travel through the markup reader as a character the text does not contain, then come out
+    // as positions, so the text itself is never rewritten.
+    const raw = parts.join('\n\n');
+    let sentinel = 0xf0000;
+    while (raw.includes(String.fromCodePoint(sentinel))) sentinel += 1;
+    sentinel = String.fromCodePoint(sentinel);
+    const mark = (cite) => {
+      const urls =
+        linkedText.get(cite.marker) ??
+        (cite.refs.length && cite.refs.every((ref) => sourceById.has(ref))
+          ? cite.refs.map((ref) => sourceById.get(ref).url)
+          : null);
+      slots.push(urls);
+      return `${sentinel}${slots.length - 1}${sentinel}`;
+    };
     // Assistant text carries ChatGPT's rendering markup; the hand-off reads like its Copy button.
     const readable =
       role === 'assistant' && content.content_type !== 'code'
-        ? readableMarkdown(parts.join('\n\n'))
-        : { markdown: parts.join('\n\n'), cites: [], omitted: 0 };
-    const markdown = readable.markdown;
+        ? readableMarkdown(raw, mark)
+        : { markdown: raw, cites: [], omitted: 0 };
+    const marks = [];
+    let removed = 0;
+    const markdown = readable.cites.length
+      ? readable.markdown.replace(
+          new RegExp(`${sentinel}(\\d+)${sentinel}`, 'gu'),
+          (_, slot, at) => {
+            marks.push({ at: at - removed, slot: Number(slot) });
+            removed += _.length;
+            return '';
+          },
+        )
+      : readable.markdown;
     let code;
     if (content.content_type === 'code') {
       code = {
@@ -638,8 +726,6 @@ export function importConversation(raw, id, leafId) {
       'extra',
       'thumbnail_url',
     ];
-    // content_references entries that only shape the rendered text, never a source link.
-    const linklessReferences = ['hidden', 'entity', 'image_group'];
     let citationNodes = 0;
     let citationLimitReported = false;
     const citationLimit = (path) => {
@@ -720,59 +806,6 @@ export function importConversation(raw, id, leafId) {
     for (const key of ['citations', 'content_references'])
       if (metadata[key] !== undefined && metadata[key] !== null)
         collectCitations(metadata[key], `${base}.message.metadata.${key}`);
-    // An inline citation is resolved when the content reference that replaces its exact text has
-    // a link, or when every source id it names (turn, type, index) is a known search result.
-    const referenceId = (value) =>
-      typeof value === 'string'
-        ? value
-        : isRecord(value) &&
-            Number.isSafeInteger(value.turn_index) &&
-            typeof value.ref_type === 'string' &&
-            Number.isSafeInteger(value.ref_index)
-          ? `turn${value.turn_index}${value.ref_type}${value.ref_index}`
-          : null;
-    const linkedText = new Set();
-    const sourceById = new Map();
-    const noteSource = (entry, ids, sourceLocator) => {
-      const url = isRecord(entry) && safeUrl(entry.url);
-      if (!url || !Array.isArray(ids)) return;
-      for (const id of ids.map(referenceId))
-        if (id && !sourceById.has(id))
-          sourceById.set(id, { url, title: entry.title, sourceLocator });
-    };
-    if (Array.isArray(metadata.content_references))
-      metadata.content_references.forEach((reference, referenceIndex) => {
-        if (!isRecord(reference)) return;
-        const path = `${base}.message.metadata.content_references[${referenceIndex}]`;
-        const items = Array.isArray(reference.items) ? reference.items : [];
-        noteSource(reference, reference.refs, path);
-        items.forEach((item, itemIndex) =>
-          noteSource(item, item?.refs, `${path}.items[${itemIndex}]`),
-        );
-        const links = [
-          reference.url,
-          ...items.map((item) => item?.url),
-          ...(Array.isArray(reference.sources) ? reference.sources.map((item) => item?.url) : []),
-          ...(Array.isArray(reference.safe_urls) ? reference.safe_urls : []),
-        ];
-        if (
-          typeof reference.matched_text === 'string' &&
-          !linklessReferences.includes(reference.type) &&
-          links.some(safeUrl)
-        )
-          linkedText.add(reference.matched_text);
-      });
-    if (Array.isArray(metadata.search_result_groups))
-      metadata.search_result_groups.forEach((group, groupIndex) => {
-        if (isRecord(group) && Array.isArray(group.entries))
-          group.entries.forEach((entry, entryIndex) =>
-            noteSource(
-              entry,
-              [entry?.ref_id],
-              `${base}.message.metadata.search_result_groups[${groupIndex}].entries[${entryIndex}]`,
-            ),
-          );
-      });
     let unresolved = false;
     for (const cite of readable.cites) {
       if (linkedText.has(cite.marker)) continue;
@@ -784,7 +817,7 @@ export function importConversation(raw, id, leafId) {
     if (unresolved)
       issue(
         'unresolved-citations',
-        'Some inline citations could not be matched to a source link. Recovered links are included; review the original turn to verify each citation.',
+        'Some inline citations could not be matched to a source link; each is marked [?] in the text. Review the original turn to verify them.',
         `${base}.message.content`,
       );
     if (readable.omitted)
@@ -793,21 +826,61 @@ export function importConversation(raw, id, leafId) {
         'Inline images or widgets from the original turn are not included. Review it if they matter.',
         `${base}.message.content`,
       );
+    // A file reference leaves the text whole; the file itself is accounted for under Files.
+    const contentFidelity = issues
+      .slice(beforeIssues)
+      .some((issue) => !issue.code.startsWith('attachment-'))
+      ? 'partial'
+      : 'original-markdown';
+    // One turn per exchange: assistant messages in a row (a note before a tool call, the answer
+    // after it) are one turn, in source order. Structured code keeps its own turn.
+    const previous = turns.at(-1);
+    if (role === 'assistant' && previous?.role === 'assistant' && !code && !previous.code) {
+      const offset =
+        previous.markdown && markdown ? previous.markdown.length + 2 : previous.markdown.length;
+      previous.marks.push(...marks.map((item) => ({ ...item, at: item.at + offset })));
+      previous.markdown = [previous.markdown, markdown].filter(Boolean).join('\n\n');
+      previous.originalParts.push(...parts);
+      previous.sourceLocators.push(`${base}.message`);
+      previous.citations.push(...citations);
+      if (contentFidelity === 'partial') previous.contentFidelity = 'partial';
+      foldedInto.set(nodeId, previous.id);
+      continue;
+    }
     turns.push({
       id: nodeId,
       role,
       markdown,
       originalParts: parts,
-      sourceLocator: `${base}.message`,
-      // A file reference leaves the text whole; the file itself is accounted for under Files.
-      contentFidelity: issues
-        .slice(beforeIssues)
-        .some((issue) => !issue.code.startsWith('attachment-'))
-        ? 'partial'
-        : 'original-markdown',
+      sourceLocators: [`${base}.message`],
+      contentFidelity,
       citations,
+      marks,
       ...(code ? { code } : {}),
     });
+  }
+  for (const file of attachments)
+    if (file.turnId) file.turnId = foldedInto.get(file.turnId) ?? file.turnId;
+  // Number each turn's sources: those cited in the text first, in order of first mention, then the
+  // rest; each mark becomes [n] (or [1, 3]), and one that resolves to no listed source [?].
+  for (const turn of turns) {
+    const { marks } = turn;
+    delete turn.marks;
+    const byUrl = new Map();
+    for (const citation of turn.citations)
+      if (!byUrl.has(citation.url)) byUrl.set(citation.url, citation);
+    const cited = marks.flatMap((item) => slots[item.slot] ?? []);
+    const order = new Set([...cited.filter((url) => byUrl.has(url)), ...byUrl.keys()]);
+    turn.citations = [...order].map((url) => byUrl.get(url));
+    const number = new Map([...order].map((url, index) => [url, index + 1]));
+    // From the end, so earlier positions stay put.
+    for (const item of marks.toReversed()) {
+      const numbers = [...new Set((slots[item.slot] ?? []).map((url) => number.get(url)))].filter(
+        Boolean,
+      );
+      const label = numbers.length ? `[${numbers.join(', ')}]` : '[?]';
+      turn.markdown = turn.markdown.slice(0, item.at) + label + turn.markdown.slice(item.at);
+    }
   }
   // A generated file linked in a turn as sandbox:/mnt/data/<name> may also be attached, outside any
   // turn, under ChatGPT's internal name "…_mnt_data_<name>". They are one file: the attached copy
@@ -833,6 +906,7 @@ export function importConversation(raw, id, leafId) {
     const own = issues.find((item) => item.sourceLocator === attached.sourceLocator);
     if (own) own.message = own.message.replace(attached.name, reference.name);
     attached.turnId = reference.turnId;
+    attached.messageId = reference.messageId;
     attached.name = reference.name;
     attachments.splice(attachments.indexOf(reference), 1);
     const raised = issues.findIndex((item) => item.sourceLocator === reference.sourceLocator);
