@@ -11,15 +11,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var item: NSStatusItem!
     private var panel: ChatPanel!
     private let chat = ChatController()
+    private let settings = SettingsWindow()
+    private lazy var hotkey = Hotkey { [weak self] in self?.toggle() }
+    private var clickMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Preferences.register()
+        NSApp.mainMenu = mainMenu()
         panel = ChatPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 760),
-                          styleMask: [.titled, .resizable, .nonactivatingPanel], backing: .buffered, defer: false)
+                          styleMask: [.titled, .resizable, .nonactivatingPanel, .fullSizeContentView],
+                          backing: .buffered, defer: false)
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             panel.standardWindowButton(button)?.isHidden = true
         }
+        panel.isMovable = false // It belongs under the menu-bar icon.
         panel.isFloatingPanel = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.onEscape = { [weak self] in self?.hide() }
@@ -30,29 +37,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.setFrameAutosaveName("ChatPanel") // Only the size persists; show() always places it under the icon.
         if panel.frame.width < 380 || panel.frame.height < 480 { panel.setContentSize(NSSize(width: 480, height: 760)) }
         panel.delegate = self
-        NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) {
+
+        chat.openSettings = { [weak self] in self?.settings.show() }
+        settings.reload = { [weak self] in self?.chat.reload() }
+        settings.signOut = { [weak self] in self?.chat.signOut() }
+        settings.shortcutTaken = { [weak self] in !(self?.hotkey.use(.current) ?? true) }
+        hotkey.use(.current)
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) {
             [weak self] _ in
-            // The user went to another app, even if one of our own popovers or panels had focus last.
-            guard let self, self.panel.isVisible, !self.chat.keepsPanelOpen else { return }
-            self.panel.orderOut(nil)
+            self?.hotkey.use(.current)
+            self?.chat.preferencesChanged()
         }
+        watchForElsewhere()
 
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = glyph("add", size: 18)
+        item.button?.image = glyph("menubar", size: 18)
         item.button?.setAccessibilityLabel("gpt-handoff")
         item.button?.toolTip = "gpt-handoff"
         item.button?.target = self
         item.button?.action = #selector(click)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        showWhenPlaced(attempts: 40)
+        if UserDefaults.standard.bool(forKey: Preferences.showAtLaunch) { showWhenPlaced(attempts: 40) }
     }
+
+    /// Never shown for an accessory app, but its key equivalents reach the chat: editing, Settings, reload.
+    private func mainMenu() -> NSMenu {
+        let menu = NSMenu()
+        let app = NSMenu()
+        app.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        app.addItem(withTitle: "Hide Panel", action: #selector(hidePanel), keyEquivalent: "w").target = self
+        app.addItem(withTitle: "Quit gpt-handoff", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let view = NSMenu(title: "View")
+        view.addItem(withTitle: "Reload Page", action: #selector(reloadPage), keyEquivalent: "r").target = self
+        view.addItem(withTitle: "Back", action: #selector(goBack), keyEquivalent: "[").target = self
+        for submenu in [app, edit, view] { menu.addItem(withTitle: submenu.title, action: nil, keyEquivalent: "").submenu = submenu }
+        return menu
+    }
+
+    @objc private func openSettings() { settings.show() }
+    @objc private func hidePanel() { hide() }
+    @objc private func reloadPage() { chat.reload() }
+    @objc private func goBack() { chat.goBack() }
 
     @objc private func click() {
         if NSApp.currentEvent?.type == .rightMouseUp {
             let menu = NSMenu()
-            let folder = menu.addItem(withTitle: "Files Folder…", action: #selector(chooseFilesFolder), keyEquivalent: "")
-            folder.target = self
-            folder.toolTip = FilesFolder.root.path
+            menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
             menu.addItem(.separator())
             menu.addItem(withTitle: "Quit gpt-handoff", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
             item.menu = menu
@@ -60,8 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             item.menu = nil
             return
         }
-        panel.isVisible ? hide() : show()
+        toggle()
     }
+
+    private func toggle() { panel.isVisible ? hide() : show() }
 
     /// At launch the menu bar has not placed the icon yet; wait for it (up to 2 s) so the panel opens under it.
     private func showWhenPlaced(attempts: Int) {
@@ -77,8 +116,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return frame.minY >= screen.maxY - 4 ? NSPoint(x: frame.midX, y: screen.maxY) : nil
     }
 
-    @objc private func chooseFilesFolder() { FilesFolder.choose() }
-
     private func show() {
         // Under the icon once it is on screen; at launch, before the menu bar lays it out, top centre.
         let screen = (item.button?.window?.screen ?? NSScreen.main ?? NSScreen.screens[0]).visibleFrame
@@ -89,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let x = min(max(anchor.x - panel.frame.width / 2, screen.minX + 8), screen.maxX - panel.frame.width - 8)
         panel.setFrameTopLeftPoint(NSPoint(x: x, y: anchor.y - 4))
         chat.bar.willShow()
+        item.button?.highlight(true)
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
     }
@@ -96,15 +134,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Hiding never destroys the page: a reply keeps streaming and the conversation stays prepared.
     func hide() {
         panel.orderOut(nil)
+        item.button?.highlight(false)
         NSApp.hide(nil)
     }
 
-    func windowDidResignKey(_ notification: Notification) {
-        // Let menus, sheets and our own panels take focus; hide only when the user went elsewhere.
-        DispatchQueue.main.async {
-            guard self.panel.isVisible, !self.panel.isKeyWindow, !self.chat.keepsPanelOpen,
-                  NSApp.keyWindow == nil || NSApp.keyWindow === self.panel else { return }
-            self.hide()
+    /// Whether something of ours needs the panel to stay, or the user pinned it.
+    private var staysOpen: Bool { Preferences.pinned || chat.keepsPanelOpen || settings.isVisible }
+
+    /// A popover's dismissal: a click in another app, or another app coming forward, hides the panel unless it
+    /// is pinned. A nonactivating panel may never make this app active, so resign notifications alone miss it.
+    private func watchForElsewhere() {
+        let elsewhere = { [weak self] in
+            guard let self, self.panel.isVisible, !self.staysOpen else { return }
+            self.panel.orderOut(nil)
+            self.item.button?.highlight(false)
+        }
+        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in elsewhere() }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
+                                                          object: nil, queue: .main) { note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            if app?.processIdentifier != ProcessInfo.processInfo.processIdentifier { elsewhere() }
         }
     }
 }

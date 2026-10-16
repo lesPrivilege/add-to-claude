@@ -22,6 +22,7 @@ func iconButton(_ name: String, _ title: String, _ action: Selector, _ target: A
     let button = NSButton(image: glyph(name) ?? NSImage(), target: target, action: action)
     button.bezelStyle = .accessoryBarAction
     button.isBordered = true
+    button.showsBorderOnlyWhileMouseInside = true
     button.toolTip = title
     button.setAccessibilityLabel(title)
     button.widthAnchor.constraint(equalToConstant: 28).isActive = true

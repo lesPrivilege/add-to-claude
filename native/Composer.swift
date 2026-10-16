@@ -211,7 +211,7 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
 private let ignoredMessage = "The app did not take the text. Nothing was added."
 
 /// Apps seen to accept AX text insertion calls without applying them; later Adds skip that wait.
-private let ignoringKey = "AppsIgnoringTextInsertion"
+let ignoringKey = "AppsIgnoringTextInsertion"
 private func ignoresInsertion(_ app: NSRunningApplication) -> Bool {
     app.bundleIdentifier.map { (UserDefaults.standard.stringArray(forKey: ignoringKey) ?? []).contains($0) } ?? false
 }

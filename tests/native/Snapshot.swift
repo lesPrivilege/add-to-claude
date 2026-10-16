@@ -31,5 +31,16 @@ import AppKit
             let png = NSBitmapImageRep(data: image.tiffRepresentation!)!.representation(using: .png, properties: [:])!
             try! png.write(to: output.appendingPathComponent("bar-\(name).png"))
         }
+        // The Settings window's content, laid out as it opens.
+        let settings = SettingsWindow()
+        settings.show()
+        RunLoop.main.run(until: Date().addingTimeInterval(1))
+        if let view = NSApp.windows.first(where: { $0.title.hasSuffix("Settings") })?.contentView {
+            view.appearance = NSApp.appearance
+            view.layoutSubtreeIfNeeded()
+            let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try! rep.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent("settings.png"))
+        }
     }
 }

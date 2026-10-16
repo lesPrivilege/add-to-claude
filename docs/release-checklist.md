@@ -17,6 +17,7 @@
   - Add it to a real Claude window and a second app; confirm the draft is preserved, nothing is sent, and no window moves or flickers.
   - Repeat with the composer unfocused, the conversation changed during Add, and Accessibility revoked.
 - [ ] Attachments: the chat's own file card download in the panel, and downloading from the Files list into the files folder with paths and SHA-256 in the hand-off text.
+- [ ] Owner checks the panel controls and Settings: pin, click-away hide, global shortcut, login item, sign out.
 - [ ] Add into a non-empty Claude prompt (Command-V fallback) and into a second app.
 - [ ] Remove the temporary diagnostics (request shapes, message types, window text elements, append checks, navigation).
 - [ ] Uploads, downloads, external links, the sign-in popup, Escape, keyboard use, VoiceOver and dark appearance.

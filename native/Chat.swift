@@ -29,8 +29,12 @@ func pageKey(_ url: URL?) -> String? {
 /// The page observer runs in the page world; the compiler and bridge run in an isolated content world.
 final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, NSWindowDelegate {
     let bar = HandoffBar()
+    var openSettings: () -> Void = {}
     private var web: WKWebView!
+    private lazy var back = iconButton("back", "Back", #selector(goBack), self)
+    private lazy var pin = iconButton("pin", "Keep open when switching apps", #selector(togglePin), self)
     private var urlObservation: NSKeyValueObservation?
+    private var backObservation: NSKeyValueObservation?
     private var popups: [NSWindow] = []
     private(set) var panelOpen = false
     private(set) var prepared: Prepared?
@@ -65,6 +69,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         urlObservation = web.observe(\.url, options: [.new]) { [weak self] view, _ in
             DispatchQueue.main.async { self?.pageMoved(to: view.url) }
         }
+        backObservation = web.observe(\.canGoBack, options: [.initial, .new]) { [weak self] view, _ in
+            DispatchQueue.main.async { self?.back.isEnabled = view.canGoBack }
+        }
         bar.withFiles = { [weak self] prepared in self?.withFiles(prepared) ?? (prepared.markdown, "") }
         bar.fileRows = { [weak self] in self?.fileRows() ?? [] }
         bar.downloadFiles = { [weak self] ids, done in self?.downloadSelected(ids, done: done) ?? done() }
@@ -73,10 +80,10 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             return prepared.revision == candidate.revision && pageKey(self.web.url) == candidate.page
         }
 
-        let column = NSStackView(views: [web, bar.view])
+        let column = NSStackView(views: [header(), web, bar.view])
         column.orientation = .vertical
         column.spacing = 0
-        for view in [web!, bar.view] { view.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true }
+        for view in column.arrangedSubviews { view.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true }
         web.setContentHuggingPriority(.defaultLow, for: .vertical)
         // A web view has no natural size; without these the window shrinks to the bar's size.
         web.widthAnchor.constraint(greaterThanOrEqualToConstant: 360).isActive = true
@@ -84,6 +91,45 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         preferredContentSize = NSSize(width: 480, height: 760)
         view = column
         start(web)
+    }
+
+    /// The panel's own controls, in the title bar's space: page navigation on the left, the panel on the right.
+    private func header() -> NSView {
+        let reload = iconButton("refresh", "Reload page", #selector(ChatController.reload), self)
+        let browser = iconButton("external", "Open in your browser", #selector(openInBrowser), self)
+        let settings = iconButton("settings", "Settings", #selector(showSettings), self)
+        let row = NSStackView(views: [back, reload, browser, NSView(), pin, settings])
+        row.spacing = 2
+        row.edgeInsets = NSEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
+        row.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        preferencesChanged()
+        return row
+    }
+
+    @objc func goBack() { web.goBack() }
+    @objc func reload() { web.reload() }
+    @objc private func showSettings() { openSettings() }
+    @objc private func togglePin() { Preferences.pinned.toggle() }
+
+    @objc private func openInBrowser() {
+        openExternally(web.url ?? URL(string: "https://chatgpt.com/")!)
+    }
+
+    /// Clears the panel's own cookies and site data, then shows ChatGPT's sign-in page.
+    func signOut() {
+        let store = WKWebsiteDataStore.default()
+        store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { [weak self] in
+            self?.set(nil, .waiting)
+            self?.web.load(URLRequest(url: URL(string: "https://chatgpt.com/")!))
+        }
+    }
+
+    func preferencesChanged() {
+        let pinned = Preferences.pinned
+        pin.image = glyph(pinned ? "pinned" : "pin")
+        pin.contentTintColor = pinned ? .controlAccentColor : nil
+        pin.toolTip = pinned ? "Pinned: stays open when you switch apps" : "Keep open when switching apps"
+        pin.setAccessibilityValue(pinned ? "on" : "off")
     }
 
     private func script(_ name: String) -> String? {
@@ -309,7 +355,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                   completionHandler: @escaping (URL?) -> Void) {
         let folder = FilesFolder.folder(for: prepared?.title ?? "ChatGPT")
         guard (try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)) != nil else {
-            bar.filesChanged("The files folder is not writable. Choose another from the menu-bar icon.")
+            bar.filesChanged("The files folder is not writable. Choose another in Settings.")
             return completionHandler(nil)
         }
         let name = safeLabel(suggestedFilename, limit: 120).replacingOccurrences(of: "/", with: "-")

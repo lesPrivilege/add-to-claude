@@ -71,6 +71,7 @@ final class HandoffBar: NSViewController {
     private lazy var filesButton: NSButton = {
         let button = NSButton(title: "", image: glyph("attach") ?? NSImage(), target: self, action: #selector(showFiles))
         button.bezelStyle = .accessoryBarAction
+        button.showsBorderOnlyWhileMouseInside = true
         button.imagePosition = .imageLeading
         button.toolTip = "Files in this conversation"
         return button
@@ -79,7 +80,8 @@ final class HandoffBar: NSViewController {
     private let targetRow = NSStackView()
     private lazy var refresh = iconButton("refresh", "Find open windows", #selector(findWindows), self)
     private lazy var add = NSButton(title: "Add", target: self, action: #selector(addContext))
-    private lazy var access = NSButton(title: "Allow Accessibility…", target: self, action: #selector(allowAccess))
+    private lazy var allow = NSButton(title: "Allow…", target: self, action: #selector(allowAccess))
+    private let access = NSStackView()
     private let statusGlyph = NSImageView()
     private let statusText = label(size: 11, color: .secondaryLabelColor)
     private let statusRow = NSStackView()
@@ -98,22 +100,32 @@ final class HandoffBar: NSViewController {
         text.alignment = .leading
         text.spacing = 2
         let sourceRow = NSStackView(views: [chatIcon, text, NSView(), filesButton, preview, copy, save])
-        sourceRow.spacing = 8
+        sourceRow.spacing = 2
+        sourceRow.setCustomSpacing(8, after: chatIcon)
 
         picker.setAccessibilityLabel("Composer window")
         picker.target = self
         picker.action = #selector(choose)
-        picker.controlSize = .small
+        picker.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        picker.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         add.image = glyph("add")
-        add.imagePosition = .imageLeading
+        add.imagePosition = .imageTrailing
         add.bezelStyle = .rounded
-        add.lineBreakMode = .byTruncatingTail
+        add.bezelColor = .controlAccentColor
+        add.contentTintColor = .white
         add.setContentCompressionResistancePriority(.required, for: .horizontal)
+        add.setContentHuggingPriority(.required, for: .horizontal)
         targetRow.setViews([agentIcon, picker, refresh, add], in: .leading)
-        targetRow.spacing = 8
-        access.image = glyph("lock")
-        access.imagePosition = .imageLeading
-        access.bezelStyle = .rounded
+        targetRow.spacing = 6
+        targetRow.setCustomSpacing(10, after: refresh)
+        let lockIcon = NSImageView(image: glyph("lock") ?? NSImage())
+        lockIcon.contentTintColor = .systemOrange
+        let accessText = label("Accessibility is off. It is needed to add into other apps.", size: 11, color: .secondaryLabelColor)
+        allow.bezelStyle = .rounded
+        allow.controlSize = .small
+        allow.setContentHuggingPriority(.required, for: .horizontal)
+        access.setViews([lockIcon, accessText, NSView(), allow], in: .leading)
+        access.spacing = 6
 
         statusText.maximumNumberOfLines = 2
         statusText.lineBreakMode = .byWordWrapping
@@ -130,7 +142,7 @@ final class HandoffBar: NSViewController {
         column.spacing = 8
         column.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 10, right: 12)
         separator.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
-        for row in [sourceRow, targetRow, statusRow] {
+        for row in [sourceRow, targetRow, access, statusRow] {
             row.widthAnchor.constraint(equalTo: column.widthAnchor, constant: -24).isActive = true
         }
         view = column
@@ -270,7 +282,8 @@ final class HandoffBar: NSViewController {
     }
 
     private func restoreLastTarget() {
-        guard let last = UserDefaults.standard.dictionary(forKey: "LastTarget") as? [String: String],
+        guard UserDefaults.standard.bool(forKey: Preferences.restoreLastWindow),
+              let last = UserDefaults.standard.dictionary(forKey: "LastTarget") as? [String: String],
               let target = targets.first(where: { target in
                   guard let choice = registry.choice(target.id) else { return false }
                   return choice.app.bundleIdentifier == last["app"] && choice.title == last["title"]
