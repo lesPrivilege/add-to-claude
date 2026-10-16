@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- R2 Line Becomes Text, menu-bar glyph. Template-ready: black + alpha only. 24 grid, 1.6 stroke, round caps.
+       A closed composer (radius 3.8). Inside it one uniform line sweeps down from the upper-left corner and
+       levels off as the composer's line of text; it stops before a caret (1.8, centred on the line) near the
+       right wall. Nothing is drawn outside the composer, so there is no handle or tail to misread.
+       A caret, not a round head: a dot at the right end of a closed rounded box reads as a toggle switch. -->
+  <rect x="2.2" y="6.2" width="19.6" height="12" rx="3.8" fill="none" stroke="#000" stroke-width="1.6"/>
+  <path d="M5.6 9.2Q6.2 13.6 12 13.6H14.4" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M17.4 11v5.2" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round"/>
+</svg>

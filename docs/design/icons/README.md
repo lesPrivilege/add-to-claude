@@ -48,7 +48,7 @@ xcrun swiftc -O scripts/icons/render.swift -o /tmp/icon-render && /tmp/icon-rend
 
 ## The three directions
 
-### D1 · Arc Insert (the owner's lead)
+### D1 · Arc Insert (the owner's lead; superseded on 2026-10-16 by R1 + R3, see [refine.md](refine.md))
 
 **Glyph.** The composer's top-left corner is left open. One trail, thin to thick, sweeps in from the upper left, flattens into the composer's line of text and stops short of a caret.
 

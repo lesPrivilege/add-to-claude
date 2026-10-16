@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- R1 Calm Arc, app icon. macOS 1024 grid, 824 plate at 100,100 with continuous corners.
+       Geometry is the glyph's 24 grid at 32 px per unit (x' = 512 + 32(x-12), y' = 522 + 32(y-12)).
+       A deep spruce plate; an open-cornered composer outline; one uniform arc that fades in from the upper left,
+       flattens onto the line and ends in the warm round head. Top-level groups are the layers for Icon Composer:
+       plate, composer, arc, head. The baked top light, edge line and head glow are for the .icns pipeline only. -->
+  <defs>
+    <path id="plate" d="M924.0 330.0L923.8 252.7L923.2 228.1L922.2 210.4L920.8 196.1L919.0 183.9L916.8 173.4L914.2 164.0L911.1 155.7L907.6 148.2L903.7 141.4L899.2 135.3L894.2 129.8L888.7 124.8L882.6 120.3L875.8 116.4L868.3 112.9L860.0 109.8L850.6 107.2L840.1 105.0L827.9 103.2L813.6 101.8L795.9 100.8L771.3 100.2L694.0 100.0L330.0 100.0L252.7 100.2L228.1 100.8L210.4 101.8L196.1 103.2L183.9 105.0L173.4 107.2L164.0 109.8L155.7 112.9L148.2 116.4L141.4 120.3L135.3 124.8L129.8 129.8L124.8 135.3L120.3 141.4L116.4 148.2L112.9 155.7L109.8 164.0L107.2 173.4L105.0 183.9L103.2 196.1L101.8 210.4L100.8 228.1L100.2 252.7L100.0 330.0L100.0 694.0L100.2 771.3L100.8 795.9L101.8 813.6L103.2 827.9L105.0 840.1L107.2 850.6L109.8 860.0L112.9 868.3L116.4 875.8L120.3 882.6L124.8 888.7L129.8 894.2L135.3 899.2L141.4 903.7L148.2 907.6L155.7 911.1L164.0 914.2L173.4 916.8L183.9 919.0L196.1 920.8L210.4 922.2L228.1 923.2L252.7 923.8L330.0 924.0L694.0 924.0L771.3 923.8L795.9 923.2L813.6 922.2L827.9 920.8L840.1 919.0L850.6 916.8L860.0 914.2L868.3 911.1L875.8 907.6L882.6 903.7L888.7 899.2L894.2 894.2L899.2 888.7L903.7 882.6L907.6 875.8L911.1 868.3L914.2 860.0L916.8 850.6L919.0 840.1L920.8 827.9L922.2 813.6L923.2 795.9L923.8 771.3L924.0 694.0Z"/>
+    <linearGradient id="ground" x1="0" y1="100" x2="0" y2="924" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1F5A60"/><stop offset="1" stop-color="#0B2328"/></linearGradient>
+    <radialGradient id="toplight" cx="330" cy="100" r="680" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9FE3DC" stop-opacity="0.30"/><stop offset="1" stop-color="#9FE3DC" stop-opacity="0"/></radialGradient>
+    <linearGradient id="fade" x1="211" y1="253" x2="506" y2="573" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/><stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.85"/><stop offset="1" stop-color="#FFFFFF"/></linearGradient>
+    <radialGradient id="glow" cx="659" cy="573" r="170" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFB27A" stop-opacity="0.50"/><stop offset="1" stop-color="#FFB27A" stop-opacity="0"/></radialGradient>
+  </defs>
+  <g id="plate-layer">
+    <use href="#plate" fill="url(#ground)"/>
+    <use href="#plate" fill="url(#toplight)"/>
+    <use href="#plate" fill="none" stroke="#FFFFFF" stroke-opacity="0.10" stroke-width="3"/>
+  </g>
+  <g id="composer">
+    <path d="M378 336H704a122 122 0 0 1 122 122v141a122 122 0 0 1 -122 122H320a122 122 0 0 1 -122 -122V477" fill="none" stroke="#D8F1EE" stroke-opacity="0.78" stroke-width="30" stroke-linecap="round"/>
+  </g>
+  <g id="arc">
+    <path d="M211 253Q301 573 506 573H614" fill="none" stroke="url(#fade)" stroke-width="46" stroke-linecap="round"/>
+  </g>
+  <g id="head">
+    <circle cx="659" cy="573" r="170" fill="url(#glow)"/>
+    <circle cx="659" cy="573" r="56" fill="#FFB27A"/>
+  </g>
+</svg>
