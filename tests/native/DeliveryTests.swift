@@ -201,9 +201,13 @@ import Foundation
     static func identities() {
         check(targetConversationId("https://claude.ai/chat/0F8FAD5B-D9CB-469F-A165-70867728950E") == "claude.ai/chat/0f8fad5b-d9cb-469f-a165-70867728950e",
               "a Claude conversation URL names its conversation")
+        check(targetConversationId("https://claude.ai/epitaxy/local_CC1B9807-0BEA-492F-B51A-627F236C886E") == "claude.ai/epitaxy/local_cc1b9807-0bea-492f-b51a-627f236c886e"
+              && targetConversationId("https://claude.ai/epitaxy/cc1b9807-0bea-492f-b51a-627f236c886e/") == "claude.ai/epitaxy/cc1b9807-0bea-492f-b51a-627f236c886e",
+              "a Claude Code session in Claude for Mac names its session")
         for url in ["https://claude.ai/new", "https://claude.ai/chat/", "https://claude.ai/chat/not-a-uuid", "http://claude.ai/chat/0f8fad5b-d9cb-469f-a165-70867728950e",
                     "https://evil.example/chat/0f8fad5b-d9cb-469f-a165-70867728950e", "https://claude.ai.evil.example/chat/0f8fad5b-d9cb-469f-a165-70867728950e",
-                    "https://user@claude.ai/chat/0f8fad5b-d9cb-469f-a165-70867728950e", "Claude", ""] {
+                    "https://user@claude.ai/chat/0f8fad5b-d9cb-469f-a165-70867728950e", "https://claude.ai/epitaxy/local_not-a-uuid",
+                    "https://claude.ai/epitaxy/", "file:///Applications/Claude.app/Contents/Resources/app.asar/.vite/renderer/main_window/index.html", "Claude", ""] {
             check(targetConversationId(url) == nil, "no conversation id in \(url)")
         }
         check(sourceConversationId("https://chatgpt.com/c/6acb722f-383c") == "6acb722f-383c", "ChatGPT conversation id")

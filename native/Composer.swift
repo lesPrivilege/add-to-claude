@@ -148,18 +148,21 @@ func inspectComposer(_ choice: WindowChoice) -> (field: AXUIElement?, problem: S
 enum AddOutcome { case inserted, unconfirmed, failed }
 
 /// A stable conversation id read from a target page's URL, or nil. Only exact, known shapes count:
-/// https://claude.ai/chat/<uuid> today. Window titles, app names and paste history never do.
+/// a Claude chat (https://claude.ai/chat/<uuid>) and a Claude Code session in Claude for Mac
+/// (https://claude.ai/epitaxy/local_<uuid>, seen on the owner's Mac on 2026-10-16).
+/// Window titles, app names and paste history never do.
 func targetConversationId(_ text: String) -> String? {
+    let uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
     guard text.utf8.count <= 4096, let url = URL(string: text), url.scheme == "https", url.host == "claude.ai",
           url.user == nil, url.password == nil, url.port == nil,
-          let match = url.path.range(of: #"^/chat/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/?$"#,
-                                     options: .regularExpression) else { return nil }
-    let id = url.path[match].dropFirst("/chat/".count).prefix(36).lowercased()
-    return "claude.ai/chat/\(id)"
+          url.path.range(of: "^/(chat/\(uuid)|epitaxy/(local_)?\(uuid))/?$", options: .regularExpression) != nil
+    else { return nil }
+    let path = url.path.hasSuffix("/") ? String(url.path.dropLast()) : url.path
+    return "claude.ai" + path.lowercased()
 }
 
 /// The target's own conversation id, when the window shows a web page that names one in its URL
-/// (Claude for Mac is a web app: its AXWebArea may carry `AXURL`, e.g. https://claude.ai/chat/<uuid>).
+/// (Claude for Mac is a web app: its inner AXWebArea carries `AXURL`, e.g. https://claude.ai/epitaxy/local_<uuid>).
 /// Several web areas naming different conversations is ambiguous: no id. Bounded walk, no activation.
 func conversationIdentity(in window: AXUIElement) -> String? {
     var found = Set<String>()

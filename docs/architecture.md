@@ -52,7 +52,7 @@ Settings window (SwiftUI) · global shortcut (Carbon hot key) · login item (SMA
   2. If the app ignores that (Claude for Mac does), set the value of an empty box, or post ⌘V to that app's process only, then restore the clipboard.
   3. Apps known to ignore step 1 skip its wait. The target is never activated, and nothing is sent.
   - It reports `inserted` only when the text reads back. A draft that changed but cannot be confirmed (a reformatting paste, for one) is `unconfirmed`; nothing added is `failed`.
-  - `conversationIdentity` reads which conversation a window shows from its `AXWebArea`'s `AXURL` or the window's `AXDocument`. Only `https://claude.ai/chat/<uuid>` counts; the walk is bounded to 1 s.
+  - `conversationIdentity` reads which conversation a window shows from its `AXWebArea`'s `AXURL` or the window's `AXDocument`. Only `https://claude.ai/chat/<uuid> or https://claude.ai/epitaxy/local_<uuid>` counts; the walk is bounded to 1 s.
 - **`Files.swift`**: the files folder and the downloader. **`Settings.swift`**: preferences, the hot key and the Settings window. **`Views.swift`**: SVG template glyphs and small controls.
 
 ## Limits
