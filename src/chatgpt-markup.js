@@ -9,7 +9,7 @@
  */
 
 // Containers lay out blocks: their own lines go, a closing one separates what follows, and the
-// content they indent is dedented.
+// content they indent goes flush left (see `flatten`).
 const containers = new Set(['box', 'row', 'grid', 'grid-item', 'WritingBlock', 'radio-group']);
 // Controls keep their visible label; their handlers and state are dropped with the attributes.
 const inline = new Set(['text', 'caption', 'radio', 'button', 'badge']);
@@ -62,6 +62,30 @@ function dedent(lines, start) {
 }
 
 /**
+ * Indentation inside laid-out content is layout, not Markdown (four spaces would read as code), so
+ * lines[start…] go flush left. Fenced code keeps its own indentation, relative to its fence.
+ */
+function flatten(lines, start) {
+  let fence = null;
+  let indent = 0;
+  for (let index = start; index < lines.length; index += 1) {
+    const line = lines[index];
+    const lead = /^[ \t]*/u.exec(line)[0].length;
+    if (fence) {
+      lines[index] = line.slice(Math.min(lead, indent));
+      if (new RegExp(`^[ \\t]*${fence}${fence[0]}*[ \\t]*$`, 'u').test(line)) fence = null;
+      continue;
+    }
+    const opening = fenceOpen.exec(line);
+    if (opening) {
+      fence = opening[1];
+      indent = lead;
+    }
+    lines[index] = line.slice(lead);
+  }
+}
+
+/**
  * Returns the readable Markdown, the citations it found (each with its exact source text and
  * reference ids, for resolving against the message metadata) and how many inline images or
  * widgets it had to leave out. `mark(cite)` gives the text that stands in a citation's place.
@@ -95,6 +119,7 @@ export function readableMarkdown(text, mark = () => '') {
   };
   let opened = 0;
   let closed = 0;
+  let first = null;
   let separated = false;
   const tag = (match, space, closing, name, attributeText, selfClosing) => {
     const values = attributes(attributeText);
@@ -102,7 +127,10 @@ export function readableMarkdown(text, mark = () => '') {
       if (closing) {
         closed += 1;
         separated = true;
-      } else if (!selfClosing) opened += 1;
+      } else if (!selfClosing) {
+        opened += 1;
+        first ??= name;
+      }
       return space;
     }
     if (inline.has(name)) return space;
@@ -146,6 +174,7 @@ export function readableMarkdown(text, mark = () => '') {
   let fence = null;
   let depth = 0;
   let region = -1;
+  let writing = false;
   let changed = false;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
@@ -174,7 +203,7 @@ export function readableMarkdown(text, mark = () => '') {
       const marks = '`'.repeat(Math.max(2, ...runs) + 1);
       const before = prose(line.slice(0, svgStart.index));
       if (before.trim()) output.push(before.trimEnd());
-      // Inside a container, keep its indentation so the container's dedent stays uniform.
+      // Inside a container, keep its indentation: the container flattens it with its fence.
       const indent = region >= 0 ? /^[ \t]*/u.exec(line)[0] : '';
       output.push(...[`${marks}svg`, ...svg, marks].map((item) => (item ? indent + item : item)));
       if (after.trim()) output.push(indent + prose(after).trim());
@@ -190,6 +219,7 @@ export function readableMarkdown(text, mark = () => '') {
     }
     opened = 0;
     closed = 0;
+    first = null;
     separated = false;
     const before = cites.length + omitted;
     let result = prose(line);
@@ -197,17 +227,21 @@ export function readableMarkdown(text, mark = () => '') {
     if (result !== line && /^[ \t]*(?:\{[^{}]*\}[ \t]*)+$/u.test(result)) result = '';
     const touched = result !== line || cites.length + omitted !== before;
     changed ||= touched;
-    if (depth === 0 && opened > closed && region < 0) region = output.length;
+    if (depth === 0 && opened > closed && region < 0) {
+      region = output.length;
+      // A writing block holds authored Markdown, whose indentation means something.
+      writing = first === 'WritingBlock';
+    }
     if (!touched) output.push(line);
     else if (result.trim()) output.push(result.trimEnd());
     else if (separated && output.length && output.at(-1) !== '') output.push('');
     depth = Math.max(0, depth + opened - closed);
     if (depth === 0 && region >= 0) {
-      dedent(output, region);
+      (writing ? dedent : flatten)(output, region);
       region = -1;
     }
   }
-  if (region >= 0) dedent(output, region);
+  if (region >= 0) (writing ? dedent : flatten)(output, region);
   if (!changed) return { markdown: text, cites, omitted };
   while (output.at(-1) === '') output.pop();
   return { markdown: output.join('\n') + (text.endsWith('\n') ? '\n' : ''), cites, omitted };

@@ -8,11 +8,9 @@ The menu-bar app (0.6.0) is the form that ships. ChatGPT is the source, and the 
 
 ## 0.6.1
 
-Done in code (see [release/0.6.1.md](release/0.6.1.md)): the bundle is "Add to Claude.app"; saved files are reused across launches; one turn per exchange; citations marked in place.
+Done (see [release/0.6.1.md](release/0.6.1.md)): the bundle is "Add to Claude.app"; saved files are reused across launches; one turn per exchange; citations marked in place; laid-out cards read flush left.
 
-Still open:
-
-- **Cards and flowcharts keep order and hierarchy.** First confirm where the arrows go (suspected: arrow `<icon>` dropped as decoration, `row`/`grid` flattened to indented prose) on a synthetic sample of the raw markup. Then: arrow icons become `→`, a `row`'s items join with `→` (or `·`), each `box` is a paragraph with a bold title, `grid` items a list. Waits on that sample.
+Owner's rule for cards (2026-10-17): do not fit the projection to one snapshot of ChatGPT's layout. Words that carry the meaning are enough; the reader infers the relations. So layout markup converges to plain text in reading order rather than being reconstructed per widget.
 
 ## Next forms
 

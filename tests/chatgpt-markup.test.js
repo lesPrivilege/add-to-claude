@@ -198,3 +198,45 @@ test('a memory mark goes without a trace, leaving the text beside it', () => {
   assert.equal(markdown, 'Build an adapter.\nNext line.');
   assert.deepEqual([cites.length, omitted], [0, 0]);
 });
+
+test('nested layout goes flush left, so deep boxes never read as code; fenced code keeps its shape', () => {
+  const text = [
+    '<box gap={2}>',
+    '  <text weight="medium">Layered plan</text>',
+    '  **Planner**',
+    '  <row gap={3}>',
+    '    <box flex="1">',
+    '      Default path',
+    '      **Cheap search**',
+    '    </box>',
+    '    <icon name="arrow-right"/>',
+    '    <box flex="1">',
+    '      Escalation',
+    '      **Semantic search**',
+    '      ```js',
+    '      if (miss) {',
+    '        escalate();',
+    '      }',
+    '      ```',
+    '    </box>',
+    '  </row>',
+    '</box>',
+  ].join('\n');
+  assert.equal(
+    readableMarkdown(text).markdown,
+    [
+      'Layered plan',
+      '**Planner**',
+      'Default path',
+      '**Cheap search**',
+      '',
+      'Escalation',
+      '**Semantic search**',
+      '```js',
+      'if (miss) {',
+      '  escalate();',
+      '}',
+      '```',
+    ].join('\n'),
+  );
+});
