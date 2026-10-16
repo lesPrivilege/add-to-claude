@@ -43,14 +43,9 @@ Evidence for Add to Claude 0.6.0-rc.1 (and the 0.5.0 rows it inherits) on macOS 
 | Delivery log written to `~/Library/Application Support/add-to-claude/`, pruned at launch, cleared from Settings             | **Not verified** on the owner's Mac (tested with a throwaway file)                                                                                                                                                            |
 | Signing, notarization, Gatekeeper                                                                                           | Signed with the stable local identity "add-to-claude Local" (designated requirement = identifier + certificate leaf); `spctl` rejects it as expected. Developer ID and notarization **not done** (needs a paid account)       |
 
-## DeepSeek Harness plugin (`dsh-chatgpt-panel` 0.1.0)
+## DeepSeek Harness plugin
 
-| Check                                                                                                                                                                                                                                                    | Result           |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| Node unit tests in `npm test`: navigation policy, payload validation, file names and the `linkFiles` port, appending to the draft, host routes, helper channel, built preload, client bundle (composer button, tab, page)                                | 41 pass          |
-| `npm run test:dsh-electron`: the ChatGPT window in real Electron 43.3.0, throwaway profile, synthetic chatgpt.com served in memory; observer, compiled text, file link, download with SHA-256, verified text, link policy                                | 16 checks        |
-| Inside DeepSeek Harness 0.2.0-rc.2: installed in the owner's `desktop` profile (linked); the guide entry and tab rendered. The restyled tab, composer button, left-bar page, routes and appending into the real composer are not yet verified end to end | **Partly seen**  |
-| Real ChatGPT sign-in and a live conversation in the plugin's window                                                                                                                                                                                      | **Not verified** |
+Shelved on 2026-10-16 and removed from the tree; its last evidence is in the tag `archive/dsh-plugin-0.1.0`. See [decisions/deepseek-harness-plugin.md](decisions/deepseek-harness-plugin.md).
 
 ## Review
 

@@ -6,7 +6,7 @@
 **Target:** macOS menu-bar app `0.5.0` → Release Candidate (not an approval to publish)  
 **Source:** `lesPrivilege/add-to-claude`, `main` at review time  
 **Status:** **NO-GO for public release**; prepare evidence and close blockers.  
-**Scope:** menu-bar application only. DeepSeek Harness mod remains a separate experimental release train.
+**Scope:** menu-bar application only. The DeepSeek Harness mod was shelved on 2026-10-16 (see `decisions/deepseek-harness-plugin.md`).
 
 ## 0. Product invariant
 

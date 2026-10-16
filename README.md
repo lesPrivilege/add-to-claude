@@ -83,10 +83,6 @@ open dist/add-to-claude.app
 2. Choose **Allow…** in the bar, then turn on Add to Claude in System Settings → Privacy & Security → Accessibility. An ad-hoc build needs this again after every rebuild; to keep it across updates, run `bash scripts/make-signing-identity.sh` once (it creates a local signing identity in your login keychain), then rebuild.
 3. Click once into the target app's message box, choose its window in the bar, and click **Add**.
 
-### DeepSeek Harness plugin
-
-**ChatGPT panel** (`dsh-chatgpt-panel`) brings the same hand-off to DeepSeek Harness: _Talk it through in ChatGPT. Finish it in DeepSeek Harness._ ChatGPT opens in its own window, a ChatGPT tab in the harness's right sidebar shows the conversation, and Add appends it to the session's draft without sending. It targets DeepSeek Harness 0.2.0-rc.2 exactly and has been checked with synthetic data only. Build, install and limits are in [plugins/deepseek-harness/README.md](plugins/deepseek-harness/README.md).
-
 ### Tests
 
 ```bash
@@ -101,7 +97,7 @@ npm run test:native
 CHROMIUM_PATH='<Chrome for Testing binary>' npm run test:browser
 ```
 
-- `npm test` covers the model, the adapters, the compiler, the page observer, the bundled bridge and the DeepSeek Harness plugin's unit tests.
+- `npm test` covers the model, the adapters, the compiler, the page observer, and the bundled bridge.
 - `test:native` runs the real chat controller in a real `WKWebView`, then the Accessibility checks against a synthetic app. The Accessibility checks report NOT RUN unless the terminal has Accessibility access.
 - `test:browser` runs the page observer in a real browser.
 
@@ -170,10 +166,6 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
 1. 在面板里登录 ChatGPT。
 2. 点击底栏的 **Allow…**，然后在 系统设置 → 隐私与安全性 → 辅助功能 中打开 Add to Claude。临时签名（ad-hoc）的构建每次重建后都要重新授权；运行一次 `bash scripts/make-signing-identity.sh`（在登录钥匙串中创建本机签名身份）再重建，之后的更新会保留授权。
 3. 先在目标应用的输入框里点一下，在底栏选中它的窗口，再点击 **Add**。
-
-### DeepSeek Harness 插件
-
-**ChatGPT 面板**（`dsh-chatgpt-panel`）把同样的交接带到 DeepSeek Harness：_在 ChatGPT 里聊透，在 DeepSeek Harness 里完成。_ ChatGPT 在独立窗口中打开，harness 右侧边栏的 ChatGPT 标签页显示当前对话，Add 把它追加到会话草稿而不发送。它只面向 DeepSeek Harness 0.2.0-rc.2，目前只用合成数据检查过。构建、安装和限制见 [plugins/deepseek-harness/README.md](plugins/deepseek-harness/README.md#中文)。
 
 ### 测试
 

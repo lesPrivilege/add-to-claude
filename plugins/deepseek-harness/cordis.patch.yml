@@ -1,5 +1,0 @@
-# ChatGPT panel (dsh-chatgpt-panel): one plugin row. The name resolves to host/index.js; because
-# package.json declares dsh.client, the harness also serves client/client.js to the page.
-- insert:
-    - id: dsh-chatgpt-panel
-      name: 'dsh-chatgpt-panel'

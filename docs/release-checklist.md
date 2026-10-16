@@ -33,19 +33,9 @@
 - [ ] The owner decides the service-terms question.
 - [x] Signing, hardened runtime, notarization and Gatekeeper, or an explicit decision to ship unsigned: the owner chose a **private technical beta** (2026-10-16). 0.6.0 ships as a GitHub pre-release signed with the local identity, labelled as needing right-click → Open on first launch. Developer ID and notarization stay required for a public release.
 
-## DeepSeek Harness plugin (`dsh-chatgpt-panel` 0.1.0)
+## DeepSeek Harness plugin
 
-Done on 2026-10-16 with synthetic data only: `npm test` (41 plugin tests) and `npm run test:dsh-electron` (16 checks in real Electron 43.3.0). See [support-matrix.md](support-matrix.md).
-
-- [ ] Owner installs `dist/dsh-chatgpt-panel` into the `desktop` profile of DeepSeek Harness 0.2.0-rc.2 and confirms it loads (Plugins page shows "ChatGPT panel", no boot error).
-- [ ] **Add from ChatGPT** appears left of the model selector in every session; with the window closed one click opens it in front of the harness; its menu offers Add, Show window and Open ChatGPT tab.
-- [ ] The **ChatGPT panel** row appears in the left bar and opens the plugin page; its status follows the window (open, hidden, closed) within about a second.
-- [ ] The ChatGPT tab opens from the right sidebar's guide and from the button's menu, uses the harness's controls in light and dark; Open starts the window; sign-in persists across a helper restart and a Desktop restart.
-- [ ] Add into an empty draft and a non-empty draft (with a file chip): appended at the end, nothing replaced, nothing sent.
-- [ ] A conversation with an uploaded file and a generated file: both saved under `~/Downloads/Add to Claude/<title>/`, paths and SHA-256 in the text, verified.
-- [ ] External links open in the default browser; sign-in popups (Google, Apple, Microsoft) complete.
-- [ ] Quitting Desktop ends the helper; quitting the helper leaves the tab showing "closed".
-- [ ] Independent review of the plugin: security, functionality and rendered UX.
+Shelved by the owner on 2026-10-16; not part of this release. See [decisions/deepseek-harness-plugin.md](decisions/deepseek-harness-plugin.md).
 
 ## Release gates (runtime hygiene, 2026-10-16)
 
