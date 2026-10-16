@@ -1,0 +1,28 @@
+# Distilled icon grammar (WO-02)
+
+One page, distilled from references.md and the rendered checks in artifacts/icons/. Where a figure is not from a source, this page says so.
+
+## Menu-bar glyph
+
+| Rule | Value used here | Basis |
+|---|---|---|
+| Format | SVG, black + alpha only, `isTemplate = true`, set on `statusItem.button` | N04 (`isTemplate` page). The app already does this in `glyph()` in native/Views.swift. |
+| Canvas | A 24 × 24 grid. The status item draws it at **18 pt** (native/App.swift). Candidates are also checked at 16 and 20 pt. | Project code. Status-bar thickness is not stated by Apple's pages; the simulation uses a 24 pt bar. Read `NSStatusBar.system.thickness` on the target Mac. |
+| Stroke | **1.6 / 24**, so 1.2 pt at 18 pt and 1.07 pt at 16 pt. Accents up to 1.8 (caret). | Estimate for SF Symbols regular next to 13 pt menu-bar text. It was matched by eye against the project's own reference glyphs in docs/design/icons/ref/, not against SF Symbols images, which are not embedded. |
+| Live area | The mark spans about 19–21 units of 24 in its long direction and about 12–14 vertically. Wide marks sit on the optical centre (y ≈ 12–13), not the geometric one. | Measured against the reference glyphs in the strips. A wide shape reads small, so it gets the width. |
+| Terminals | Round caps and joins. Tapered trails end in a round head of at least 2.4 units (≥ 1.6 px at 16 pt @1x). The thin tip is decorative only: the meaning must survive when the tip disappears at @1x. | Rendered @1x checks (the 4× pixel zoom rows in menubar-compare.png). |
+| Corners | Composer corners use a radius of 3.4–4 units, a rounded rectangle and **not a pill**: a pill under strokes read as a handbag or radio in P0. | P0 history, WO-02. |
+| Weight | Outline glyphs stay within the reference set's weight. Filled glyphs (D3) read about one step heavier, like a `.fill` symbol. Use them only if the owner wants more presence. | menubar-compare.png. |
+| Don'ts | No gradients, no partial alpha for meaning, no dots or double hairlines under 1 px, no symmetric pairs above a body (handbag or antenna), no arrow into a tray (download), no paper plane (send), no four-point star (AI). | WO-02 and the registry. |
+
+## App icon
+
+| Rule | Value used here | Basis |
+|---|---|---|
+| Canvas | 1024 × 1024. The plate is 824 × 824 at (100, 100), with continuous corners (superellipse, n = 5, about 230 px corner extent) and transparent margin. | N02 gives 1024 and the system mask. The 824 plate comes from Apple's production template, not from the HIG page (see references.md). |
+| Main form | One object, centred, at about 60–75% of the plate width. The CleanShot, WhatCable, Strongbox and Bartender icons all do this. | Observed images in references.md. |
+| Colour | One plate colour family plus **one accent**: warm peach-orange (#FFB27A) for the landing point and caret in every candidate, so the accent means "here is where it lands". | Raycast and WhatCable show one-accent brands. The warm accent continues the current icon's peach. |
+| Light | Top light only: a vertical plate gradient plus one soft radial from the top-left. Edge line at 3 px, 8–14% white. No bevels and no neon. | N02 (light from the top, restraint). |
+| Depth | Two planes at most: the plate, then the composer or slab. The trail or caret is the only lit element. | CleanShot overlap. N02: filled overlapping shapes, no outline-only art. |
+| Pipelines | **.icns (macOS 14+)** keeps the baked gradient, glow and shadow. **Icon Composer (Tahoe 26.4+)** uses the same top-level SVG groups as layers with the baked highlight, glow and shadow removed; the system supplies them. | N02 and N03. The project builds .icns today (scripts/make-app-icon.sh). |
+| Small-size test | At 32 px the plate colour and the landing accent must still identify the app, and the composer must still read as a box with a line. | appicon-compare.png |
