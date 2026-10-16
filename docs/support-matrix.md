@@ -11,25 +11,35 @@ Evidence for Add to Claude 0.5.0 on macOS 27.0.1 (arm64), recorded 2026-10-16. A
 | `npm run test:native`, Accessibility half: background append with exact readback, target never activated                                                                                                                           | 49 checks in the owner's earlier run; **not run** in this round (the runner lacks Accessibility) |
 | `npm run test:browser`: page observer in Chrome for Testing                                                                                                                                                                        | **Not run** in this round (browser not installed on the runner); 14/14 earlier                   |
 | App build (unsigned, macOS 14 target) and snapshot render of the bar and Settings                                                                                                                                                  | Builds without warnings                                                                          |
+| Incremental hand-off (WO-01), 2026-10-16, branch `feat/handoff-incremental-log`: `npm test` with subset projection, per-turn hashes and the bridge's `addToClaudeProject`                                                          | 153/153 (112 core, 41 plugin; plugin source unchanged)                                           |
+| `test:native`, delivery-log half: state machine, scope rule, every logic row of the WO-01 acceptance matrix, identity parsing, file contents (no text), retention, Remember off, Clear                                             | 104 checks                                                                                       |
+| `test:native`, WebKit half after WO-01: the above plus per-turn metadata and a subset projected through the real isolated world; a stale hash is refused                                                                           | 26 checks                                                                                        |
+| Snapshots of the scope control (New, All, unconfirmed with Continue, continuing, Add again) and the turn picker, reviewed by eye                                                                                                   | Rendered (`artifacts/bar-scope-*.png`, `bar-add-again.png`, `turn-picker.png`)                   |
 
 ## On the owner's Mac
 
-| Area                                                                                                                        | Status                                                       |
-| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Sign in to ChatGPT in the panel, stay signed in across restarts, send messages                                              | Verified by the owner                                        |
-| Panel opens under the menu-bar icon; hide and show keep the page and a streaming reply                                      | Verified by the owner                                        |
-| Live conversation load, including long paged conversations; reasoning and tool entries hidden                               | Verified by the owner                                        |
-| Preview, Copy and Save produce the hand-off format with original Markdown and references                                    | Verified by the owner                                        |
-| Add into Claude for Mac with an empty prompt, without activating it or sending                                              | Verified by the owner                                        |
-| Add into a non-empty Claude prompt (⌘V fallback) and into a second app                                                      | **Not verified**                                             |
-| Generated file downloaded on Add, its path and SHA-256 in the text                                                          | Verified by the owner (one Markdown file)                    |
-| Uploaded files and images on Add                                                                                            | **Not verified**                                             |
-| Rendering markup (`<box>`, `<Entity/>`, `<Cite/>`, private-use markers) read as clean Markdown; repeated checks listed once | Synthetic only; **not yet seen live**                        |
-| Header controls, Settings, pin, click-away hiding                                                                           | Used by the owner in the 0.4 build without problems reported |
-| Global shortcut, login item, sign out                                                                                       | **Not verified**                                             |
-| Renamed build (`io.lesprivilege.add-to-claude`): fresh login, fresh Accessibility grant                                     | **Not verified**                                             |
-| Dark appearance, VoiceOver, keyboard-only use                                                                               | **Not verified**                                             |
-| Signing, notarization, Gatekeeper                                                                                           | **Not done**: no signing identity on this Mac                |
+| Area                                                                                                                                 | Status                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Sign in to ChatGPT in the panel, stay signed in across restarts, send messages                                                       | Verified by the owner                                                          |
+| Panel opens under the menu-bar icon; hide and show keep the page and a streaming reply                                               | Verified by the owner                                                          |
+| Live conversation load, including long paged conversations; reasoning and tool entries hidden                                        | Verified by the owner                                                          |
+| Preview, Copy and Save produce the hand-off format with original Markdown and references                                             | Verified by the owner                                                          |
+| Add into Claude for Mac with an empty prompt, without activating it or sending                                                       | Verified by the owner                                                          |
+| Add into a non-empty Claude prompt (⌘V fallback) and into a second app                                                               | **Not verified**                                                               |
+| Generated file downloaded on Add, its path and SHA-256 in the text                                                                   | Verified by the owner (one Markdown file)                                      |
+| Uploaded files and images on Add                                                                                                     | **Not verified**                                                               |
+| Rendering markup (`<box>`, `<Entity/>`, `<Cite/>`, private-use markers) read as clean Markdown; repeated checks listed once          | Synthetic only; **not yet seen live**                                          |
+| Header controls, Settings, pin, click-away hiding                                                                                    | Used by the owner in the 0.4 build without problems reported                   |
+| Global shortcut, login item, sign out                                                                                                | **Not verified**                                                               |
+| Renamed build (`io.lesprivilege.add-to-claude`): fresh login, fresh Accessibility grant                                              | **Not verified**                                                               |
+| Dark appearance, VoiceOver, keyboard-only use                                                                                        | **Not verified**                                                               |
+| Claude for Mac exposes its conversation id over AX (`AXWebArea` `AXURL` = `claude.ai/chat/<uuid>`); run `scripts/probe-target-ax.sh` | **Not verified**: not observed yet; until it is, Claude targets default to All |
+| Incremental Add into the same Claude conversation (New · N), and All after switching conversations in the same window                | **Not verified**                                                               |
+| Continue in this conversation for a window without an id; Stop continuing                                                            | **Not verified** (logic tested only)                                           |
+| Could not confirm after a reformatting paste into Claude, then It's There / It's Not                                                 | **Not verified**                                                               |
+| Choose turns… with a long live conversation; subset files downloaded and linked                                                      | **Not verified**                                                               |
+| Delivery log written to `~/Library/Application Support/add-to-claude/`, pruned at launch, cleared from Settings                      | **Not verified** on the owner's Mac (tested with a throwaway file)             |
+| Signing, notarization, Gatekeeper                                                                                                    | **Not done**: no signing identity on this Mac                                  |
 
 ## DeepSeek Harness plugin (`dsh-chatgpt-panel` 0.1.0)
 

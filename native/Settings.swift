@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import ServiceManagement
+import Security
 import SwiftUI
 
 /// What the user can change, kept in UserDefaults. The files folder lives with `FilesFolder`.
@@ -14,9 +15,9 @@ enum Preferences {
     static let appsUsingPaste = ignoringKey
 
     static func register() {
-        UserDefaults.standard.register(defaults: [keepPanelOpen: false, showAtLaunch: true,
-                                                  shortcut: Shortcut.none.rawValue, restoreLastWindow: true,
-                                                  downloadOnAdd: true])
+        let defaults: [String: Any] = [keepPanelOpen: false, showAtLaunch: true, shortcut: Shortcut.none.rawValue,
+                                       restoreLastWindow: true, downloadOnAdd: true]
+        UserDefaults.standard.register(defaults: defaults.merging(HistoryKeys.defaults) { $1 })
     }
 
     static var pinned: Bool {
@@ -85,6 +86,7 @@ final class Hotkey {
 final class SettingsWindow: NSObject, NSWindowDelegate {
     var reload: () -> Void = {}
     var signOut: () -> Void = {}
+    var clearWebCache: () -> Void = {}
     var shortcutTaken: () -> Bool = { false }
     private var window: NSWindow?
 
@@ -93,6 +95,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     func show() {
         if window == nil {
             let view = SettingsView(reload: { [weak self] in self?.reload() }, signOut: { [weak self] in self?.signOut() },
+                                    clearWebCache: { [weak self] in self?.clearWebCache() },
                                     shortcutTaken: { [weak self] in self?.shortcutTaken() ?? false })
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Add to Claude Settings"
@@ -109,9 +112,32 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 }
 
+/// How this copy is signed: a stable identity keeps macOS permissions across updates; ad-hoc does not.
+struct Signing {
+    let summary: String
+    let stable: Bool
+
+    static let current: Signing = {
+        var code: SecCode?
+        var staticCode: SecStaticCode?
+        var info: CFDictionary?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code,
+              SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode,
+              SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let values = info as? [String: Any] else { return Signing(summary: "Unsigned", stable: false) }
+        if let leaf = (values[kSecCodeInfoCertificates as String] as? [SecCertificate])?.first,
+           let name = SecCertificateCopySubjectSummary(leaf) as String? {
+            return Signing(summary: "Signed by \(name)", stable: true)
+        }
+        return Signing(summary: "Ad-hoc · permissions reset on update", stable: false)
+    }()
+}
+
 private struct SettingsView: View {
+    private let signing = Signing.current
     let reload: () -> Void
     let signOut: () -> Void
+    let clearWebCache: () -> Void
     let shortcutTaken: () -> Bool
 
     @AppStorage(Preferences.keepPanelOpen) private var pinned = false
@@ -119,6 +145,10 @@ private struct SettingsView: View {
     @AppStorage(Preferences.shortcut) private var shortcut = Shortcut.none
     @AppStorage(Preferences.restoreLastWindow) private var restoreLast = true
     @AppStorage(Preferences.downloadOnAdd) private var downloadOnAdd = true
+    @AppStorage(HistoryKeys.remember) private var rememberAdded = true
+    @AppStorage(HistoryKeys.days) private var historyDays = 30
+    @State private var confirmClear = false
+    @State private var cacheCleared = false
     @State private var pasteApps = SettingsView.pastedApps()
     @State private var login = SMAppService.mainApp.status
     @State private var loginProblem = false
@@ -173,6 +203,37 @@ private struct SettingsView: View {
             } header: { sectionHeader("Hand-off", glyph: "brand") }
 
             Section {
+                Toggle("Remember what was added", isOn: $rememberAdded)
+                    .onChange(of: rememberAdded) { DeliveryLog.shared.preferencesChanged() }
+                Picker("Keep for", selection: $historyDays) {
+                    Text("7 days").tag(7)
+                    Text("30 days").tag(30)
+                    Text("90 days").tag(90)
+                }
+                .disabled(!rememberAdded)
+                .onChange(of: historyDays) { DeliveryLog.shared.prune() }
+                LabeledContent("History") {
+                    Button("Clear History…") { confirmClear = true }
+                }
+                note(rememberAdded
+                     ? "So Add can offer only what is new in a conversation it can identify. Kept on this Mac: ids, positions, hashes and times, never message text."
+                     : "Add remembers what was added only until you quit.")
+            } header: { sectionHeader("History", glyph: "waiting") }
+
+            Section {
+                LabeledContent("Web cache") {
+                    Button("Clear and Reload") { clearWebCache(); cacheCleared = true }
+                }
+                note(cacheCleared ? "Cleared. Your ChatGPT sign-in is kept."
+                     : "Try this first if the ChatGPT page misbehaves. Your sign-in is kept.")
+                LabeledContent("Diagnostics") {
+                    Button("Export…") { Diagnostics.export() }
+                }
+                note("This session's hand-off steps, times and sizes. Never message text, titles, file names or paths.")
+                note("Clearing never touches files you downloaded, your settings or your sign-in.")
+            } header: { sectionHeader("Storage & Diagnostics", glyph: "folder") }
+
+            Section {
                 LabeledContent("Accessibility") {
                     HStack(spacing: 6) {
                         Label { Text(trusted ? "Allowed" : "Not allowed") } icon: { glyphImage(trusted ? "done" : "lock") }
@@ -190,9 +251,22 @@ private struct SettingsView: View {
                         Button("Sign Out…", role: .destructive) { confirmSignOut = true }
                     }
                 }
-            } header: { sectionHeader("Access", glyph: "lock") } footer: {
-                Text((["Add to Claude", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String]
-                    .compactMap { $0 }.joined(separator: " ")) + " · reads only the page you are on, never sends for you")
+            } header: { sectionHeader("Access", glyph: "lock") }
+
+            Section {
+                LabeledContent("Version") {
+                    Text([Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+                          (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String).map { "(\($0))" }]
+                        .compactMap { $0 }.joined(separator: " ")).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                LabeledContent("Signature") {
+                    Label { Text(signing.summary) } icon: { glyphImage(signing.stable ? "done" : "info") }
+                        .foregroundStyle(signing.stable ? Color.secondary : Color.orange)
+                        .help(signing.stable ? "Updates signed the same way keep the Accessibility permission."
+                              : "Ad-hoc builds change their signature, so macOS asks for Accessibility after every update. Run scripts/make-signing-identity.sh once, then rebuild.")
+                }
+            } header: { sectionHeader("About", glyph: "info") } footer: {
+                Text("Add to Claude · reads only the page you are on, never sends for you")
                     .font(.caption).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
             }
         }
@@ -204,6 +278,11 @@ private struct SettingsView: View {
             trusted = AXIsProcessTrusted()
             login = SMAppService.mainApp.status
             pasteApps = SettingsView.pastedApps()
+        }
+        .confirmationDialog("Clear what Add to Claude remembers adding?", isPresented: $confirmClear) {
+            Button("Clear History", role: .destructive) { DeliveryLog.shared.clear() }
+        } message: {
+            Text("The next Add into any conversation offers all turns again. Your conversations and drafts are not touched.")
         }
         .confirmationDialog("Sign out of ChatGPT in Add to Claude?", isPresented: $confirmSignOut) {
             Button("Sign Out", role: .destructive) { signOut() }

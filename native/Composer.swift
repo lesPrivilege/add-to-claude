@@ -63,12 +63,16 @@ final class WindowChoice: NSObject {
     var identityOrdinal = 0
     var needsIdentityCue = false
 
-    init?(app: NSRunningApplication, window: AXUIElement) {
+    convenience init?(app: NSRunningApplication, window: AXUIElement) {
         guard let launchDate = app.launchDate else { return nil }
+        self.init(app: app, launchDate: launchDate, window: window, title: axString(window, kAXTitleAttribute) ?? "Untitled window")
+    }
+
+    init(app: NSRunningApplication, launchDate: Date, window: AXUIElement, title: String) {
         self.app = app
         self.launchDate = launchDate
         self.window = window
-        self.title = axString(window, kAXTitleAttribute) ?? "Untitled window"
+        self.title = title
     }
 
     func displayLabel(limit: Int = 90) -> String {
@@ -139,36 +143,85 @@ func inspectComposer(_ choice: WindowChoice) -> (field: AXUIElement?, problem: S
 }
 
 
+/// What an append ended with. Only `inserted` means the text was read back from the draft; `unconfirmed`
+/// means the draft changed but the text could not be confirmed; `failed` means nothing was added.
+enum AddOutcome { case inserted, unconfirmed, failed }
+
+/// A stable conversation id read from a target page's URL, or nil. Only exact, known shapes count:
+/// a Claude chat (https://claude.ai/chat/<uuid>) and a Claude Code session in Claude for Mac
+/// (https://claude.ai/epitaxy/local_<uuid>, seen on the owner's Mac on 2026-10-16).
+/// Window titles, app names and paste history never do.
+func targetConversationId(_ text: String) -> String? {
+    let uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    guard text.utf8.count <= 4096, let url = URL(string: text), url.scheme == "https", url.host == "claude.ai",
+          url.user == nil, url.password == nil, url.port == nil,
+          url.path.range(of: "^/(chat/\(uuid)|epitaxy/(local_)?\(uuid))/?$", options: .regularExpression) != nil
+    else { return nil }
+    let path = url.path.hasSuffix("/") ? String(url.path.dropLast()) : url.path
+    return "claude.ai" + path.lowercased()
+}
+
+/// The target's own conversation id, when the window shows a web page that names one in its URL
+/// (Claude for Mac is a web app: its inner AXWebArea carries `AXURL`, e.g. https://claude.ai/epitaxy/local_<uuid>).
+/// Several web areas naming different conversations is ambiguous: no id. Bounded walk, no activation.
+func conversationIdentity(in window: AXUIElement) -> String? { conversationPage(in: window)?.id }
+
+/// The conversation a window shows: its id and, when the page has one, its title (for the picker only).
+func conversationPage(in window: AXUIElement) -> (id: String, title: String?)? {
+    var found: [String: String?] = [:]
+    var queue: [(AXUIElement, Int)] = [(window, 0)], visited = 0
+    let deadline = Date().addingTimeInterval(1) // A slow app reads as unidentified, never as the same conversation.
+    if let document = axString(window, kAXDocumentAttribute), let id = targetConversationId(document) { found[id] = .some(nil) }
+    while !queue.isEmpty && visited < 2000 && Date() < deadline {
+        let (element, depth) = queue.removeFirst()
+        visited += 1
+        if axString(element, kAXRoleAttribute) == "AXWebArea" {
+            let value = attribute(element, kAXURLAttribute)
+            let text = (value as? URL)?.absoluteString ?? value as? String
+            if let text, let id = targetConversationId(text) {
+                let title = axString(element, kAXTitleAttribute).map { safeLabel($0, limit: 60) }
+                found[id] = .some(title?.isEmpty == false ? title : nil)
+            }
+            continue // A web area's page is not searched further; its URL is what names it.
+        }
+        if depth < 12, let children = attribute(element, kAXChildrenAttribute) as? [AXUIElement] {
+            queue.append(contentsOf: children.map { ($0, depth + 1) })
+        }
+    }
+    guard found.count == 1, let (id, title) = found.first else { return nil }
+    return (id, title)
+}
+
 /// Appends at the end of the chosen composer while its app stays in the background.
 /// Never activates, raises, pastes, types or sends; success means the exact text was read back.
 func appendToComposer(_ selected: Composer, text: String, operationValid: @escaping () -> Bool,
                       revalidateSource: @escaping (@escaping (Bool) -> Void) -> Void,
-                      completion: @escaping (String, Bool) -> Void) {
+                      completion: @escaping (String, AddOutcome) -> Void) {
     guard operationValid(), !text.isEmpty, text.utf8.count <= maximumTextBytes else {
-        completion("The context changed or exceeds the native text limit. Use a context file.", false); return
+        completion("The context changed or exceeds the native text limit. Use a context file.", .failed); return
     }
     guard AXIsProcessTrusted(), validWindow(selected.choice) else {
-        completion("The target or its permission changed. Choose the composer again.", false); return
+        completion("The target or its permission changed. Choose the composer again.", .failed); return
     }
     revalidateSource { valid in
         DispatchQueue.main.async {
-            guard valid, operationValid() else { completion("The source changed. Nothing was added.", false); return }
+            guard valid, operationValid() else { completion("The source changed. Nothing was added.", .failed); return }
             guard let current = focusedComposer(selected.choice), CFEqual(current, selected.editor),
                   let old = axString(current, kAXValueAttribute) else {
-                completion("The composer is no longer ready. Nothing was added; choose it again.", false); return
+                completion("The composer is no longer ready. Nothing was added; choose it again.", .failed); return
             }
             // A blank draft (rich editors report an empty paragraph as "\n") has nothing to keep.
             let blank = old.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let suffix = blank ? text : "\n\n" + text
             guard old.utf8.count + suffix.utf8.count <= maximumTextBytes else {
-                completion("The combined draft exceeds the native text limit. Use a context file.", false); return
+                completion("The combined draft exceeds the native text limit. Use a context file.", .failed); return
             }
             let combined = blank ? text : old + suffix
             // Never replace AXValue: doing so discards existing rich spans and attachment objects.
             // AX text ranges use UTF-16 offsets, not Swift Character or UTF-8 counts.
             // A blank draft is replaced as a selection; otherwise the caret goes to the end.
             var end = CFRange(location: blank ? 0 : old.utf16.count, length: blank ? old.utf16.count : 0)
-            guard operationValid() else { completion("The handoff expired or changed. Nothing was added.", false); return }
+            guard operationValid() else { completion("The handoff expired or changed. Nothing was added.", .failed); return }
             if ignoresInsertion(selected.choice.app) {
                 return fallBack(selected, field: current, old: old, blank: blank, text: text, suffix: suffix, completion: completion)
             }
@@ -185,19 +238,19 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             guard setRange == .success, stillFocused, sameTextUnits(after, old), let range,
                   (range.location == end.location && range.length == end.length) || beforeFinalBreak,
                   operationValid() else {
-                completion("The insertion point or draft changed. Nothing was added; choose the composer again.", false); return
+                completion("The insertion point or draft changed. Nothing was added; choose the composer again.", .failed); return
             }
             let head = String(utf16CodeUnits: Array(units[..<range.location]), count: range.location)
             let tail = String(utf16CodeUnits: Array(units[(range.location + range.length)...]), count: units.count - range.location - range.length)
             let expected = beforeFinalBreak ? (blank ? text : head + suffix) + tail : combined
             let result = AXUIElementSetAttributeValue(current, kAXSelectedTextAttribute as CFString, suffix as CFString)
             guard result == .success else {
-                completion("The app refused the text. Nothing was added.", false); return
+                completion("The app refused the text. Nothing was added.", .failed); return
             }
             // Web-based editors (Chromium, Electron) apply the write asynchronously; wait for the draft to
             // change before reading it back, for up to two seconds.
             confirmWrite(current, old: old, expected: expected, attempts: 20, rich: beforeFinalBreak) { message, success in
-                guard !success, message == ignoredMessage, operationValid() else { return completion(message, success) }
+                guard success == .failed, message == ignoredMessage, operationValid() else { return completion(message, success) }
                 rememberIgnoresInsertion(selected.choice.app)
                 // Some web editors (Claude's ProseMirror prompt) take no AX text writes at all.
                 fallBack(selected, field: current, old: old, blank: blank, text: text, suffix: suffix, completion: completion)
@@ -227,7 +280,7 @@ private func normalized(_ text: String) -> String {
 /// After an ignored AX write: set the whole value of an empty box, then paste with ⌘V sent to that app
 /// alone. The app is never activated and nothing is sent. Unconfirmed, the text stays on the clipboard.
 private func fallBack(_ selected: Composer, field: AXUIElement, old: String, blank: Bool, text: String, suffix: String,
-                      completion: @escaping (String, Bool) -> Void) {
+                      completion: @escaping (String, AddOutcome) -> Void) {
     let landed: (String?) -> Bool = { written in
         guard let written, !sameTextUnits(written, old) else { return false }
         return normalized(written) == normalized(blank ? text : old + suffix)
@@ -245,7 +298,7 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
         }
         waitForChange(field, old: old, attempts: 20) { written in
             guard let written, !sameTextUnits(written, old) else {
-                return completion("This app takes text only by pasting. The conversation is on the clipboard: click its message box and press ⌘V.", false)
+                return completion("This app takes text only by pasting. The conversation is on the clipboard: click its message box and press ⌘V.", .failed)
             }
             board.clearContents()
             board.writeObjects(saved.map { pairs in
@@ -253,18 +306,19 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
                 for (type, data) in pairs { item.setData(data, forType: type) }
                 return item
             })
-            // Editors that turn pasted Markdown into formatting (Claude's does) cannot read back exactly.
-            completion(landed(written) ? "Added by pasting into the app. Review the draft there; nothing was sent."
-                       : "Pasted into the app, which reformatted the Markdown. Review the draft there; nothing was sent.", true)
+            // Editors that turn pasted Markdown into formatting (Claude's does) cannot read back exactly,
+            // so the draft changed but whether all of it landed is not known.
+            if landed(written) { return completion("Added by pasting into the app. Review the draft there; nothing was sent.", .inserted) }
+            completion("Pasted, but the app reformatted the Markdown, so it could not be confirmed. Check the draft there; nothing was sent.", .unconfirmed)
         }
     }
     guard blank, axSettable(field, kAXValueAttribute) else { return paste() }
     // An empty box has no rich content to lose, so replacing its whole value is safe here.
     AXUIElementSetAttributeValue(field, kAXValueAttribute as CFString, text as CFString)
     waitForChange(field, old: old, attempts: 10) { written in
-        if landed(written) { return completion("Added. Review the draft there; nothing was sent.", true) }
+        if landed(written) { return completion("Added. Review the draft there; nothing was sent.", .inserted) }
         if let written, !sameTextUnits(written, old) {
-            return completion("Text was added but reads back differently. Check the draft before retrying.", false)
+            return completion("Text was added but reads back differently. Check the draft before retrying.", .unconfirmed)
         }
         paste()
     }
@@ -279,7 +333,7 @@ private func waitForChange(_ field: AXUIElement, old: String, attempts: Int, the
 }
 
 private func confirmWrite(_ field: AXUIElement, old: String, expected: String, attempts: Int, rich: Bool,
-                          completion: @escaping (String, Bool) -> Void) {
+                          completion: @escaping (String, AddOutcome) -> Void) {
     let written = axString(field, kAXValueAttribute)
     if sameTextUnits(written, old) && attempts > 0 {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -287,9 +341,9 @@ private func confirmWrite(_ field: AXUIElement, old: String, expected: String, a
         }
         return
     }
-    if sameTextUnits(written, expected) { return completion("Added. Review the draft there; nothing was sent.", true) }
-    if sameTextUnits(written, old) { return completion(ignoredMessage, false) }
-    completion("Text was added but reads back differently. Check the draft before retrying.", false)
+    if sameTextUnits(written, expected) { return completion("Added. Review the draft there; nothing was sent.", .inserted) }
+    if sameTextUnits(written, old) { return completion(ignoredMessage, .failed) }
+    completion("Text was added but reads back differently. Check the draft before retrying.", .unconfirmed)
 }
 
 struct Target {
@@ -336,8 +390,13 @@ final class ComposerRegistry {
             choice.identityOrdinal = ordinals[key]!
             choice.needsIdentityCue = counts[key]! > 1
             choices[id] = choice
-            return Target(id: id, app: safeLabel(choice.app.localizedName ?? "App", limit: 48),
-                          window: choice.displayLabel(limit: 60), icon: choice.app.icon)
+            let app = safeLabel(choice.app.localizedName ?? "App", limit: 48)
+            // An app that titles every window with its own name (Claude for Mac) says which
+            // conversation it shows only inside its page; use that title to tell windows apart.
+            let page = choice.title == choice.app.localizedName ? conversationPage(in: choice.window)?.title : nil
+            let label = page.map { $0.replacingOccurrences(of: #" - Claude( Code)?$"#, with: "", options: .regularExpression) }
+                ?? (choice.title == choice.app.localizedName && !choice.needsIdentityCue ? nil : choice.displayLabel(limit: 60))
+            return Target(id: id, app: app, window: label ?? "", icon: choice.app.icon)
         }
         return Discovery(targets: targets, choices: choices)
     }

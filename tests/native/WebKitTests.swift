@@ -39,6 +39,17 @@ import WebKit
 
     /// Two turns made files with the same name; each line gets its own copy, and the shared check goes
     /// only when both have one.
+    /// A hand-off's trace reaches the exported report as counts and stage names only.
+    static func diagnostics() {
+        let trace = HandoffTrace()
+        trace.record(.started, turns: 3, scope: "new", target: "com.example.target")
+        trace.record(.inserted)
+        let report = (try? Diagnostics.sessionReport()) ?? ""
+        check(report.contains("op=\(trace.id) stage=started") && report.contains("turns=3") && report.contains("op=\(trace.id) stage=inserted"),
+              "the diagnostics report carries this session's hand-off stages")
+        check(report.contains("No message text"), "the report says what it never records")
+    }
+
     static func linkedFiles() {
         let markdown = ["# Charts", "", "Source: <https://chatgpt.com/c/two> · 4 turns · verification: partial", "<!-- b -->",
                         "", "## Content checks", "", "- chart.png: download this file…", "", "## Turn 2 — Assistant", "",
@@ -114,6 +125,24 @@ import WebKit
               && prepared.markdown.range(of: "Synthetic question.")!.lowerBound
                  < prepared.markdown.range(of: "Original **Markdown**")!.lowerBound, "exact Markdown in order")
         check(chat.bar.isCurrent(prepared), "preparation is current")
+        check(prepared.turnList.map(\.role) == ["user", "assistant"] && prepared.turnList.allSatisfy { isSHA256($0.sha256) }
+              && prepared.turnList[1].preview == "Original **Markdown** 中文 ✓" && prepared.sourceId == "one",
+              "per-turn ids, roles, previews and hashes arrive with the preparation")
+
+        // Some turns, projected by the compiler in the isolated world, for the hash the app was shown.
+        var projected: ProjectionResult?
+        chat.project(prepared, turns: [prepared.turnList[1]], note: "new since last add") { projected = $0 }
+        pump(until: { projected != nil }, "the bridge answers a request for some turns")
+        if case .success(let text) = projected! {
+            check(text.markdown.contains("\nTurn 2 of 2 · new since last add\n") && text.markdown.contains("## Turn 2 — Assistant")
+                  && !text.markdown.contains("Synthetic question.") && text.verification == "verified",
+                  "the subset text: the chosen turn under its own number, with the scope line")
+        } else { check(false, "the subset text") }
+        projected = nil
+        let stale = TurnInfo(id: "a", role: "assistant", position: 2, preview: "", sha256: String(repeating: "0", count: 64), files: [])
+        chat.project(prepared, turns: [stale], note: "chosen") { projected = $0 }
+        pump(until: { projected != nil }, "the bridge answers a stale request")
+        if case .failure = projected! { check(true, "") } else { check(false, "a turn whose text changed since it was shown is refused") }
 
         _ = evaluate(web, "history.pushState(null, '', '/c/another'); true")
         pump(until: { chat.prepared == nil }, "navigating to another conversation revokes it")
@@ -124,6 +153,7 @@ import WebKit
         check(chat.prepared == nil, "a response for a conversation no longer shown is not prepared")
 
         linkedFiles()
+        diagnostics()
         print("PASS: \(checks) WebKit checks in a real WKWebView")
         exit(0)
     }

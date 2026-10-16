@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Preferences.register()
+        DeliveryLog.shared.load() // Also drops what is past the retention period.
         NSApp.mainMenu = mainMenu()
         panel = ChatPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 760),
                           styleMask: [.titled, .resizable, .nonactivatingPanel, .fullSizeContentView],
@@ -43,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         chat.openSettings = { [weak self] in self?.settings.show() }
         settings.reload = { [weak self] in self?.chat.reload() }
         settings.signOut = { [weak self] in self?.chat.signOut() }
+        settings.clearWebCache = { [weak self] in self?.chat.clearWebCache() }
         settings.shortcutTaken = { [weak self] in !(self?.hotkey.use(.current) ?? true) }
         hotkey.use(.current)
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) {

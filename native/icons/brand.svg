@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.8 2.5 10.2 12.6M18.2 2.5 13.8 12.6"/><path d="M8.6 11.5H7a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10h-1.6"/><path d="M6 15h12M6 18.2h6.6M14.6 17.1v2.2"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- D1 Arc Insert, menu-bar glyph. Template-ready: black + alpha only. 24 grid, 1.6 stroke.
+       The composer's top-left corner is left open; one swept trail, thin to thick, comes in from the
+       upper left, flattens into the composer's line of text and stops short of the caret. -->
+  <path d="M8 6.8H17.4a4 4 0 0 1 4 4v4.4a4 4 0 0 1-4 4H6.6a4 4 0 0 1-4-4v-2.4" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M17.4 11.9v4.8" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round"/>
+  <path fill="#000" d="M0.96 2.51L1.31 3.86L1.70 5.13L2.12 6.34L2.59 7.47L3.09 8.54L3.65 9.53L4.24 10.46L4.89 11.31L5.58 12.10L6.33 12.81L7.12 13.44L7.97 14.00L8.86 14.48L9.81 14.88L10.80 15.20L11.83 15.43L12.91 15.58L14.03 15.65A1.25 1.25 0 0 0 13.97 13.15L13.04 13.18L12.14 13.15L11.28 13.04L10.45 12.87L9.65 12.62L8.88 12.31L8.13 11.92L7.41 11.45L6.72 10.90L6.05 10.28L5.41 9.57L4.80 8.78L4.22 7.90L3.67 6.95L3.16 5.91L2.68 4.78L2.24 3.58L1.84 2.29Z"/>
+</svg>

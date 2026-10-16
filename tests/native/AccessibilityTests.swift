@@ -95,7 +95,7 @@ import ApplicationServices
             appendToComposer(selected, text: text, operationValid: valid, revalidateSource: { reply in
                 Task { await mutation?.value; reply(source) }
             }) { message, success in
-                continuation.resume(returning: (message, success))
+                continuation.resume(returning: (message, success == .inserted))
             }
         }
         await mutation?.value

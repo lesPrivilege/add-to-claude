@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- D2 Cursor Arrival, app icon. macOS 1024 grid, 824 plate at 100,100 with continuous corners.
+       Layers: plate (pearl), composer (dark glass), settled line, arriving line, caret + glow.
+       The baked highlights are for the .icns pipeline; drop them in Icon Composer. -->
+  <defs>
+    <path id="plate" d="M924.0 330.0L923.8 252.7L923.2 228.1L922.2 210.4L920.8 196.1L919.0 183.9L916.8 173.4L914.2 164.0L911.1 155.7L907.6 148.2L903.7 141.4L899.2 135.3L894.2 129.8L888.7 124.8L882.6 120.3L875.8 116.4L868.3 112.9L860.0 109.8L850.6 107.2L840.1 105.0L827.9 103.2L813.6 101.8L795.9 100.8L771.3 100.2L694.0 100.0L330.0 100.0L252.7 100.2L228.1 100.8L210.4 101.8L196.1 103.2L183.9 105.0L173.4 107.2L164.0 109.8L155.7 112.9L148.2 116.4L141.4 120.3L135.3 124.8L129.8 129.8L124.8 135.3L120.3 141.4L116.4 148.2L112.9 155.7L109.8 164.0L107.2 173.4L105.0 183.9L103.2 196.1L101.8 210.4L100.8 228.1L100.2 252.7L100.0 330.0L100.0 694.0L100.2 771.3L100.8 795.9L101.8 813.6L103.2 827.9L105.0 840.1L107.2 850.6L109.8 860.0L112.9 868.3L116.4 875.8L120.3 882.6L124.8 888.7L129.8 894.2L135.3 899.2L141.4 903.7L148.2 907.6L155.7 911.1L164.0 914.2L173.4 916.8L183.9 919.0L196.1 920.8L210.4 922.2L228.1 923.2L252.7 923.8L330.0 924.0L694.0 924.0L771.3 923.8L795.9 923.2L813.6 922.2L827.9 920.8L840.1 919.0L850.6 916.8L860.0 914.2L868.3 911.1L875.8 907.6L882.6 903.7L888.7 899.2L894.2 894.2L899.2 888.7L903.7 882.6L907.6 875.8L911.1 868.3L914.2 860.0L916.8 850.6L919.0 840.1L920.8 827.9L922.2 813.6L923.2 795.9L923.8 771.3L924.0 694.0Z"/>
+    <linearGradient id="ground" x1="0" y1="100" x2="0" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FBFAF8"/>
+      <stop offset="1" stop-color="#DCDDE3"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="262" x2="0" y2="762" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2B3040"/>
+      <stop offset="1" stop-color="#11131A"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="262" x2="0" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="arrive" x1="292" y1="0" x2="640" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9FB4FF" stop-opacity="0.1"/>
+      <stop offset="0.6" stop-color="#DDE5FF" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="712" cy="556" r="170" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF9F5A" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#FF9F5A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g id="plate-layer">
+    <use href="#plate" fill="url(#ground)"/>
+    <use href="#plate" fill="none" stroke="#000000" stroke-opacity="0.08" stroke-width="3"/>
+  </g>
+  <g id="composer">
+    <rect x="172" y="262" width="680" height="500" rx="132" fill="url(#glass)"/>
+    <rect x="172" y="262" width="680" height="500" rx="132" fill="url(#sheen)"/>
+    <rect x="173.5" y="263.5" width="677" height="497" rx="130.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="3"/>
+  </g>
+  <g id="settled-line">
+    <path d="M314 418H540" stroke="#8C93A8" stroke-width="44" stroke-linecap="round"/>
+  </g>
+  <g id="arriving-line">
+    <path fill="url(#arrive)" d="M292.15 570.00L305.34 569.89L318.54 569.96L331.77 570.14L345.00 570.39L358.26 570.71L371.53 571.08L384.81 571.50L398.10 571.97L411.41 572.48L424.74 573.03L438.08 573.62L451.43 574.24L464.79 574.90L478.17 575.58L491.57 576.30L504.97 577.05L518.39 577.82L531.82 578.63L545.27 579.46L558.73 580.32L572.20 581.20L585.68 582.11L599.18 583.04L612.69 583.99A28.00 28.00 0 0 0 611.31 528.01L597.83 529.64L584.37 531.26L570.93 532.86L557.50 534.46L544.08 536.05L530.68 537.62L517.29 539.18L503.92 540.73L490.56 542.26L477.22 543.78L463.89 545.28L450.57 546.76L437.27 548.22L423.98 549.66L410.71 551.08L397.45 552.47L384.21 553.84L370.97 555.17L357.76 556.47L344.55 557.72L331.36 558.93L318.18 560.07L305.01 561.12L291.85 562.00Z"/>
+  </g>
+  <g id="caret">
+    <circle cx="712" cy="556" r="170" fill="url(#glow)"/>
+    <rect x="692" y="456" width="40" height="200" rx="20" fill="#FFB27A"/>
+  </g>
+</svg>

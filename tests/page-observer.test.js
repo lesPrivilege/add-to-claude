@@ -575,3 +575,12 @@ test('returning to a conversation the website shows from memory publishes it aga
   );
   assert.equal(h.messages.at(-1).kind, 'response', 'the replay follows the change notice');
 });
+
+test('sending a message tells the app a reply is in progress, before any answer arrives', () => {
+  const h = harness();
+  void h.post({ action: 'next', messages: [] });
+  assert.deepEqual(
+    h.messages.map((message) => message.kind),
+    ['changed', 'replying'],
+  );
+});
