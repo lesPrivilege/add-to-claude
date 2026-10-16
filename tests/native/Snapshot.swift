@@ -79,7 +79,7 @@ import AppKit
                                title: "Research notes with a very long conversation title that truncates", turns: 14, files: 1,
                                verification: "partial", issues: ["report.pdf is a reference only."], attachments: [], verifiedWithFiles: false)
         let states: [(String, SourceState)] = [("waiting", .waiting), ("ready", .ready(ready)), ("partial", .ready(partial)),
-                                               ("unavailable", .unavailable("This page did not expose its original messages."))]
+                                               ("unavailable", .unavailable("The conversation could not be read. Open it again once any reply has finished."))]
         for (name, state) in states {
             let bar = HandoffBar()
             bar.isTrusted = { false }

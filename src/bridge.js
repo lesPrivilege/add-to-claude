@@ -72,7 +72,11 @@ if (handler && window === top) {
           messageId: String(packet.messageId ?? ''),
           status: String(packet.status),
         });
-      if (packet?.kind === 'changed' || packet?.kind === 'unavailable')
+      if (
+        packet?.kind === 'changed' ||
+        packet?.kind === 'unavailable' ||
+        packet?.kind === 'replying'
+      )
         return handler.postMessage({ kind: packet.kind, page: String(packet.pageUrl) });
       if (packet?.kind !== 'response') return;
       try {

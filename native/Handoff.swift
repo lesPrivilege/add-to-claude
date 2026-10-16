@@ -83,6 +83,8 @@ struct Attachment {
 
 enum SourceState {
     case waiting
+    /// A reply is streaming in the page; Add waits for it to finish.
+    case replying
     case ready(Prepared)
     case unavailable(String)
 }
@@ -327,6 +329,9 @@ final class HandoffBar: NSViewController {
         case .waiting:
             sourceTitle.stringValue = "No conversation yet"
             sourceDetail.stringValue = "Open or start a chat above."
+        case .replying:
+            sourceTitle.stringValue = "Reply in progress"
+            sourceDetail.stringValue = "Add when it finishes. If it stops partway, open the conversation again once it is complete."
         case .unavailable(let reason):
             sourceTitle.stringValue = "Conversation unavailable"
             sourceDetail.stringValue = reason

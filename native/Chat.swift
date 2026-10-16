@@ -213,8 +213,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         case "file-missing":
             settle((body["id"] as? String ?? "") + "|" + (body["messageId"] as? String ?? ""))
         case "changed": set(nil, .waiting)
+        case "replying": set(nil, .replying)
         case "invalid": set(nil, .unavailable(safeLabel(body["message"] as? String ?? "", limit: 160)))
-        case "unavailable": set(nil, .unavailable("This page did not expose its original messages."))
+        case "unavailable": set(nil, .unavailable("The conversation could not be read. Open it again once any reply has finished."))
         default: break
         }
     }

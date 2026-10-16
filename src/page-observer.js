@@ -595,6 +595,8 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       void observed.catch(() => {});
       const base = cached;
       invalidate(true);
+      // A reply is streaming: the app waits for it to finish before offering Add.
+      post({ kind: 'replying', pageUrl: location.href });
       const active = {
         version: generation,
         base,
