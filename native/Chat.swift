@@ -174,7 +174,8 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                                         guard let id = file["id"] as? String, let line = file["line"] as? String else { return nil }
                                         return Attachment(id: id, name: safeLabel(file["name"] as? String ?? "", limit: 200),
                                                           turn: file["turn"] as? Int ?? 0,
-                                                          messageId: file["messageId"] as? String ?? "", line: line)
+                                                          messageId: file["messageId"] as? String ?? "", line: line,
+                                                          issue: file["issue"] as? String ?? "")
                                     })
             if !prepared.issues.isEmpty {
                 traceLog.notice("partial: \(prepared.issues.joined(separator: " | "), privacy: .public)")
@@ -213,13 +214,20 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         saved[page, default: [:]][name.lowercased()] = (path, sha256)
     }
 
-    /// Each saved file's line points at its local copy; the rest stay references.
+    /// Each saved file's line points at its local copy and its "download this file" check goes; the
+    /// rest stay references. When no check is left, the hand-off is verified.
     private func withFiles(_ prepared: Prepared) -> (String, String) {
         var markdown = prepared.markdown, linked = 0
         for file in prepared.attachments {
             guard let copy = saved[prepared.page]?[file.name.lowercased()] else { continue }
             markdown = markdown.replacingOccurrences(of: file.line, with: "- \(file.name) — `\(copy.path.path)` · sha256 \(copy.sha256)")
+            if !file.issue.isEmpty { markdown = markdown.replacingOccurrences(of: "\n" + file.issue + "\n", with: "\n") }
             linked += 1
+        }
+        if linked > 0, let checks = markdown.range(of: "\n\n## Content checks\n\n"),
+           markdown[checks.upperBound...].hasPrefix("\n## ") {
+            markdown.removeSubrange(checks.lowerBound..<markdown.index(before: checks.upperBound))
+            markdown = markdown.replacingOccurrences(of: " · verification: partial\n", with: " · verification: verified\n")
         }
         let total = prepared.attachments.count
         return (markdown, total == 0 ? "" : linked == total ? "\(linked) file\(linked == 1 ? "" : "s") linked."

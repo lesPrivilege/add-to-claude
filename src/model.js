@@ -531,7 +531,7 @@ export function validateConversation(data) {
   };
 }
 
-function headingText(value) {
+export function headingText(value) {
   return value
     .replace(/[\r\n]/gu, ' ')
     .replace(/[<>]/gu, (char) => (char === '<' ? '&lt;' : '&gt;'));
@@ -561,6 +561,11 @@ export function projectFileLine(file) {
   return `- ${labelText(file.name)} — ${file.status}${file.url ? ` · <${file.url}>` : ''}`;
 }
 
+/** One content check's line; the app drops a file's check once it has a local copy. */
+export function projectIssueLine(issue) {
+  return `- ${headingText(issue.message)}`;
+}
+
 export function projectMarkdown(input) {
   const model = validateConversation(input);
   const comment = (text) => `<!-- ${headingText(text).replaceAll('--', '- -')} -->`;
@@ -578,7 +583,7 @@ export function projectMarkdown(input) {
     );
   if (model.verification.issues.length) {
     lines.push('', '## Content checks', '');
-    for (const issue of model.verification.issues) lines.push(`- ${headingText(issue.message)}`);
+    for (const issue of model.verification.issues) lines.push(projectIssueLine(issue));
   }
   const files = new Map(model.turns.map((turn) => [turn.id, []]));
   const loose = [];

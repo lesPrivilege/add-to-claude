@@ -1,5 +1,5 @@
 import { importBrowserResponse } from './chatgpt-response.js';
-import { projectFileLine, projectMarkdown } from './model.js';
+import { projectFileLine, projectIssueLine, projectMarkdown } from './model.js';
 
 export const MAX_MARKDOWN = 16 * 1024 * 1024;
 
@@ -22,6 +22,14 @@ export function compile(packet) {
       turn: turnNumber.get(file.turnId) ?? 0,
       messageId: file.turnId ?? '',
       line: projectFileLine(file),
+      // The "download this file" check this reference raised, if any.
+      issue: (() => {
+        const raised = model.verification.issues.find(
+          (issue) =>
+            issue.code.startsWith('attachment-') && issue.sourceLocator === file.sourceLocator,
+        );
+        return raised ? projectIssueLine(raised) : '';
+      })(),
     })),
     verification: model.verification.status,
     issues: model.verification.issues.slice(0, 5).map((issue) => issue.message),

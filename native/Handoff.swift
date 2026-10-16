@@ -22,6 +22,8 @@ struct Attachment {
     let turn: Int
     let messageId: String
     let line: String
+    /// Its content check line ("download this file…"), dropped once the file is saved.
+    let issue: String
 }
 
 enum SourceState {
