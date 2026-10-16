@@ -1,6 +1,8 @@
-# gpt-handoff
+# Ferry
 
-A macOS menu-bar ChatGPT panel with one extra button. **Add** puts the conversation you have open into the message box of a window that is already open in another app, for example Claude. It never sends anything: the text lands in that app's draft and you decide what to do with it.
+**Carry a chat across to the agent that does the work.** Ferry reads only the conversation on the page you have open and never sends anything for you.
+
+A macOS menu-bar chat panel with one extra button. **Add to {app}** puts the conversation you have open into the message box of a window that is already open in another app, for example Claude. It never sends anything: the text lands in that app's draft and you decide what to do with it.
 
 It replaces copying each turn by hand, joining them, switching windows and pasting.
 
@@ -28,11 +30,11 @@ bash scripts/build-macos.sh
 ```
 
 ```bash
-open dist/gpt-handoff.app
+open dist/Ferry.app
 ```
 
 1. Sign in to ChatGPT in the panel.
-2. Choose **Allow Accessibility…** in the bar, and turn on gpt-handoff in System Settings. A rebuilt unsigned app may need this again.
+2. Choose **Allow Accessibility…** in the bar, and turn on Ferry in System Settings. A rebuilt unsigned app may need this again.
 
 To use it, click into the target app's message box once, so that box has focus. Then choose that window in the bar and click **Add**.
 

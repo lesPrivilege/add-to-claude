@@ -285,7 +285,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         if Date().timeIntervalSince(lastCrash) > 60 {
             set(nil, .unavailable("The page stopped. It is reloading."))
             web.reload()
-        } else { set(nil, .unavailable("The page stopped again. Quit and reopen gpt-handoff.")) }
+        } else { set(nil, .unavailable("The page stopped again. Quit and reopen Ferry.")) }
         lastCrash = Date()
     }
 

@@ -207,8 +207,9 @@ final class HandoffBar: NSViewController {
         renderPicker(trusted: trusted)
         picker.isEnabled = !targets.isEmpty && !busy && !discovering
         refresh.isEnabled = !busy && !discovering
-        add.title = "Add"
-        add.toolTip = composer.map { "Add to \(safeLabel($0.choice.app.localizedName ?? "app", limit: 40)) — \($0.choice.displayLabel(limit: 60))" }
+        let destination = composer.map { safeLabel($0.choice.app.localizedName ?? "app", limit: 24) }
+        add.title = destination.map { "Add to \($0)" } ?? "Add"
+        add.toolTip = composer.map { "Adds this conversation to \($0.choice.displayLabel(limit: 60)) without sending it" }
         add.isEnabled = prepared.map { $0.markdown.utf8.count <= maximumTextBytes } == true && composer != nil && !busy
     }
 
@@ -293,7 +294,7 @@ final class HandoffBar: NSViewController {
 
     @objc private func allowAccess() {
         _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-        say("Turn on gpt-handoff in System Settings → Privacy & Security → Accessibility. This bar updates by itself.")
+        say("Turn on Ferry in System Settings → Privacy & Security → Accessibility. This bar updates by itself.")
     }
 
     // MARK: context
