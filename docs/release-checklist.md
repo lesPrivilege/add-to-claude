@@ -1,4 +1,4 @@
-# Release checklist (0.5.0)
+# Release checklist (0.6.0)
 
 ## Done
 
@@ -22,12 +22,13 @@
   - Try the global shortcut, open at login, sign out, Escape and ⌘W.
 - [ ] Incremental hand-off (WO-01), owner's Mac with Claude for Mac:
   - Run `bash scripts/probe-target-ax.sh` with two Claude conversations open, then again after switching conversations in one window. Record whether `AXURL` carries `claude.ai/chat/<uuid>` and whether it follows the switch; update the decision log.
+  - [x] New into a Claude Code session in Claude for Mac: "Turns 5–6 of 6 · new since last add", verified (owner, 2026-10-16).
   - Add a long conversation, reply twice in ChatGPT, and check that Add offers "New · 2" with the right range. Switch Claude to another conversation and check that it offers All.
   - Choose turns… with a gap, Add, and check the text's scope line, references and file lines.
   - Click Add twice on the same scope and check that "Already added — Add again?" appears.
   - Paste into a non-empty Claude prompt and check that "Could not confirm" offers It's There / It's Not.
   - Check the log file holds no message text; Clear History, then turn Remember off.
-- [ ] Run `npm run test:browser` and the Accessibility half of `npm run test:native` from a terminal that has the browser and Accessibility.
+- [x] Run `npm run test:browser` and the Accessibility half of `npm run test:native` from a terminal that has the browser and Accessibility (R0 on `v0.6.0-rc.1`: 14/14 and 49/49; see [release/0.6.0-rc.1.md](release/0.6.0-rc.1.md)).
 - [ ] Dark appearance and VoiceOver pass over the bar, the Files popover and Settings.
 - [ ] The owner decides the service-terms question.
 - [ ] Signing, hardened runtime, notarization and Gatekeeper, or an explicit decision to ship unsigned.
