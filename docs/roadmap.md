@@ -13,7 +13,8 @@ The menu-bar app (0.5.0) is the first form. ChatGPT is the source, and the desti
    - The icon carries over unchanged: light from outside falling into a composer.
    - Open question: does DeepSeek harness's extension API let a web view be embedded, or does it only accept text into its composer? The answer decides between an embedded panel and a separate window linked to the harness. Check before starting.
 2. **Claude mod.** Waits until Claude's newly released mod format settles, so the port is an adaptation rather than a rewrite.
-3. **More chat providers.** Claude chat first, so a Claude conversation can be added to a harness composer too.
+3. **Your own browser as an optional source.** No second sign-in: a browser extension reads the conversation in the tab you already use. Prefer a plain content script limited to chatgpt.com and the few hosts it needs; ask for `debugger` only if something turns out to need it, since it shows a permanent "being debugged" bar and draws stricter store review. It feeds the same shared format, so nothing downstream changes.
+4. **More chat providers.** Claude chat first, so a Claude conversation can be added to a harness composer too.
 
 ## Shape that keeps this N + M, not N × M
 

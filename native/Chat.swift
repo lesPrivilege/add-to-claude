@@ -26,6 +26,9 @@ func pageKey(_ url: URL?) -> String? {
 final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, NSWindowDelegate {
     let bar = HandoffBar()
     var openSettings: () -> Void = {}
+    private let notice = Notice()
+    /// Set once the user has read the sign-in note or a conversation has loaded (so they are signed in).
+    private static let signInNoteKey = "SignInNoteSeen"
     private var web: WKWebView!
     private lazy var back = iconButton("back", "Back", #selector(goBack), self)
     private lazy var pin = iconButton("pin", "Keep open when switching apps", #selector(togglePin), self)
@@ -76,7 +79,12 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             return prepared.revision == candidate.revision && pageKey(self.web.url) == candidate.page
         }
 
-        let column = NSStackView(views: [header(), web, bar.view])
+        let column = NSStackView(views: [header(), notice, web, bar.view])
+        if !UserDefaults.standard.bool(forKey: Self.signInNoteKey) {
+            notice.show("This panel is its own browser, so ChatGPT will see a new device and may ask for a code and email you about a new sign-in. That is expected. You stay signed in after that.") {
+                UserDefaults.standard.set(true, forKey: Self.signInNoteKey)
+            }
+        }
         column.orientation = .vertical
         column.spacing = 0
         for view in column.arrangedSubviews { view.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true }
@@ -161,6 +169,10 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
               page.hasPrefix("https://\(message.frameInfo.securityOrigin.host)/") else { return }
         switch kind {
         case "ready":
+            if !UserDefaults.standard.bool(forKey: Self.signInNoteKey) {
+                UserDefaults.standard.set(true, forKey: Self.signInNoteKey)
+                notice.dismiss()
+            }
             // A late answer for a conversation the panel has already left is not the one on screen.
             guard let markdown = body["markdown"] as? String, page == pageKey(web.url) || isChatRoot(web.url) else { return }
             let prepared = Prepared(revision: UUID(), page: page, markdown: markdown,
@@ -309,6 +321,11 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        // Google does not allow its sign-in in embedded browsers. Say so plainly instead of working around it.
+        if let url = response.response.url, url.host == "accounts.google.com",
+           (response.response as? HTTPURLResponse)?.statusCode == 403 || url.absoluteString.contains("disallowed_useragent") {
+            notice.show("Google sign-in is not available inside this panel. Sign in to ChatGPT with your email and password instead.")
+        }
         decisionHandler(response.canShowMIMEType ? .allow : .download)
     }
 

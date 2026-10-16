@@ -30,6 +30,48 @@ func iconButton(_ name: String, _ title: String, _ action: Selector, _ target: A
     return button
 }
 
+/// A one-line note above the chat with a dismiss button; hidden until shown.
+final class Notice: NSView {
+    private let text = label(size: 11, color: .secondaryLabelColor)
+    private var dismissed: () -> Void = {}
+
+    init() {
+        super.init(frame: .zero)
+        let icon = NSImageView(image: glyph("info", size: 14) ?? NSImage())
+        icon.contentTintColor = .secondaryLabelColor
+        text.maximumNumberOfLines = 3
+        text.lineBreakMode = .byWordWrapping
+        text.cell?.truncatesLastVisibleLine = true
+        let close = iconButton("close", "Dismiss", #selector(dismiss), self)
+        let row = NSStackView(views: [icon, text, close])
+        row.alignment = .top
+        row.spacing = 8
+        row.edgeInsets = NSEdgeInsets(top: 6, left: 12, bottom: 6, right: 8)
+        row.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: leadingAnchor), row.trailingAnchor.constraint(equalTo: trailingAnchor),
+            row.topAnchor.constraint(equalTo: topAnchor), row.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.quaternaryLabelColor.withAlphaComponent(0.08).cgColor
+        isHidden = true
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func show(_ message: String, onDismiss: @escaping () -> Void = {}) {
+        text.stringValue = message
+        text.toolTip = message
+        dismissed = onDismiss
+        isHidden = false
+    }
+
+    @objc func dismiss() {
+        isHidden = true
+        dismissed()
+    }
+}
+
 /// Glyph plus one word; a dashed outline means the state is not fully in effect.
 final class Tag: NSView {
     private let image = NSImageView()

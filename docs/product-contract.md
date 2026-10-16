@@ -7,6 +7,8 @@ The goal is a small macOS menu-bar utility that passes functional and real-machi
 - **Name.** Add to Claude (`add-to-claude`), named for the destination most people use. The button names the actual destination ("Add to Codex", "Add to Claude"). Earlier working names were gpt-handoff and Ferry.
 
 - **Surface.** A menu-bar panel that is the ChatGPT website itself, in the app's own persistent WebKit session, with a thin handoff bar beneath it. Hiding never destroys the page. No handoff may open a browser, refresh the page, raise or switch windows, flicker, or put a blocking overlay over the chat.
+- **Sign-in stays honest.** The panel is its own browser and says so before the first sign-in, including that ChatGPT may send a new-device email. It never reads another browser's cookies and never disguises its user agent. If a provider refuses embedded sign-in (Google does), the panel says so and suggests email and password.
+- **Stable identity.** The app id `io.lesprivilege.add-to-claude` and, once there is one, the signing identity stay fixed, so updates keep the sign-in and the Accessibility grant.
 - **Session.** The owner signs in once inside the panel. Their sign-in method was confirmed to work in the embedded view, survive restart and send messages (login probe, 2026-10-14). That result superseded the Chrome-session route and its extension, which were removed. Browser credentials are never copied.
 - **Target.** An exact window that is already open in another app. Text is appended into its composer in the background and read back to confirm. Nothing is sent.
 - **Memory only.** No session journal or conversation archive. WebKit's login data, the settings and the files the user downloads are the only things on disk.
