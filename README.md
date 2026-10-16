@@ -65,6 +65,8 @@ Today the source is ChatGPT. The destination can be any app with a text box.
 
 ### Install the beta
 
+> Add to Claude is an independent tool, not affiliated with or approved by OpenAI or Anthropic. It reads the ChatGPT page you have open through your own session; check that this fits the terms that apply to your account.
+
 0.6.0 is a private technical beta for Apple silicon Macs on macOS 14 or later. It is signed with the author's own certificate, not an Apple Developer ID, and not notarized, so macOS asks once before the first launch.
 
 1. Download `add-to-claude-0.6.0.zip` from [Releases](https://github.com/lesPrivilege/add-to-claude/releases), check its SHA-256 against the release notes, unzip it and move **Add to Claude** to Applications.
@@ -168,6 +170,8 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
 - 没有遥测，没有历史存档，也没有自己的服务器。
 
 ### 安装测试版
+
+> Add to Claude 是独立工具，与 OpenAI 或 Anthropic 无关联，也未获其认可。它通过你自己的会话读取你打开的 ChatGPT 页面；请自行确认这符合你账号适用的条款。
 
 0.6.0 是面向 Apple 芯片 Mac（macOS 14 或更高版本）的私有技术测试版。它用作者自己的证书签名，不是 Apple 开发者 ID，也未经公证，所以第一次打开前 macOS 会询问一次。
 

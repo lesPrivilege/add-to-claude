@@ -30,7 +30,7 @@
   - Check the log file holds no message text; Clear History, then turn Remember off.
 - [x] Run `npm run test:browser` and the Accessibility half of `npm run test:native` from a terminal that has the browser and Accessibility (R0 on `v0.6.0-rc.1`: 14/14 and 49/49; see [release/0.6.0-rc.1.md](release/0.6.0-rc.1.md)).
 - [ ] Dark appearance and VoiceOver pass over the bar, the Files popover and Settings.
-- [ ] The owner decides the service-terms question.
+- [x] The owner decides the service-terms question (2026-10-16): the owner accepts the risk for the private beta. The release notes and README say plainly what the app reads and through which session, that it is not affiliated with or approved by OpenAI or Anthropic, and that users check the terms that apply to them. This is the owner's decision, not an authorization from either company.
 - [x] Signing, hardened runtime, notarization and Gatekeeper, or an explicit decision to ship unsigned: the owner chose a **private technical beta** (2026-10-16). 0.6.0 ships as a GitHub pre-release signed with the local identity, labelled as needing right-click → Open on first launch. Developer ID and notarization stay required for a public release.
 
 ## DeepSeek Harness plugin
