@@ -29,4 +29,7 @@ Before a second provider, move two things into the shared shape:
 
 - **File links.** How a file's download link is obtained is ChatGPT-specific today: the observer's resolver and both downloaders (`native/Files.swift`, `plugins/deepseek-harness/helper/chat.js`) assume `files/download` and `interpreter/download`. Each source adapter should supply its own link step behind one interface.
 - **File lines.** Pointing a file line at its local copy (`linkFiles`) now exists twice, in `native/Handoff.swift` and `plugins/deepseek-harness/shared/files.js`, kept equal by tests on each side. It belongs in `src/` as one function both forms use.
-- **Selection.** Adding chosen turns, or only the turns since the last Add, is parked. When it returns, it belongs in the shared format as a range over the selected branch, not in a destination.
+- **Selection.** Done in the menu-bar app (WO-01, [decision log](decisions/incremental-handoff.md)).
+  - The projection of chosen turns is in the shared format (`projectMarkdown` with `turnIds`, plus per-turn hashes from `describeTurns`).
+  - The delivery log and the scope rule live natively in `native/Delivery.swift`.
+  - The DeepSeek Harness mod still adds the whole conversation. To adopt selection it needs its own target identity (the session id) and a port of the scope rule; the projection is already shared.

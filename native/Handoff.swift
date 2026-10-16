@@ -325,7 +325,7 @@ final class HandoffBar: NSViewController {
             sourceTitle.stringValue = prepared.title
             let tooLong = prepared.markdown.utf8.count > maximumTextBytes
             sourceDetail.stringValue = "\(prepared.turns) turns · \(prepared.files) file\(prepared.files == 1 ? "" : "s")"
-                + (tooLong ? " · too long, save instead" : "")
+                + (tooLong ? " · too long for one Add: choose turns or save" : "")
         }
         sourceTitle.toolTip = prepared?.page
         sourceDetail.toolTip = sourceDetail.stringValue
