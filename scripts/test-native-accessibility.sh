@@ -5,7 +5,7 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 2
 fi
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
-fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/handoff-accessibility.XXXXXX")"
+fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/add-to-claude-accessibility.XXXXXX")"
 trap 'rm -r "$fixture_root"' EXIT
 fixture_bundle="$fixture_root/Synthetic composer.app"
 mkdir -p "$fixture_bundle/Contents/MacOS"

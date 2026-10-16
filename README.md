@@ -63,6 +63,14 @@ Today the source is ChatGPT. The destination can be any app with a text box.
   - It is kept for 30 days by default. Settings → History turns it off, changes how long it is kept, or clears it.
 - No telemetry, no history archive, no server of its own.
 
+### Install the beta
+
+0.6.0 is a private technical beta for Apple silicon Macs on macOS 14 or later. It is signed with the author's own certificate, not an Apple Developer ID, and not notarized, so macOS asks once before the first launch.
+
+1. Download `add-to-claude-0.6.0.zip` from [Releases](https://github.com/lesPrivilege/add-to-claude/releases), check its SHA-256 against the release notes, unzip it and move **Add to Claude** to Applications.
+2. Open it. macOS refuses the first time; go to System Settings → Privacy & Security, choose **Open Anyway** for Add to Claude, and confirm.
+3. Sign in to ChatGPT in the panel, then choose **Allow…** in the bar for Accessibility (below). Later releases signed with the same certificate keep that permission.
+
 ### Build and set up
 
 You need macOS 14 or later, the Xcode command-line tools, and Node.js 24 or later.
@@ -158,6 +166,14 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
   - 它记录哪些轮次进入了哪个已识别的对话：消息 ID、位置、内容哈希、状态和时间，从不保存消息正文。
   - 默认保留 30 天。在 设置 → History 中可以关闭、改变保留时长或清除。
 - 没有遥测，没有历史存档，也没有自己的服务器。
+
+### 安装测试版
+
+0.6.0 是面向 Apple 芯片 Mac（macOS 14 或更高版本）的私有技术测试版。它用作者自己的证书签名，不是 Apple 开发者 ID，也未经公证，所以第一次打开前 macOS 会询问一次。
+
+1. 从 [Releases](https://github.com/lesPrivilege/add-to-claude/releases) 下载 `add-to-claude-0.6.0.zip`，与发布说明核对 SHA-256，解压后把 **Add to Claude** 移到“应用程序”。
+2. 打开它。第一次会被拒绝；到 系统设置 → 隐私与安全性，为 Add to Claude 选择 **仍要打开**，再确认。
+3. 在面板里登录 ChatGPT，然后点击底栏的 **Allow…** 开启辅助功能（见下文）。之后用同一证书签名的版本会保留这项授权。
 
 ### 构建与设置
 

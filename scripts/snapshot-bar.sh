@@ -2,7 +2,7 @@
 # Renders the real handoff bar in several source states to artifacts/bar-*.png.
 set -euo pipefail
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
-work="$(mktemp -d "${TMPDIR:-/tmp}/gh-snapshot.XXXXXX")"
+work="$(mktemp -d "${TMPDIR:-/tmp}/add-to-claude-snapshot.XXXXXX")"
 trap 'rm -r "$work"' EXIT
 native="$project_root/native"
 cp -R "$native/icons" "$work/icons"

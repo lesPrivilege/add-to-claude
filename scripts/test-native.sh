@@ -3,7 +3,7 @@
 # Accessibility against a synthetic app.
 set -euo pipefail
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
-work="$(mktemp -d "${TMPDIR:-/tmp}/gh-native.XXXXXX")"
+work="$(mktemp -d "${TMPDIR:-/tmp}/add-to-claude-native.XXXXXX")"
 trap 'rm -r "$work"' EXIT
 native="$project_root/native"
 xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \
