@@ -11,8 +11,17 @@ struct Prepared {
     let files: Int
     let verification: String
     let issues: [String]
-    /// Each file the conversation refers to: the page's file id, its name, turn and line in the Markdown.
-    let attachments: [(id: String, name: String, turn: Int, line: String)]
+    let attachments: [Attachment]
+}
+
+/// A file the conversation refers to: the page's id for it (file id or sandbox path), its name, the
+/// turn and message it belongs to, and its line in the Markdown, which a local copy replaces.
+struct Attachment {
+    let id: String
+    let name: String
+    let turn: Int
+    let messageId: String
+    let line: String
 }
 
 enum SourceState {
@@ -26,7 +35,6 @@ struct FileRow {
     let name: String
     let turn: Int
     let saved: URL?
-    let linkReady: Bool
 }
 
 /// A push button that runs a closure; keeps small popover controls free of selector plumbing.
@@ -340,11 +348,10 @@ final class HandoffBar: NSViewController {
         list.spacing = 6
         for row in rows {
             let box = NSButton(checkboxWithTitle: "\(row.name) · turn \(row.turn)", target: nil, action: nil)
-            box.isEnabled = row.saved == nil && row.linkReady
-            box.state = .off
+            box.isEnabled = row.saved == nil
+            box.state = box.isEnabled ? .on : .off
             box.lineBreakMode = .byTruncatingMiddle
-            let state = label(row.saved != nil ? "Saved" : row.linkReady ? "Ready to download" : "Open it in the chat first",
-                              size: 11, color: .secondaryLabelColor)
+            let state = label(row.saved != nil ? "Saved" : "Not downloaded", size: 11, color: .secondaryLabelColor)
             state.toolTip = row.saved?.path
             let line = NSStackView(views: [box, NSView(), state])
             line.widthAnchor.constraint(equalToConstant: 380).isActive = true
@@ -423,11 +430,19 @@ final class HandoffBar: NSViewController {
             guard let self, self.operation == id, let current = self.prepared else { return false }
             return current.revision == frozen.revision && self.isCurrent(frozen)
         }
-        let (text, filesNote) = withFiles(frozen)
-        appendToComposer(selected, text: text, operationValid: valid,
-                         revalidateSource: { reply in reply(valid()) }) { [weak self] message, success in
-            self?.finish(filesNote.isEmpty ? message : message + " " + filesNote, success)
+        let append = { [weak self] in
+            guard let self, valid() else { return self?.finish("The conversation changed. Nothing was added.", false) ?? () }
+            self.say("Adding…", glyph: "waiting")
+            let (text, filesNote) = self.withFiles(frozen)
+            appendToComposer(selected, text: text, operationValid: valid,
+                             revalidateSource: { reply in reply(valid()) }) { [weak self] message, success in
+                self?.finish(filesNote.isEmpty ? message : message + " " + filesNote, success)
+            }
         }
+        // Files first, so their lines can point at local copies.
+        guard UserDefaults.standard.bool(forKey: Preferences.downloadOnAdd), !frozen.attachments.isEmpty else { return append() }
+        say("Downloading files…", glyph: "waiting")
+        downloadFiles(frozen.attachments.map(\.id)) { append() }
     }
 
     private func finish(_ message: String, _ success: Bool) {

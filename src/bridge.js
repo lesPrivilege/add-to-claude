@@ -14,7 +14,17 @@ if (handler && window === top) {
     )
       return;
     removeEventListener('message', adopt);
-    event.ports[0].onmessage = ({ data: packet }) => {
+    const port = event.ports[0];
+    // The app asks, from this isolated world only, for links to the files it is about to download.
+    globalThis.ferryResolve = (files) =>
+      port.postMessage({
+        kind: 'resolve',
+        files: (Array.isArray(files) ? files : []).map((file) => ({
+          id: String(file?.id ?? ''),
+          messageId: String(file?.messageId ?? ''),
+        })),
+      });
+    port.onmessage = ({ data: packet }) => {
       if (packet?.kind === 'trace')
         return handler.postMessage({
           kind: 'trace',
@@ -29,6 +39,13 @@ if (handler && window === top) {
           id: String(packet.id),
           url: String(packet.url),
           name: String(packet.name),
+        });
+      if (packet?.kind === 'file-missing')
+        return handler.postMessage({
+          kind: 'file-missing',
+          page: String(packet.pageUrl),
+          id: String(packet.id),
+          status: String(packet.status),
         });
       if (packet?.kind === 'changed' || packet?.kind === 'unavailable')
         return handler.postMessage({ kind: packet.kind, page: String(packet.pageUrl) });

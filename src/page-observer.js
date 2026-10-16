@@ -5,7 +5,8 @@ import { createChatGPTStream } from './chatgpt-stream.js';
 import { mergeConversationStream } from './stream-conversation.js';
 import { toMappingConversation } from './paged-conversation.js';
 
-/** Observe only data the current ChatGPT page loads itself. Never fetch or refresh.
+/** Observe only data the current ChatGPT page loads itself. Never refresh. The one request it makes
+ * on its own is a file's short-lived download link, when the app asks while the user adds the chat.
  * Packets go to the app's isolated-world bridge over a private MessagePort. The port is handed over
  * once at document start, before any page script runs, so page scripts cannot post into it. */
 export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
@@ -89,8 +90,83 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       path:
         url.origin +
         url.pathname.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}|[A-Za-z0-9_-]{20,}/giu, ':id') +
-        (url.search ? '?…' : ''),
+        (url.search ? `?${[...url.searchParams.keys()].join('&')}` : ''),
     });
+  // The page's own API headers (its session token and client ids), kept in this closure only so a
+  // file link can be requested the way the page requests it. They are never posted to the app.
+  let apiHeaders = null;
+  const keepApiHeaders = (input, init) => {
+    try {
+      keepHeaders(input, init);
+    } catch {
+      /* Headers the page sends in an unusual form are not needed. */
+    }
+  };
+  const keepHeaders = (input, init) => {
+    const headers = new Headers(
+      init?.headers ?? (input instanceof Request ? input.headers : undefined),
+    );
+    if (!headers.has('authorization')) return;
+    const kept = new Headers();
+    for (const [name, value] of headers)
+      if (name === 'authorization' || name.startsWith('oai-') || name === 'chatgpt-account-id')
+        kept.set(name, value);
+    apiHeaders = kept;
+  };
+  // Generated files are linked as sandbox paths; uploads and newer files by a file id.
+  const linkRequest = (file, conversationId) => {
+    if (/^file[-_][A-Za-z0-9_-]{1,200}$/u.test(file.id))
+      return `/backend-api/files/download/${file.id}`;
+    const path = /^sandbox:(\/[^?#]{1,1000})$/u.exec(file.id)?.[1];
+    if (path && conversationId && typeof file.messageId === 'string')
+      return `/backend-api/conversation/${encodeURIComponent(conversationId)}/interpreter/download?${new URLSearchParams({ message_id: file.messageId, sandbox_path: path })}`;
+    return null;
+  };
+  const resolveFiles = async (files) => {
+    const conversationId = surface()?.id;
+    for (const file of Array.isArray(files) ? files.slice(0, 200) : []) {
+      let path = null;
+      try {
+        path = typeof file?.id === 'string' ? linkRequest(file, conversationId) : null;
+      } catch {
+        /* An id the page would not accept is reported as unsupported. */
+      }
+      let status = 'unsupported';
+      if (path && apiHeaders)
+        try {
+          const response = await Reflect.apply(originalFetch, window, [
+            path,
+            { headers: apiHeaders, credentials: 'include' },
+          ]);
+          trace(`RESOLVE ${response.status}`, new URL(path, location.origin));
+          status = String(response.status);
+          const value = response.ok ? await response.json() : null;
+          const url = value?.download_url ? new URL(value.download_url, location.origin) : null;
+          if (url?.protocol === 'https:') {
+            post({
+              kind: 'file',
+              pageUrl: location.origin + location.pathname,
+              id: file.id,
+              url: url.href,
+              name: typeof value.file_name === 'string' ? value.file_name : '',
+            });
+            continue;
+          }
+        } catch {
+          status = 'failed';
+        }
+      else if (path) status = 'no-session';
+      post({
+        kind: 'file-missing',
+        pageUrl: location.origin + location.pathname,
+        id: String(file?.id),
+        status,
+      });
+    }
+  };
+  port.onmessage = ({ data }) => {
+    if (data?.kind === 'resolve') void resolveFiles(data.files);
+  };
   addEventListener('DOMContentLoaded', () =>
     trace(
       `DOM mapping-in-html=${/"mapping"/u.test(document.documentElement.innerHTML)}`,
@@ -475,6 +551,8 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
         requested.pathname,
       )?.[1];
       if (fileId && requested.origin === location.origin && method === 'GET') fileLink = fileId;
+      if (requested.origin === location.origin && requested.pathname.startsWith('/backend-api/'))
+        keepApiHeaders(args[0], args[1]);
       // TEMPORARY diagnostic: for conversation loads, the response shape (type, size, key names only).
       if (
         requested.origin === location.origin &&

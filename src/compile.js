@@ -20,6 +20,7 @@ export function compile(packet) {
       id: file.id.slice(file.id.indexOf(':') + 1),
       name: file.name,
       turn: turnNumber.get(file.turnId) ?? 0,
+      messageId: file.turnId ?? '',
       line: projectFileLine(file),
     })),
     verification: model.verification.status,

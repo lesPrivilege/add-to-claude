@@ -172,19 +172,26 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                                     issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) },
                                     attachments: (body["attachments"] as? [[String: Any]] ?? []).compactMap { file in
                                         guard let id = file["id"] as? String, let line = file["line"] as? String else { return nil }
-                                        return (id, safeLabel(file["name"] as? String ?? "", limit: 200), file["turn"] as? Int ?? 0, line)
+                                        return Attachment(id: id, name: safeLabel(file["name"] as? String ?? "", limit: 200),
+                                                          turn: file["turn"] as? Int ?? 0,
+                                                          messageId: file["messageId"] as? String ?? "", line: line)
                                     })
             if !prepared.issues.isEmpty {
-                traceLog.info("partial: \(prepared.issues.joined(separator: " | "), privacy: .public)")
+                traceLog.notice("partial: \(prepared.issues.joined(separator: " | "), privacy: .public)")
             }
             set(prepared, .ready(prepared))
-        case "trace": traceLog.info("\(body["method"] as? String ?? "", privacy: .public) \(body["path"] as? String ?? "", privacy: .public)")
+        case "trace": traceLog.notice("\(body["method"] as? String ?? "", privacy: .public) \(body["path"] as? String ?? "", privacy: .public)")
         case "file":
             // A link the page itself requested for one of its files; only https on ChatGPT's own hosts.
             guard let id = body["id"] as? String, let text = body["url"] as? String, let url = URL(string: text),
                   url.scheme == "https", let host = url.host,
                   chatHosts.contains(host) || host.hasSuffix(".oaiusercontent.com") else { return }
             fileLinks[id] = FileLink(url: url, name: body["name"] as? String ?? "", seen: Date())
+            traceLog.notice("file link \(id.hasPrefix("sandbox:") ? "sandbox" : "id", privacy: .public) name=\(body["name"] as? String ?? "", privacy: .public)")
+            settle(id)
+        case "file-missing":
+            traceLog.notice("file link missing: \(body["status"] as? String ?? "", privacy: .public)")
+            settle(body["id"] as? String ?? "")
         case "changed": set(nil, .waiting)
         case "invalid": set(nil, .unavailable(safeLabel(body["message"] as? String ?? "", limit: 160)))
         case "unavailable": set(nil, .unavailable("This page did not expose its original messages."))
@@ -220,20 +227,53 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     }
 
     /// The page's link for a file: by its id, or by name, since generated files are referred to by
-    /// their sandbox path in the conversation but fetched by an internal file id.
-    private func link(for file: (id: String, name: String, turn: Int, line: String)) -> FileLink? {
-        fileLinks[file.id] ?? fileLinks.values.filter { $0.name == file.name }.max { $0.seen < $1.seen }
+    /// their sandbox path in the conversation but fetched by an internal file id. Links last minutes.
+    private func link(for file: Attachment) -> FileLink? {
+        let fresh = fileLinks.filter { Date().timeIntervalSince($0.value.seen) < 240 }
+        return fresh[file.id] ?? fresh.values.filter { $0.name == file.name }.max { $0.seen < $1.seen }
     }
 
     private func fileRows() -> [FileRow] {
         (prepared?.attachments ?? []).map { file in
-            FileRow(id: file.id, name: file.name, turn: file.turn, saved: savedFile(file.name)?.path, linkReady: link(for: file) != nil)
+            FileRow(id: file.id, name: file.name, turn: file.turn, saved: savedFile(file.name)?.path)
         }
     }
 
+    /// Files whose link is being requested by the page, and what runs when all have answered.
+    private var resolving: (pending: Set<String>, done: () -> Void)?
+
+    /// Asks the page for fresh links to these files, the way it asks when the user opens one. Waits at most 10 s.
+    private func resolveLinks(_ files: [Attachment], done: @escaping () -> Void) {
+        let missing = files.filter { link(for: $0) == nil }
+        guard !missing.isEmpty, resolving == nil else { return done() }
+        resolving = (Set(missing.map(\.id)), done)
+        web.callAsyncJavaScript("ferryResolve(files)", arguments: ["files": missing.map { ["id": $0.id, "messageId": $0.messageId] }],
+                                in: nil, in: .defaultClient) { _ in }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in self?.settle(nil) }
+    }
+
+    /// One file answered, or (nil) time ran out.
+    private func settle(_ id: String?) {
+        guard var current = resolving else { return }
+        if let id { current.pending.remove(id) } else { current.pending.removeAll() }
+        resolving = current.pending.isEmpty ? nil : current
+        if current.pending.isEmpty { current.done() }
+    }
+
+    /// Downloads the chosen files that are not saved yet into the conversation's folder.
     private func downloadSelected(_ ids: [String], done: @escaping () -> Void) {
         guard let prepared else { return done() }
-        let files = prepared.attachments.filter { ids.contains($0.id) && link(for: $0) != nil }
+        let wanted = prepared.attachments.filter { ids.contains($0.id) && savedFile($0.name) == nil }
+        guard !wanted.isEmpty else { return done() }
+        resolveLinks(wanted) { [weak self] in self?.download(wanted, of: prepared, done: done) ?? done() }
+    }
+
+    private func download(_ wanted: [Attachment], of prepared: Prepared, done: @escaping () -> Void) {
+        let files = wanted.filter { link(for: $0) != nil }
+        guard !files.isEmpty else {
+            bar.filesChanged("No download link for \(wanted.count == 1 ? wanted[0].name : "\(wanted.count) files"). Open it once in the chat, then try again.")
+            return done()
+        }
         let links = files.map { file in
             let link = link(for: file)!
             return FileLink(url: link.url, name: file.name, seen: link.seen)
@@ -244,8 +284,10 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                 if let path = outcome.path, let hash = outcome.sha256 { self.record(path, sha256: hash, name: file.name) }
             }
             let failed = outcomes.compactMap(\.problem)
-            self.bar.filesChanged(failed.isEmpty ? "\(outcomes.count) file\(outcomes.count == 1 ? "" : "s") saved."
-                                  : "\(outcomes.count - failed.count) saved; \(failed.count) failed: \(failed[0]).")
+            let unlinked = wanted.count - files.count
+            self.bar.filesChanged((failed.isEmpty ? "\(outcomes.count) file\(outcomes.count == 1 ? "" : "s") saved."
+                                   : "\(outcomes.count - failed.count) saved; \(failed.count) failed: \(failed[0]).")
+                                  + (unlinked > 0 ? " \(unlinked) had no download link." : ""))
             done()
         }
     }
@@ -256,7 +298,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { return decisionHandler(.cancel) }
         // TEMPORARY diagnostic: how the page's file clicks navigate (scheme, host, path shape only).
-        navLog.info("navigate \(url.scheme ?? "-", privacy: .public)://\(url.host ?? "", privacy: .public)\(url.path.replacingOccurrences(of: #"[A-Za-z0-9_-]{20,}"#, with: ":id", options: .regularExpression), privacy: .public) type=\(action.navigationType.rawValue) main=\(action.targetFrame?.isMainFrame ?? false) download=\(action.shouldPerformDownload)")
+        navLog.notice("navigate \(url.scheme ?? "-", privacy: .public)://\(url.host ?? "", privacy: .public)\(url.path.replacingOccurrences(of: #"[A-Za-z0-9_-]{20,}"#, with: ":id", options: .regularExpression), privacy: .public) type=\(action.navigationType.rawValue) main=\(action.targetFrame?.isMainFrame ?? false) download=\(action.shouldPerformDownload)")
         if action.shouldPerformDownload { return decisionHandler(.download) }
         guard action.targetFrame?.isMainFrame != false else {
             return decisionHandler(["https", "about", "blob", "data"].contains(url.scheme ?? "") ? .allow : .cancel)
@@ -270,7 +312,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        navLog.info("response \(response.response.mimeType ?? "-", privacy: .public) show=\(response.canShowMIMEType) main=\(response.isForMainFrame)")
+        navLog.notice("response \(response.response.mimeType ?? "-", privacy: .public) show=\(response.canShowMIMEType) main=\(response.isForMainFrame)")
         decisionHandler(response.canShowMIMEType ? .allow : .download)
     }
 
@@ -298,7 +340,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = action.request.url else { return nil }
-        navLog.info("new window \(url.scheme ?? "-", privacy: .public)://\(url.host ?? "", privacy: .public)")
+        navLog.notice("new window \(url.scheme ?? "-", privacy: .public)://\(url.host ?? "", privacy: .public)")
         guard url.scheme == "about" || (url.scheme == "https" && url.host.map(signInHosts.contains) == true) else {
             openExternally(url)
             return nil
@@ -364,7 +406,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             path = folder.appendingPathComponent("\((name as NSString).deletingPathExtension) \(index)" + ((name as NSString).pathExtension.isEmpty ? "" : ".\((name as NSString).pathExtension)"))
             index += 1
         }
-        navLog.info("download to conversation folder: \(path.lastPathComponent, privacy: .public)")
+        navLog.notice("download to conversation folder: \(path.lastPathComponent, privacy: .public)")
         pageDownloads[ObjectIdentifier(download)] = (path, suggestedFilename)
         completionHandler(path)
     }

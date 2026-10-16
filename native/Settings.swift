@@ -9,12 +9,14 @@ enum Preferences {
     static let showAtLaunch = "ShowAtLaunch"
     static let shortcut = "ToggleShortcut"
     static let restoreLastWindow = "RestoreLastWindow"
+    static let downloadOnAdd = "DownloadOnAdd"
     /// Apps seen to ignore AX text insertion; Add pastes into them without waiting first.
     static let appsUsingPaste = ignoringKey
 
     static func register() {
         UserDefaults.standard.register(defaults: [keepPanelOpen: false, showAtLaunch: true,
-                                                  shortcut: Shortcut.none.rawValue, restoreLastWindow: true])
+                                                  shortcut: Shortcut.none.rawValue, restoreLastWindow: true,
+                                                  downloadOnAdd: true])
     }
 
     static var pinned: Bool {
@@ -116,6 +118,7 @@ private struct SettingsView: View {
     @AppStorage(Preferences.showAtLaunch) private var showAtLaunch = true
     @AppStorage(Preferences.shortcut) private var shortcut = Shortcut.none
     @AppStorage(Preferences.restoreLastWindow) private var restoreLast = true
+    @AppStorage(Preferences.downloadOnAdd) private var downloadOnAdd = true
     @State private var pasteApps = SettingsView.pastedApps()
     @State private var login = SMAppService.mainApp.status
     @State private var loginProblem = false
@@ -145,6 +148,7 @@ private struct SettingsView: View {
 
             Section {
                 Toggle("Start with the last window used", isOn: $restoreLast)
+                Toggle("Download the conversation's files when adding", isOn: $downloadOnAdd)
                 LabeledContent("Files folder") {
                     HStack(spacing: 6) {
                         Text(folder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))

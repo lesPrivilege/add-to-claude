@@ -10,6 +10,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 function harness(initialURL = page, { socketSupport = false } = {}) {
   const messages = [],
     requests = [];
+  let observerPort;
   const location = {
     href: initialURL,
     get origin() {
@@ -58,6 +59,9 @@ function harness(initialURL = page, { socketSupport = false } = {}) {
     URL,
     TextDecoder,
     TextEncoder,
+    Headers,
+    Request,
+    URLSearchParams,
     structuredClone,
     // Synchronous stand-in for the private port, so tests observe packets in posting order.
     MessageChannel: class {
@@ -65,6 +69,7 @@ function harness(initialURL = page, { socketSupport = false } = {}) {
         const port2 = {};
         this.port2 = port2;
         this.port1 = { postMessage: (value) => port2.onmessage?.({ data: value }) };
+        observerPort = this.port1;
       }
     },
     setTimeout,
@@ -75,10 +80,13 @@ function harness(initialURL = page, { socketSupport = false } = {}) {
   return {
     messages,
     requests,
+    // What the app's bridge sends to the observer.
+    ask: (data) => observerPort.onmessage({ data }),
     socket: () => new window.WebSocket('wss://ws.chatgpt.com/p4/ws/user/synthetic'),
     navigate: (url) => history.pushState({}, '', url),
     request: (id) => window.fetch(endpoint(id)).then((response) => response.text()),
     fetch: (url) => window.fetch(url).then((response) => response.text()),
+    fetchWith: (url, init) => window.fetch(url, init),
     post: (request) =>
       window
         .fetch('https://chatgpt.com/backend-api/f/conversation', {
@@ -487,3 +495,58 @@ test('pages loaded while scrolling up are merged into one complete conversation'
   );
   assert.equal(model.verification.status, 'verified');
 });
+
+test('file links are requested with the page session only when the app asks, and never leave the page', async () => {
+  const h = harness();
+  h.ask({ kind: 'resolve', files: [{ id: 'file-abc', messageId: 'm1' }] });
+  await tick();
+  assert.equal(h.requests.length, 0, 'no request before the page has used its own session');
+  assert.equal(h.messages.at(-1).kind, 'file-missing');
+  assert.equal(h.messages.at(-1).status, 'no-session');
+
+  void window_fetch(h, 'https://chatgpt.com/backend-api/me', {
+    authorization: 'Bearer synthetic',
+    'x-other': 'no',
+  });
+  h.ask({
+    kind: 'resolve',
+    files: [
+      { id: 'sandbox:/mnt/data/report one.md', messageId: 'm2' },
+      { id: 'https://example.com/x', messageId: 'm3' },
+    ],
+  });
+  await tick();
+  const resolve = h.requests.at(-1);
+  assert.equal(
+    resolve.url,
+    '/backend-api/conversation/a/interpreter/download?message_id=m2&sandbox_path=%2Fmnt%2Fdata%2Freport+one.md',
+  );
+  assert.equal(resolve.init.headers.get('authorization'), 'Bearer synthetic');
+  assert.equal(resolve.init.headers.has('x-other'), false);
+  resolve.resolve(
+    new Response(
+      JSON.stringify({
+        download_url: '/backend-api/estuary/content?id=f',
+        file_name: 'report one.md',
+      }),
+      {
+        status: 200,
+      },
+    ),
+  );
+  for (let i = 0; i < 5; i++) await tick();
+  const file = h.messages.find((message) => message.kind === 'file');
+  assert.equal(file.id, 'sandbox:/mnt/data/report one.md');
+  assert.equal(file.url, 'https://chatgpt.com/backend-api/estuary/content?id=f');
+  assert.equal(file.name, 'report one.md');
+  assert.equal(
+    JSON.stringify(h.messages).includes('synthetic'),
+    false,
+    'the session token is never posted',
+  );
+  assert.equal(h.messages.at(-1).status, 'unsupported');
+});
+
+function window_fetch(h, url, headers) {
+  return h.fetchWith(url, { headers });
+}
