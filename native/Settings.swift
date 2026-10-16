@@ -88,7 +88,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var signOut: () -> Void = {}
     var clearWebCache: () -> Void = {}
     var shortcutTaken: () -> Bool = { false }
-    private var window: NSWindow?
+    private var window: NSPanel?
 
     var isKey: Bool { window?.isKeyWindow == true }
 
@@ -97,9 +97,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             let view = SettingsView(reload: { [weak self] in self?.reload() }, signOut: { [weak self] in self?.signOut() },
                                     clearWebCache: { [weak self] in self?.clearWebCache() },
                                     shortcutTaken: { [weak self] in self?.shortcutTaken() ?? false })
-            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+            // Like the chat panel, a nonactivating panel: it takes keyboard focus and draws as active
+            // without this accessory app becoming active, which macOS refuses while another app is in front.
+            let window = NSPanel(contentRect: .zero, styleMask: [.titled, .closable, .nonactivatingPanel],
+                                 backing: .buffered, defer: false)
+            window.contentViewController = NSHostingController(rootView: view)
+            window.setContentSize(NSSize(width: 480, height: 560))
+            window.hidesOnDeactivate = false
+            window.becomesKeyOnlyIfNeeded = false
             window.title = "Add to Claude Settings"
-            window.styleMask = [.titled, .closable]
             window.level = aboveChatPanel
             window.isReleasedWhenClosed = false
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]

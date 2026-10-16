@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if panel.frame.width < 380 || panel.frame.height < 480 { panel.setContentSize(NSSize(width: 480, height: 760)) }
         panel.delegate = self
 
-        chat.openSettings = { [weak self] in self?.settings.show() }
+        chat.openSettings = { [weak self] in self?.openSettings() }
         settings.reload = { [weak self] in self?.chat.reload() }
         settings.signOut = { [weak self] in self?.chat.signOut() }
         settings.clearWebCache = { [weak self] in self?.chat.clearWebCache() }
@@ -85,7 +85,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return menu
     }
 
-    @objc private func openSettings() { settings.show() }
+    /// One window at a time: the panel steps aside for Settings (its page keeps running) and comes back with
+    /// the next click on the menu-bar icon.
+    @objc private func openSettings() {
+        panel.orderOut(nil)
+        item.button?.highlight(false)
+        settings.show()
+    }
     @objc private func reloadPage() { chat.reload() }
     @objc private func goBack() { chat.goBack() }
 
