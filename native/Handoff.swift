@@ -159,6 +159,8 @@ final class HandoffBar: NSViewController {
     /// The files list: what the conversation refers to and what can be downloaded now.
     var fileRows: () -> [FileRow] = { [] }
     var downloadFiles: ([String], @escaping () -> Void) -> Void = { _, done in done() }
+    /// Asks the page to read the open conversation again.
+    var readAgain: () -> Void = {}
     /// Some turns of a preparation, projected by the compiler in the page's isolated world.
     var project: (Prepared, [TurnInfo], String, @escaping (ProjectionResult) -> Void) -> Void = { _, _, _, done in
         done(.failure("Choosing turns is not available here."))
@@ -191,6 +193,7 @@ final class HandoffBar: NSViewController {
     private lazy var preview = iconButton("preview", "Preview context", #selector(showPreview), self)
     private lazy var save = iconButton("save", "Save Markdown…", #selector(saveMarkdown), self)
     private lazy var copy = iconButton("copy", "Copy conversation", #selector(copyMarkdown), self)
+    private lazy var readAgainButton = iconButton("read-again", "Read the conversation again", #selector(readConversationAgain), self)
     private lazy var filesButton: NSButton = {
         let button = NSButton(title: "", image: glyph("attach") ?? NSImage(), target: self, action: #selector(showFiles))
         button.bezelStyle = .accessoryBarAction
@@ -226,7 +229,7 @@ final class HandoffBar: NSViewController {
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 2
-        let sourceRow = NSStackView(views: [chatIcon, text, NSView(), filesButton, preview, copy, save])
+        let sourceRow = NSStackView(views: [chatIcon, text, NSView(), readAgainButton, filesButton, preview, copy, save])
         sourceRow.spacing = 2
         sourceRow.setCustomSpacing(8, after: chatIcon)
 
@@ -314,7 +317,12 @@ final class HandoffBar: NSViewController {
     }
 
     /// Re-read what can change while the panel is hidden.
-    func willShow() { findWindows() }
+    func willShow() {
+        findWindows()
+        // Event-driven, never on a timer: opening the panel on a conversation that could not be read
+        // reads it once more.
+        if case .unavailable = source { readAgain() }
+    }
 
     private var prepared: Prepared? {
         if case .ready(let prepared) = source { return prepared }
@@ -344,6 +352,8 @@ final class HandoffBar: NSViewController {
         }
         tag.isHidden = prepared == nil
         preview.isHidden = prepared == nil
+        // Shown once there is a conversation to read; hidden on the new-chat page.
+        readAgainButton.isHidden = { if case .waiting = source { return true }; return false }()
         save.isHidden = prepared == nil
         copy.isHidden = prepared == nil
         filesButton.isHidden = (prepared?.attachments.isEmpty ?? true)
@@ -585,6 +595,11 @@ final class HandoffBar: NSViewController {
     }
 
     // MARK: targets
+
+    @objc private func readConversationAgain() {
+        say("Reading the conversation again…", glyph: "waiting")
+        readAgain()
+    }
 
     @objc private func findWindows() {
         guard AXIsProcessTrusted(), !discovering else { return render() }

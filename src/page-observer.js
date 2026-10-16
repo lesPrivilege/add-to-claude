@@ -167,6 +167,8 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
   };
   port.onmessage = ({ data }) => {
     if (data?.kind === 'resolve') void resolveFiles(data.files);
+    if (data?.kind === 'refresh' && !refresh())
+      post({ kind: 'unavailable', pageUrl: location.href });
   };
   const invalidate = (keepBase = false) => {
     generation++;
@@ -200,6 +202,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     if (bytes > maxBytes) throw new Error('size');
     snapshot = value;
     remember(value, bytes);
+    retries.delete(value.id);
     post({
       kind: 'response',
       pageUrl: selected.pageUrl,
@@ -210,8 +213,31 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     });
     return true;
   };
+  // Reading the conversation again, as the website does when it opens one: on the app's request,
+  // or once by itself after a load could not be read (a long reply can end that way), since the
+  // website will not load it again until the user leaves and comes back.
+  const loadUrls = new Map();
+  const retries = new Map();
+  const refresh = () => {
+    const selected = surface();
+    if (!selected?.id || !apiHeaders) return false;
+    const url =
+      loadUrls.get(selected.id) ?? `${location.origin}/backend-api/conversations/${selected.id}`;
+    void window
+      .fetch(url, { headers: apiHeaders, credentials: 'include' })
+      .then((response) => response.text())
+      .catch(() => {});
+    return true;
+  };
   const unavailable = (version) => {
-    if (version === generation) post({ kind: 'unavailable', pageUrl: location.href });
+    if (version !== generation) return;
+    post({ kind: 'unavailable', pageUrl: location.href });
+    const id = surface()?.id;
+    if (!id || (retries.get(id) ?? 0) >= 2) return;
+    retries.set(id, (retries.get(id) ?? 0) + 1);
+    setTimeout(() => {
+      if (version === generation && surface()?.id === id) refresh();
+    }, 1500);
   };
   const read = async (response, version, consume, owned = false) => {
     const reader = (owned ? response : response.clone()).body?.getReader();
@@ -614,6 +640,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       ].includes(url.split('?')[0]) &&
         !url.includes('#'));
     if (method !== 'GET' || !selected.id || !conversationLoad(requested.href)) return promise;
+    if (!requested.pathname.endsWith('/messages')) loadUrls.set(selected.id, requested.href);
     // The website can hydrate a new conversation while its answer is streaming.
     // Keep that stream alive and use the GET as its base, never as a final answer.
     const associatedJob = job && !job.finished && job.boundId === selected.id ? job : null;

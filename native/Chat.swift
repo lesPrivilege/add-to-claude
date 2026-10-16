@@ -74,6 +74,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         bar.withFiles = { [weak self] prepared in self?.withFiles(prepared) ?? (prepared.markdown, "") }
         bar.fileRows = { [weak self] in self?.fileRows() ?? [] }
         bar.downloadFiles = { [weak self] ids, done in self?.downloadSelected(ids, done: done) ?? done() }
+        bar.readAgain = { [weak self] in
+            self?.web.callAsyncJavaScript("addToClaudeRefresh()", arguments: [:], in: nil, in: .defaultClient) { _ in }
+        }
         bar.project = { [weak self] prepared, turns, note, done in
             guard let self else { return done(.failure("The panel closed.")) }
             self.project(prepared, turns: turns, note: note, done: done)
@@ -214,7 +217,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             settle((body["id"] as? String ?? "") + "|" + (body["messageId"] as? String ?? ""))
         case "changed": set(nil, .waiting)
         case "invalid": set(nil, .unavailable(safeLabel(body["message"] as? String ?? "", limit: 160)))
-        case "unavailable": set(nil, .unavailable("This page did not expose its original messages."))
+        case "unavailable": set(nil, .unavailable("The conversation could not be read. Read it again with the button on the right."))
         default: break
         }
     }
