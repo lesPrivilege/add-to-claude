@@ -54,8 +54,6 @@ if (handler && window === top) {
         return { error: error.message || 'These turns could not be prepared.' };
       }
     };
-    // Read the open conversation again (the bar's Read Again).
-    globalThis.addToClaudeRefresh = () => port.postMessage({ kind: 'refresh' });
     port.onmessage = ({ data: packet }) => {
       if (packet?.kind === 'file')
         return handler.postMessage({
