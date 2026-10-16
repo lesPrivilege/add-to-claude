@@ -190,3 +190,11 @@ test('a scripted checklist widget leaves its labels, not its code', () => {
   assert.equal(result.markdown, ['Acceptance matrix', 'IMG-GEN-72', '   Copy results'].join('\n'));
   assert.equal(result.omitted, 2);
 });
+
+test('a memory mark goes without a trace, leaving the text beside it', () => {
+  const { markdown, cites, omitted } = readableMarkdown(
+    'Build an adapter.<MemoryCite />\nNext <MemoryCite/> line.',
+  );
+  assert.equal(markdown, 'Build an adapter.\nNext line.');
+  assert.deepEqual([cites.length, omitted], [0, 0]);
+});

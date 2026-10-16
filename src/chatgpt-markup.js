@@ -14,7 +14,16 @@ const containers = new Set(['box', 'row', 'grid', 'grid-item', 'WritingBlock', '
 // Controls keep their visible label; their handlers and state are dropped with the attributes.
 const inline = new Set(['text', 'caption', 'radio', 'button', 'badge']);
 const decoration = new Set(['icon', 'divider', 'select', 'spacer']);
-const tagNames = [...containers, ...inline, ...decoration, 'AsyncImage', 'Entity', 'Link', 'Cite'];
+const tagNames = [
+  ...containers,
+  ...inline,
+  ...decoration,
+  'AsyncImage',
+  'Entity',
+  'Link',
+  'Cite',
+  'MemoryCite',
+];
 const tagPattern = new RegExp(
   `([ \\t]*)<(/?)(${tagNames.join('|')})((?:\\s+[A-Za-z_][\\w-]*(?:=(?:"[^"]*"|'[^']*'|\\{(?:[^{}]|\\{(?:[^{}]|\\{[^{}]*\\})*\\})*\\}|[^\\s"'{}<>/=\`]+))?)*)\\s*(/?)>`,
   'gu',
@@ -99,6 +108,8 @@ export function readableMarkdown(text, mark = () => '') {
     if (inline.has(name)) return space;
     if (name === 'divider') separated = true;
     if (decoration.has(name)) return space;
+    // An answer drew on memory: no link and nothing to read, so it goes with the space before it.
+    if (name === 'MemoryCite') return '';
     if (name === 'AsyncImage') {
       omitted += 1;
       return space;
