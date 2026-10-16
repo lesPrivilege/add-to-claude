@@ -14,6 +14,7 @@ Owner's rule for cards (2026-10-17): do not fit the projection to one snapshot o
 
 ## Open to contributions
 
+- **Saved files reused after a relaunch, on a real Mac.** The logic is tested (`SavedFiles` in the delivery-log suite); a hand run of quit, reopen and Add again is still open.
 - **Picking up a long reply without a reload.** Reading is passive, so a long task's answer needs the reload button (top left, ⌘R), which is easy to miss. Left as it is for 0.6.1; a better signal or an automatic re-read is welcome as a community PR.
 
 ## Next forms
