@@ -37,6 +37,35 @@ struct ProjectedText {
     let verifiedWithFiles: Bool
 }
 
+/// The longest hand-off text the app takes, as the compiler's own limit.
+let maximumMarkdownBytes = 16 * 1024 * 1024
+
+/// Reads the compiler's "ready" message for `page`: the whole conversation. Nil when anything is malformed.
+/// The shape is pinned by tests/fixtures/bridge-messages.json, which the JS and WebKit suites both read.
+func parseReady(_ body: [String: Any], page: String) -> Prepared? {
+    guard let markdown = body["markdown"] as? String, markdown.utf8.count <= maximumMarkdownBytes,
+          let attachments = parseAttachments(body["attachments"], lineCount: markdown.components(separatedBy: "\n").count),
+          let turnList = parseTurnList(body["turnList"]), turnList.count == body["turns"] as? Int else { return nil }
+    return Prepared(revision: UUID(), page: page, markdown: markdown,
+                    title: safeLabel(body["title"] as? String ?? "ChatGPT conversation", limit: 120),
+                    turns: turnList.count, files: body["files"] as? Int ?? 0,
+                    verification: body["verification"] as? String ?? "",
+                    issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) },
+                    attachments: attachments,
+                    verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false, turnList: turnList,
+                    checks: parseChecks(body["checks"]))
+}
+
+/// Reads the compiler's projection of `turns` chosen turns. Nil when anything is malformed.
+func parseProjection(_ body: [String: Any], turns: Int) -> ProjectedText? {
+    guard let markdown = body["markdown"] as? String, markdown.utf8.count <= maximumMarkdownBytes,
+          body["selectedTurns"] as? Int == turns,
+          let attachments = parseAttachments(body["attachments"], lineCount: markdown.components(separatedBy: "\n").count),
+          let verification = body["verification"] as? String else { return nil }
+    return ProjectedText(markdown: markdown, attachments: attachments, verification: verification,
+                         verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false)
+}
+
 /// Reads a compiler result's file list; nil when any entry is malformed or points outside the text.
 func parseAttachments(_ value: Any?, lineCount: Int) -> [Attachment]? {
     guard let files = value as? [[String: Any]], files.count <= 1000 else { return nil }

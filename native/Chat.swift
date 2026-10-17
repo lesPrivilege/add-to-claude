@@ -189,19 +189,10 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                 notice.dismiss()
             }
             // A late answer for a conversation the panel has already left is not the one on screen.
-            guard let markdown = body["markdown"] as? String, page == pageKey(web.url) || isChatRoot(web.url) else { return }
-            guard let attachments = parseAttachments(body["attachments"], lineCount: markdown.components(separatedBy: "\n").count),
-                  let turnList = parseTurnList(body["turnList"]), turnList.count == body["turns"] as? Int else {
+            guard page == pageKey(web.url) || isChatRoot(web.url) else { return }
+            guard let prepared = parseReady(body, page: page) else {
                 return set(nil, .unavailable("This conversation could not be read."))
             }
-            let prepared = Prepared(revision: UUID(), page: page, markdown: markdown,
-                                    title: safeLabel(body["title"] as? String ?? "ChatGPT conversation", limit: 120),
-                                    turns: turnList.count, files: body["files"] as? Int ?? 0,
-                                    verification: body["verification"] as? String ?? "",
-                                    issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) },
-                                    attachments: attachments,
-                                    verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false, turnList: turnList,
-                                    checks: parseChecks(body["checks"]))
             set(prepared, .ready(prepared))
         case "file":
             // A link the page itself requested for one of its files; only https on ChatGPT's own hosts.
@@ -237,14 +228,10 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                 return done(.failure("These turns could not be prepared."))
             }
             if let error = body["error"] as? String { return done(.failure(safeLabel(error, limit: 160))) }
-            guard let markdown = body["markdown"] as? String, markdown.utf8.count <= 16 * 1024 * 1024,
-                  body["selectedTurns"] as? Int == turns.count,
-                  let attachments = parseAttachments(body["attachments"], lineCount: markdown.components(separatedBy: "\n").count),
-                  let verification = body["verification"] as? String else {
+            guard let text = parseProjection(body, turns: turns.count) else {
                 return done(.failure("These turns could not be prepared."))
             }
-            done(.success(ProjectedText(markdown: markdown, attachments: attachments, verification: verification,
-                                        verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false)))
+            done(.success(text))
         }
     }
 

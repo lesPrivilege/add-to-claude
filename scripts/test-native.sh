@@ -15,7 +15,7 @@ xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0"
 node "$project_root/scripts/build-webkit.js" "$work/webkit" >/dev/null
 xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \
   "$project_root/tests/native/WebKitTests.swift" "${app[@]}" -o "$work/webkit-tests"
-"$work/webkit-tests" "$work/webkit"
+"$work/webkit-tests" "$work/webkit" "$project_root/tests/fixtures/bridge-messages.json"
 status=0
 bash "$project_root/scripts/test-native-accessibility.sh" || status=$?
 # Exit 2 means the runner lacks Accessibility access, so nothing was tested; report it as not run.

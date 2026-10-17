@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { readFile } from 'node:fs/promises';
 import { bundle } from '../scripts/build-webkit.js';
 import { compile } from '../src/compile.js';
 
@@ -59,7 +60,7 @@ async function run() {
   const port = {};
   const offer = (target = port) => event({ type: 'add-to-claude/port' }, [target]);
   const send = (packet, through = port) => through.onmessage?.({ data: packet });
-  return { posted, event, offer, send };
+  return { posted, event, offer, send, context };
 }
 
 test('the bundled bridge posts exactly what the compiler module produces', async () => {
@@ -77,6 +78,24 @@ test('the bundled bridge posts exactly what the compiler module produces', async
   );
   assert.equal(rest.turns, 2);
   assert.equal(rest.verification, 'verified');
+});
+
+test('the bridge sends exactly the shared contract fixture the app is tested against', async () => {
+  // tests/fixtures/bridge-messages.json is also read by the WebKit suite (tests/native/WebKitTests.swift).
+  // After an intended change to the compiler's output: node scripts/make-bridge-fixture.js, and review the diff.
+  const fixture = JSON.parse(
+    await readFile(new URL('./fixtures/bridge-messages.json', import.meta.url), 'utf8'),
+  );
+  const { posted, offer, send, context } = await run();
+  offer();
+  send(fixture.packet);
+  assert.deepEqual(JSON.parse(JSON.stringify(posted)), [fixture.ready]);
+  context.request = fixture.project;
+  const result = vm.runInContext(
+    'addToClaudeProject(request.page, request.turns, request.note)',
+    context,
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), fixture.project.result);
 });
 
 test('only the first port is used; page-posted packets and foreign or later ports are ignored', async () => {

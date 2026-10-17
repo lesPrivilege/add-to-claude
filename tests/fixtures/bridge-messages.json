@@ -1,0 +1,115 @@
+{
+  "about": "Synthetic. What the compiler sends the app for one packet, and for a choice of its turns. tests/bridge.test.js checks the compiler still produces exactly this; the WebKit suite checks the app accepts it and refuses broken variants.",
+  "packet": {
+    "kind": "response",
+    "pageUrl": "https://chatgpt.com/c/synthetic-bridge",
+    "responseUrl": "https://chatgpt.com/backend-api/conversation/synthetic-bridge",
+    "capturedAt": "2026-10-17T00:00:00.000Z",
+    "method": "GET",
+    "body": "{\"conversation_id\":\"synthetic-bridge\",\"title\":\"Synthetic bridge contract\",\"current_node\":\"a2\",\"mapping\":{\"root\":{\"parent\":null,\"children\":[\"u1\"],\"message\":null},\"u1\":{\"parent\":\"root\",\"children\":[\"a1\"],\"message\":{\"id\":\"u1\",\"author\":{\"role\":\"user\"},\"status\":\"finished_successfully\",\"end_turn\":false,\"content\":{\"content_type\":\"text\",\"parts\":[\"Make a chart.\"]}}},\"a1\":{\"parent\":\"u1\",\"children\":[\"u2\"],\"message\":{\"id\":\"a1\",\"author\":{\"role\":\"assistant\"},\"status\":\"finished_successfully\",\"end_turn\":true,\"content\":{\"content_type\":\"text\",\"parts\":[\"Here it is: [chart.png](sandbox:/mnt/data/chart.png)\"]}}},\"u2\":{\"parent\":\"a1\",\"children\":[\"a2\"],\"message\":{\"id\":\"u2\",\"author\":{\"role\":\"user\"},\"status\":\"finished_successfully\",\"end_turn\":false,\"content\":{\"content_type\":\"text\",\"parts\":[\"And a summary.\"]}}},\"a2\":{\"parent\":\"u2\",\"children\":[],\"message\":{\"id\":\"a2\",\"author\":{\"role\":\"assistant\"},\"status\":\"finished_successfully\",\"end_turn\":true,\"content\":{\"content_type\":\"text\",\"parts\":[\"A **short** summary.\"]}}}}}"
+  },
+  "ready": {
+    "kind": "ready",
+    "page": "https://chatgpt.com/c/synthetic-bridge",
+    "markdown": "# Synthetic bridge contract\n\nSource: <https://chatgpt.com/c/synthetic-bridge> · 4 turns · verification: partial\n<!-- selected branch: a2 -->\n\n## Content checks\n\n- chart.png: download this file from the original conversation and select it separately; this export contains a reference only.\n\n## Turn 1 — User\n<!-- source: response.mapping[\"u1\"].message -->\n\nMake a chart.\n\n## Turn 2 — Assistant\n<!-- source: response.mapping[\"a1\"].message -->\n\nHere it is: [chart.png](sandbox:/mnt/data/chart.png)\n\n### Files\n\n- chart.png — download-needed\n\n## Turn 3 — User\n<!-- source: response.mapping[\"u2\"].message -->\n\nAnd a summary.\n\n## Turn 4 — Assistant\n<!-- source: response.mapping[\"a2\"].message -->\n\nA **short** summary.\n",
+    "title": "Synthetic bridge contract",
+    "turns": 4,
+    "selectedTurns": 4,
+    "files": 1,
+    "attachments": [
+      {
+        "key": "1:sandbox:/mnt/data/chart.png",
+        "id": "sandbox:/mnt/data/chart.png",
+        "name": "chart.png",
+        "label": "chart.png",
+        "turn": 2,
+        "messageId": "a1",
+        "line": 21,
+        "check": 7
+      }
+    ],
+    "verifiedWithFiles": true,
+    "verification": "partial",
+    "issues": [
+      "chart.png: download this file from the original conversation and select it separately; this export contains a reference only."
+    ],
+    "checks": { "attachment-download-needed": 1 },
+    "turnList": [
+      {
+        "id": "u1",
+        "role": "user",
+        "position": 1,
+        "preview": "Make a chart.",
+        "files": [],
+        "sha256": "ebf92685eff9b91b556db1dce0164622db97225ab11d962839d60c64e3b3f965"
+      },
+      {
+        "id": "a1",
+        "role": "assistant",
+        "position": 2,
+        "preview": "Here it is: [chart.png](sandbox:/mnt/data/chart.png)",
+        "files": ["1:sandbox:/mnt/data/chart.png"],
+        "sha256": "5c872c89be528e688c989f4c81738e6c8a07aca734982abbf5796a9dc68b7560"
+      },
+      {
+        "id": "u2",
+        "role": "user",
+        "position": 3,
+        "preview": "And a summary.",
+        "files": [],
+        "sha256": "7b604945ed0537d3d42761deac609efc246210907fe8d22b3bdb916290c2d882"
+      },
+      {
+        "id": "a2",
+        "role": "assistant",
+        "position": 4,
+        "preview": "A **short** summary.",
+        "files": [],
+        "sha256": "a0113cd05781d4b8c1808aab9d890aeacb274509d7487d01509e176a9969f4e8"
+      }
+    ]
+  },
+  "project": {
+    "page": "https://chatgpt.com/c/synthetic-bridge",
+    "turns": [
+      {
+        "id": "a1",
+        "sha256": "5c872c89be528e688c989f4c81738e6c8a07aca734982abbf5796a9dc68b7560"
+      },
+      {
+        "id": "u2",
+        "sha256": "7b604945ed0537d3d42761deac609efc246210907fe8d22b3bdb916290c2d882"
+      },
+      {
+        "id": "a2",
+        "sha256": "a0113cd05781d4b8c1808aab9d890aeacb274509d7487d01509e176a9969f4e8"
+      }
+    ],
+    "note": "new since last add",
+    "result": {
+      "markdown": "# Synthetic bridge contract\n\nSource: <https://chatgpt.com/c/synthetic-bridge> · 4 turns · verification: partial\nTurns 2–4 of 4 · new since last add\n<!-- selected branch: a2 -->\n\n## Content checks\n\n- chart.png: download this file from the original conversation and select it separately; this export contains a reference only.\n\n## Turn 2 — Assistant\n<!-- source: response.mapping[\"a1\"].message -->\n\nHere it is: [chart.png](sandbox:/mnt/data/chart.png)\n\n### Files\n\n- chart.png — download-needed\n\n## Turn 3 — User\n<!-- source: response.mapping[\"u2\"].message -->\n\nAnd a summary.\n\n## Turn 4 — Assistant\n<!-- source: response.mapping[\"a2\"].message -->\n\nA **short** summary.\n",
+      "title": "Synthetic bridge contract",
+      "turns": 4,
+      "selectedTurns": 3,
+      "files": 1,
+      "attachments": [
+        {
+          "key": "1:sandbox:/mnt/data/chart.png",
+          "id": "sandbox:/mnt/data/chart.png",
+          "name": "chart.png",
+          "label": "chart.png",
+          "turn": 2,
+          "messageId": "a1",
+          "line": 17,
+          "check": 8
+        }
+      ],
+      "verifiedWithFiles": true,
+      "verification": "partial",
+      "issues": [
+        "chart.png: download this file from the original conversation and select it separately; this export contains a reference only."
+      ],
+      "checks": { "attachment-download-needed": 1 }
+    }
+  }
+}

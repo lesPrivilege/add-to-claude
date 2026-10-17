@@ -51,6 +51,7 @@ npx prettier --check .
 ```
 
 - The Accessibility half of `test:native` reports NOT RUN unless your terminal has Accessibility access. Say so in the pull request rather than leaving it out.
+- A change to what the compiler sends the app regenerates the shared fixture (`node scripts/make-bridge-fixture.js`); review its diff, since the WebKit suite reads it too.
 - A change to how ChatGPT's data is read comes with a synthetic fixture for the new shape, and says which real case it stands for, in words, without pasting the real one.
 
 ## A pull request

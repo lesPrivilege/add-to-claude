@@ -72,6 +72,45 @@ import WebKit
               && !both.contains("\n\n\n"), "both linked: each its own copy, the check gone, verified")
     }
 
+    /// tests/fixtures/bridge-messages.json: what the compiler sends (tests/bridge.test.js checks that side).
+    static func contract() {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[2])),
+              let fixture = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ready = fixture["ready"] as? [String: Any], let page = ready["page"] as? String,
+              let project = fixture["project"] as? [String: Any], let result = project["result"] as? [String: Any],
+              let chosen = project["turns"] as? [[String: Any]] else { return check(false, "the contract fixture reads") }
+        let prepared = parseReady(ready, page: page)
+        check(prepared?.turns == 4 && prepared?.attachments.count == 1 && prepared?.turnList.count == 4
+              && prepared?.checks == ["attachment-download-needed": 1] && prepared?.markdown == ready["markdown"] as? String,
+              "the app accepts the compiler's ready message whole")
+        let text = parseProjection(result, turns: chosen.count)
+        check(text?.attachments.first?.messageId == "a1" && text?.markdown == result["markdown"] as? String,
+              "and its projection of chosen turns")
+        func refused(_ change: (inout [String: Any]) -> Void) -> Bool {
+            var body = ready
+            change(&body)
+            return parseReady(body, page: page) == nil
+        }
+        check(refused { $0["turns"] = 5 }, "a turn count that disagrees with the list is refused")
+        check(refused { $0["markdown"] = String(repeating: "x", count: maximumMarkdownBytes + 1) }, "text over 16 MiB is refused")
+        check(refused { body in
+            var files = body["attachments"] as! [[String: Any]]
+            files[0]["line"] = 10_000
+            body["attachments"] = files
+        }, "a file line outside the text is refused")
+        check(refused { body in
+            var rows = body["turnList"] as! [[String: Any]]
+            rows[1]["sha256"] = "not-a-hash"
+            body["turnList"] = rows
+        }, "a turn without a SHA-256 is refused")
+        check(refused { body in
+            var rows = body["turnList"] as! [[String: Any]]
+            rows[1]["id"] = rows[0]["id"]
+            body["turnList"] = rows
+        }, "two turns with one id are refused")
+        check(parseProjection(result, turns: chosen.count + 1) == nil, "a projection of a different number of turns is refused")
+    }
+
     static func checkCounts() {
         check(parseChecks(["attachment-download-needed": 2, "unreadable-markup": 1]) == ["attachment-download-needed": 2, "unreadable-markup": 1],
               "content-check counts read by code")
@@ -183,6 +222,7 @@ import WebKit
         linkedFiles()
         fileLinkChoice()
         checkCounts()
+        contract()
         diagnostics()
         print("PASS: \(checks) WebKit checks in a real WKWebView")
         exit(0)
