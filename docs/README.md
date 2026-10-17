@@ -5,13 +5,14 @@ The living documents describe Add to Claude as it is at `main`. The archive keep
 ## Living
 
 - [../README.md](../README.md): what the app does, privacy, installing the beta, building and testing (English and Chinese).
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) and [../SECURITY.md](../SECURITY.md): the rules a change must keep, the checks to run, and how to report a vulnerability. The project is under the [MIT License](../LICENSE).
 - [architecture.md](architecture.md): how the panel, the page scripts, the compiler and the native app fit together, and what is stored where.
 - [product-contract.md](product-contract.md): the owner's design decisions, the required behaviour (R1–R8) and where each stands.
 - [support-matrix.md](support-matrix.md): evidence for the current release, split into owner-verified, synthetic and not run.
 - [release-checklist.md](release-checklist.md): the gates for the next release and how to cut a candidate and publish.
-- [roadmap.md](roadmap.md): the next forms and the shape that keeps sources and destinations independent.
+- [roadmap.md](roadmap.md): maturity and maintenance work, the next forms and the shape that keeps sources and destinations independent.
 - [decisions/](decisions/): [incremental hand-off](decisions/incremental-handoff.md) and the shelved [DeepSeek Harness plugin](decisions/deepseek-harness-plugin.md).
-- [release/0.6.0.md](release/0.6.0.md): the published 0.6.0 release notes.
+- [release/](release/0.6.1.md): the published release notes for [0.6.0](release/0.6.0.md) and [0.6.1](release/0.6.1.md).
 - [design/icons/](design/icons/README.md): the shipped menu-bar glyph and app icon, the icon grammar and the refinement round.
 - [sources/](sources/): the owner's research transcripts the project started from, kept as given.
 

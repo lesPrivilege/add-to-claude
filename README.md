@@ -114,6 +114,10 @@ CHROMIUM_PATH='<Chrome for Testing binary>' npm run test:browser
 
 [docs/support-matrix.md](docs/support-matrix.md) records what has been verified and what has not. [docs/roadmap.md](docs/roadmap.md) has what comes next, and [docs/README.md](docs/README.md) lists the rest of the documentation.
 
+### Contributing and licence
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the rules a change must keep and the checks to run, and [SECURITY.md](SECURITY.md) for reporting a vulnerability. Add to Claude is under the [MIT License](LICENSE).
+
 ---
 
 ## 中文
@@ -192,3 +196,7 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
 ### 测试
 
 测试命令同上。[docs/support-matrix.md](docs/support-matrix.md) 记录了哪些已经验证、哪些尚未验证；后续计划见 [docs/roadmap.md](docs/roadmap.md)；其余文档见 [docs/README.md](docs/README.md)。
+
+### 贡献与许可
+
+修改须遵守的规则与要运行的检查见 [CONTRIBUTING.md](CONTRIBUTING.md)，报告安全漏洞见 [SECURITY.md](SECURITY.md)。Add to Claude 采用 [MIT 许可证](LICENSE)。

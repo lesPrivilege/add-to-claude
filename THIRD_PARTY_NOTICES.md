@@ -14,4 +14,4 @@ Development dependencies are locked in `package-lock.json`:
 
 Their installed packages retain their own LICENSE/NOTICE files under `node_modules`; dependencies are not vendored into the source or portable runtime artifact. Chrome/Chromium, Node.js, macOS and Xcode are separately installed tools with their own licenses. Node.js is used only to build the WebKit scripts and run tests; the app does not use or redistribute it. Future redistribution of a runtime must include its applicable notices.
 
-Source provenance and official documentation links are in `docs/archive/research.md`. Names of third-party applications identify possible destinations, not affiliation or guaranteed compatibility. This private project does not introduce a custom end-user agreement or grant a new public source license.
+Source provenance and official documentation links are in `docs/archive/research.md`. Names of third-party applications identify possible destinations, not affiliation or guaranteed compatibility. The project itself is under the MIT License (`LICENSE`); it adds no end-user agreement of its own.

@@ -17,6 +17,19 @@ Owner's rule for cards (2026-10-17): do not fit the projection to one snapshot o
 - **Saved files reused after a relaunch, on a real Mac.** The logic is tested (`SavedFiles` in the delivery-log suite); a hand run of quit, reopen and Add again is still open.
 - **Picking up a long reply without a reload.** Reading is passive, so a long task's answer needs the reload button (top left, ⌘R), which is easy to miss. Left as it is for 0.6.1; a better signal or an automatic re-read is welcome as a community PR.
 
+## Maturity and long-term maintenance
+
+Recorded 2026-10-17 from the owner's review. Worked in this order; CI and release automation wait for the owner's go.
+
+1. **Licence and contributor docs.** A licence (the repo is `UNLICENSED` today, so a community PR cannot be accepted), `CONTRIBUTING.md` (the project's rules for people, how to run the three suites, synthetic fixtures only) and `SECURITY.md` (how to report a vulnerability).
+2. **Split the large modules.** `src/import.js` into turn folding, citation marks and numbering, and attachment matching, each pure and tested on its own; `src/model.js` into validation and projection; `native/Handoff.swift` into assembly, file lines and UI state.
+3. **Drift signal.** ChatGPT changing its response shape is the main long-term risk. The importer counts node and content types it does not recognise and names them in the top notice, as `[?]` already does for citations; diagnostics keep the counts only, never content. A synthetic shape corpus records each known shape and the period it stands for.
+4. **Written knowledge.** Short decision records for choices a PR could undo: cards converge to plain text, reading is passive, terminals receive one `@path` line, citations are marked by position. A versioned spec for the hand-off format (`projectMarkdown` is the outward contract). A one-page threat model: trust boundaries, what each validates, accepted risks.
+5. **Versioned state on disk.** `saved-files.json` and the delivery log carry a `version`; a mismatch is discarded and rebuilt, with no migration.
+6. **Bridge schema.** The messages between the page scripts and the native app are validated on both sides from one definition, or at least from one shared set of fixtures.
+7. **Before a second provider.** The file-link step behind a source-adapter interface, `linkFiles` moved into `src/` (see below), and a contract suite every source adapter must pass.
+8. **Waiting for the owner's go.** CI on a macOS runner (unit, browser, delivery log and WebKit suites; Accessibility stays a hand run), a release script (zip, checksum, tag, release, download and verify), Developer ID signing and notarization, a universal binary, and an update channel.
+
 ## Next forms
 
 1. **Claude mod.** Waits until Claude's newly released mod format settles, so the port is an adaptation rather than a rewrite.
