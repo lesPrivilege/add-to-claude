@@ -193,7 +193,8 @@ func conversationPage(in window: AXUIElement) -> (id: String, title: String?)? {
 }
 
 /// Appends at the end of the chosen composer while its app stays in the background.
-/// Never activates, raises, pastes, types or sends; success means the exact text was read back.
+/// Never activates, raises, types or sends. It pastes only when the app ignores the AX write (see
+/// `fallBack`). Success means the exact text was read back.
 func appendToComposer(_ selected: Composer, text: String, operationValid: @escaping () -> Bool,
                       revalidateSource: @escaping (@escaping (Bool) -> Void) -> Void,
                       completion: @escaping (String, AddOutcome) -> Void) {

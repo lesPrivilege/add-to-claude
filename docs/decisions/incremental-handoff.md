@@ -27,7 +27,7 @@ Work order: [WO-01](../archive/workorders/WO-01-incremental-handoff.md). Decided
 ## 3. Source identity and changed turns
 
 - **Source:** the ChatGPT conversation id from the page URL (`/c/<id>`, `/g/<gpt>/c/<id>`). A new chat without an id has no history; it is always All and nothing is logged.
-- **Turns:** each turn's message id plus `content_sha256`, the SHA-256 of the turn's projected body. The body is its role, Markdown, references and file lines, but not the numbered heading, so loading earlier turns does not change later hashes. The hash is computed in the shared compiler (`describeTurns` in `src/model.js`, `src/sha256.js`).
+- **Turns:** each turn's message id plus `content_sha256`, the SHA-256 of the turn's projected body. The body is its role, Markdown, references and file lines, but not the numbered heading, so loading earlier turns does not change later hashes. The hash is computed in the shared compiler (`describeTurns` in `src/projection.js`, `src/sha256.js`).
 - **A turn added earlier whose hash now differs** is reported ("2 earlier turns changed since added"). It is left out of New and marked "changed" in the picker. The menu offers it through **New and changed** (shown only when there are changed turns) or Choose turns…; it is never re-sent silently.
 - **A regenerated answer** has a new message id, so it is simply new.
 
@@ -48,7 +48,7 @@ Work order: [WO-01](../archive/workorders/WO-01-incremental-handoff.md). Decided
 
 ## 5. Projection of a subset
 
-- **Where:** in the shared JS compiler, so every form uses one projection (`projectMarkdown(model, lines, { turnIds, note })`, `selectTurns`, `scopeLine` in `src/model.js`; `handoff()` in `src/compile.js`).
+- **Where:** in the shared JS compiler, so every form uses one projection (`projectMarkdown(model, lines, { turnIds, note })`, `selectTurns`, `scopeLine` in `src/projection.js`; `handoff()` in `src/compile.js`).
 - **What a subset carries:** the chosen turns, in source order, keeping their numbers in the whole conversation; only their references and files; and only the content checks about them.
   - A check that names no turn or file (the conversation as a whole, e.g. "earlier turns were not loaded") always goes.
   - Files that belong to no turn go with every subset.

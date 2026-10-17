@@ -14,7 +14,7 @@ These are the project's boundaries. A pull request that crosses one is declined,
 - **No runtime npm dependency.** Node.js builds the page scripts and runs the tests; the app ships without it. Development dependencies stay few and locked.
 - **No compatibility layers.** When a shape changes, the old path is removed rather than kept beside the new one.
 
-Why these exist, and the decisions behind the less obvious behaviour (cards read as plain text, reading is passive), are in [docs/roadmap.md](docs/roadmap.md) and [docs/decisions/](docs/decisions/).
+Why these exist, and the decisions behind the less obvious behaviour (cards read as plain text, reading is passive), are in [docs/roadmap.md](docs/roadmap.md) and [docs/decisions/](docs/decisions/). A change to the hand-off text follows [docs/handoff-format.md](docs/handoff-format.md); a change at a trust boundary updates [docs/threat-model.md](docs/threat-model.md).
 
 ## Setting up
 

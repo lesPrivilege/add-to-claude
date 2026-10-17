@@ -12,7 +12,9 @@ The living documents describe Add to Claude as it is at `main`. The archive keep
 - [support-matrix.md](support-matrix.md): evidence for the current release, split into owner-verified, synthetic and not run.
 - [release-checklist.md](release-checklist.md): the gates for the next release and how to cut a candidate and publish.
 - [roadmap.md](roadmap.md): maturity and maintenance work, the next forms and the shape that keeps sources and destinations independent.
-- [decisions/](decisions/): [incremental hand-off](decisions/incremental-handoff.md) and the shelved [DeepSeek Harness plugin](decisions/deepseek-harness-plugin.md).
+- [handoff-format.md](handoff-format.md): the hand-off text as an outward contract (format 1), and the rules for changing it.
+- [threat-model.md](threat-model.md): what is trusted, each boundary's checks, and the accepted risks.
+- [decisions/](decisions/): [incremental hand-off](decisions/incremental-handoff.md), [reading and projection](decisions/reading-and-projection.md) (cards as plain text, passive reading, citation marks, terminals) and the shelved [DeepSeek Harness plugin](decisions/deepseek-harness-plugin.md).
 - [release/](release/0.6.1.md): the published release notes for [0.6.0](release/0.6.0.md) and [0.6.1](release/0.6.1.md).
 - [design/icons/](design/icons/README.md): the shipped menu-bar glyph and app icon, the icon grammar and the refinement round.
 - [sources/](sources/): the owner's research transcripts the project started from, kept as given.
