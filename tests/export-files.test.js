@@ -51,3 +51,20 @@ test('settle: folded turns, a sandbox link joined to its attached copy, no accou
   );
   assert.ok(issues.every((item) => !item.message.includes('user-abc')));
 });
+
+test('a name with replacement patterns ($&, $`) never brings the account id back', () => {
+  const issues = [];
+  const { list, add } = attachmentList((code, message, sourceLocator) =>
+    issues.push({ code, message, sourceLocator }),
+  );
+  add({ id: 'file-8', name: 'user-abc_456_mnt_data_$&.txt' }, 'tool');
+  add({ id: 'sandbox:/mnt/data/$`.csv', name: '$`.csv' }, 'link', 'm1');
+  add({ id: 'file-9', name: 'user-abc_789_mnt_data_$`.csv' }, 'tool2');
+  settleAttachments(list, issues, new Map());
+  assert.deepEqual(
+    list.map((file) => file.name),
+    ['$&.txt', '$`.csv'],
+  );
+  for (const issue of issues) assert.ok(!issue.message.includes('user-abc'), issue.message);
+  assert.ok(issues[0].message.startsWith('$&.txt: '));
+});

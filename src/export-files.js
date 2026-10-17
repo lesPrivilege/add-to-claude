@@ -83,7 +83,8 @@ export function settleAttachments(attachments, issues, foldedInto) {
     if (file.turnId) file.turnId = foldedInto.get(file.turnId) ?? file.turnId;
   const rename = (file, name) => {
     const raised = issues.find((item) => item.sourceLocator === file.sourceLocator);
-    if (raised) raised.message = raised.message.replace(file.name, name);
+    // A function, so `$&` and the like in a name are kept as written, never expanded.
+    if (raised) raised.message = raised.message.replace(file.name, () => name);
     file.name = name;
   };
   // A generated file linked in a turn as sandbox:/mnt/data/<name> may also be attached, outside any
