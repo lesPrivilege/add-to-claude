@@ -10,7 +10,7 @@ Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release not
 | Automatic delivery into a Terminal tab (Apple Events, then its Paste menu item in the background) | Owner, on the first build (`5715845`): tabs listed after the Automation prompt, but the line did not land; the copied line pasted by hand worked. Path removed after |
 | Add to a terminal window: file written, line copied, window brought forward, pasted by hand       | Owner, on `c40e6c0` (2026-10-17): the pasted line worked                                                                                                             |
 | Delivery log and scope, WebKit                                                                    | Synthetic: 128 and 45                                                                                                                                                |
-| Accessibility suite                                                                               | Synthetic: 54, run from the owner's terminal at `5715845` (2026-10-17)                                                                                               |
+| Accessibility suite                                                                               | Synthetic: 54, run from the owner's terminal at `18ee0c4` (2026-10-17)                                                                                               |
 
 ### 0.6.1 on the owner's Mac (installed release build, 2026-10-17)
 
