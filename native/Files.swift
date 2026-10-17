@@ -29,8 +29,10 @@ enum FilesFolder {
         if panel.runModal() == .OK, let url = panel.url { root = url }
     }
 
+    /// A double quote becomes an apostrophe, so a terminal's one-line `@"…"` mention can name the folder.
     static func folder(for title: String) -> URL {
-        root.appendingPathComponent(safeFileName(String(title.prefix(80)), fallback: "conversation"), isDirectory: true)
+        let name = safeFileName(String(title.prefix(80)), fallback: "conversation").replacingOccurrences(of: "\"", with: "'")
+        return root.appendingPathComponent(name, isDirectory: true)
     }
 }
 

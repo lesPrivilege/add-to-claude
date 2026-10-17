@@ -30,7 +30,11 @@ final class HandoffBar: NSViewController {
     private var source = SourceState.waiting
     private let registry = ComposerRegistry()
     private var targets: [Target] = []
+    private var blocked: [(TerminalApp, TerminalAccess)] = []
+    /// The chosen destination: a composer window, or a terminal tab. Never both.
     private var composer: Composer?
+    private var terminal: TerminalTab?
+    private var hasDestination: Bool { composer != nil || terminal != nil }
     private var discovering = false
     private var busy = false
     private var operation = UUID()
@@ -210,19 +214,20 @@ final class HandoffBar: NSViewController {
         targetRow.isHidden = !trusted
         renderPicker(trusted: trusted)
         picker.isEnabled = !targets.isEmpty && !busy && !discovering
-        let destination = composer.map { safeLabel($0.choice.app.localizedName ?? "app", limit: 24) }
+        let destination = composer.map { safeLabel($0.choice.app.localizedName ?? "app", limit: 24) } ?? terminal?.app.name
         add.title = destination.map { "Add to \($0)" } ?? "Add"
         let scope = currentScope
         renderScope(scope, trusted: trusted)
-        add.toolTip = composer.map { composer in
-            "Adds \(scope.map { $0.everything ? "this conversation" : $0.detail.lowercased() } ?? "this conversation") to "
-                + "\(composer.choice.displayLabel(limit: 60)) without sending it"
-        }
+        let what = scope.map { $0.everything ? "this conversation" : $0.detail.lowercased() } ?? "this conversation"
+        add.toolTip = composer.map { "Adds \(what) to \($0.choice.displayLabel(limit: 60)) without sending it" }
+            ?? terminal.map { "Saves \(what) as a hand-off file and puts a one-line mention of it in \($0.label) without running it" }
+        // A terminal gets a file, so only a composer is held to the 2 MB a message box takes.
+        let limit = terminal != nil ? maximumMarkdownBytes : maximumTextBytes
         let addable = scope.map { scope in
-            scope.everything ? prepared.map { $0.markdown.utf8.count <= maximumTextBytes } == true
+            scope.everything ? prepared.map { $0.markdown.utf8.count <= limit } == true
                 : !scope.turns.isEmpty || (scope.mode == "new" && !(analysis?.lastBatch.isEmpty ?? true))
         } ?? false
-        add.isEnabled = addable && composer != nil && !busy
+        add.isEnabled = addable && hasDestination && !busy
         // Accent only when it can act; a disabled accent button reads as pale text on blue.
         add.bezelColor = add.isEnabled ? .controlAccentColor : nil
         add.contentTintColor = add.isEnabled ? .white : nil
@@ -263,7 +268,7 @@ final class HandoffBar: NSViewController {
         }
         scopeDetail.stringValue = detail
         scopeDetail.toolTip = detail
-        scopeRow.isHidden = !trusted || scope == nil || composer == nil
+        scopeRow.isHidden = !trusted || scope == nil || !hasDestination
             || (scope?.mode == "all" && scope?.automatic == true && !canBind && !bound)
 
         guard let scope, let analysis, let prepared else { return }
@@ -340,24 +345,48 @@ final class HandoffBar: NSViewController {
 
     // MARK: target identity
 
-    /// One chosen window, from when it was chosen until it closes or changes its title. Ids name it
-    /// in the log; `bound` is the user's "Continue in this conversation".
+    /// One chosen window or terminal tab, from when it was chosen until it closes (or a window changes its
+    /// title). Ids name it in the log; `bound` is the user's "Continue in this conversation".
     private final class WindowSession {
-        let app: pid_t
-        let launchDate: Date
-        let window: AXUIElement
+        /// The app instance and, for a tab, its session.
+        let slot: String
+        let window: AXUIElement?
         let title: String
         let id = UUID().uuidString.lowercased()
         var bound = false
-        init(_ choice: WindowChoice) {
-            app = choice.app.processIdentifier
-            launchDate = choice.launchDate
-            window = choice.window
-            title = choice.title
+        init(slot: String, window: AXUIElement?, title: String) {
+            self.slot = slot
+            self.window = window
+            self.title = title
         }
-        func matches(_ choice: WindowChoice) -> Bool {
-            app == choice.app.processIdentifier && launchDate == choice.launchDate && title == choice.title && CFEqual(window, choice.window)
+        func sameSlot(_ slot: String, _ window: AXUIElement?) -> Bool {
+            guard self.slot == slot else { return false }
+            switch (self.window, window) {
+            case (nil, nil): return true
+            case let (mine?, theirs?): return CFEqual(mine, theirs)
+            default: return false
+            }
         }
+    }
+
+    private func session(slot: String, window: AXUIElement?, title: String) -> WindowSession {
+        let session = sessions.first { $0.sameSlot(slot, window) && $0.title == title } ?? {
+            let session = WindowSession(slot: slot, window: window, title: title)
+            sessions.append(session)
+            return session
+        }()
+        sessions.removeAll { $0 !== session && $0.sameSlot(slot, window) }
+        return session
+    }
+
+    private func session(for composer: Composer) -> WindowSession {
+        session(slot: "\(composer.choice.app.processIdentifier)|\(composer.choice.launchDate.timeIntervalSince1970)",
+                window: composer.choice.window, title: composer.choice.title)
+    }
+
+    /// A tab's session lasts while it lives: a tty number reused by a new tab is a new session.
+    private func session(for tab: TerminalTab) -> WindowSession {
+        session(slot: "\(tab.key)|\(tab.launchDate.timeIntervalSince1970)", window: nil, title: tab.tty)
     }
 
     /// Which conversation the window shows: verified when the window names it (its page URL), else this
@@ -367,56 +396,83 @@ final class HandoffBar: NSViewController {
         if let id = conversationIdentity(in: composer.choice.window) {
             return TargetIdentity(app: app, conversation: id, confidence: .verified)
         }
-        let session = sessions.first { $0.matches(composer.choice) } ?? {
-            let session = WindowSession(composer.choice)
-            sessions.append(session)
-            return session
-        }()
-        sessions.removeAll { $0 !== session && $0.app == session.app && CFEqual($0.window, session.window) }
+        let session = session(for: composer)
         return TargetIdentity(app: app, conversation: "window:\(session.id)", confidence: session.bound ? .confirmed : .unconfirmed)
     }
+
+    /// A terminal never says which conversation an agent in it holds: always this tab's session.
+    private func identify(_ tab: TerminalTab) -> TargetIdentity {
+        let session = session(for: tab)
+        return TargetIdentity(app: tab.app.rawValue, conversation: "window:\(session.id)", confidence: session.bound ? .confirmed : .unconfirmed)
+    }
+
+    private func identifyDestination() -> TargetIdentity? { composer.map(identify) ?? terminal.map(identify) }
 
     /// Uses this composer as the target, with its identity read now (or as given, for snapshots).
     func select(_ chosen: Composer?, identity: TargetIdentity? = nil) {
         let before = target
         composer = chosen
-        target = identity ?? chosen.map(identify)
+        if chosen != nil { terminal = nil }
+        target = identity ?? identifyDestination()
         if target != before { scopeChoice = .auto; turnsPopover?.close() }
         render()
     }
 
+    /// Uses this terminal tab as the target.
+    func select(_ tab: TerminalTab) {
+        composer = nil
+        terminal = tab
+        select(nil)
+    }
+
     @objc private func toggleBinding() {
-        guard let composer, let session = sessions.first(where: { $0.matches(composer.choice) }) else { return }
+        guard let session = composer.map({ session(for: $0) }) ?? terminal.map({ session(for: $0) }) else { return }
         session.bound.toggle()
-        target = identify(composer)
+        target = identifyDestination()
         scopeChoice = .auto
         render()
     }
 
     /// Rebuilt only when its rows change, so page updates never disturb an open menu.
     private func renderPicker(trusted: Bool) {
-        let selected = composer.flatMap { registry.id(of: $0) }
+        let selected = composer.flatMap { registry.id(of: $0) } ?? terminal.flatMap { registry.id(of: $0) }
         let signature = "\(trusted)|\(discovering)|\(selected ?? "")|" + targets.map(\.id).joined(separator: ",")
+            + "|" + blocked.map { "\($0.0.rawValue):\($0.1)" }.joined(separator: ",")
         guard signature != pickerSignature else { return }
         pickerSignature = signature
         picker.removeAllItems()
         picker.addItem(withTitle: discovering ? "Finding windows…" : targets.isEmpty ? "No open windows" : "Choose a window…")
         picker.item(at: 0)?.isEnabled = false
-        for target in targets {
-            picker.addItem(withTitle: target.window.isEmpty ? target.app : "\(target.app) · \(target.window)")
-            picker.lastItem?.representedObject = target.id
-            picker.lastItem?.image = target.icon.map { icon in
+        let row = { (target: Target) in
+            self.picker.addItem(withTitle: target.window.isEmpty ? target.app : "\(target.app) · \(target.window)")
+            self.picker.lastItem?.representedObject = target.id
+            self.picker.lastItem?.image = target.icon.map { icon in
                 let copy = icon.copy() as! NSImage
                 copy.size = NSSize(width: 16, height: 16)
                 return copy
+            }
+        }
+        targets.filter { !$0.terminal }.forEach(row)
+        // Terminal tabs get a one-line mention of a hand-off file; the header says so before one is chosen.
+        let tabs = targets.filter(\.terminal)
+        if !tabs.isEmpty || !blocked.isEmpty {
+            picker.menu?.addItem(.separator())
+            picker.addItem(withTitle: "Terminal tabs · a one-line file mention, never run")
+            picker.lastItem?.isEnabled = false
+            tabs.forEach(row)
+            for (app, access) in blocked {
+                picker.addItem(withTitle: access == .notAsked ? "Allow Listing \(app.name) Tabs…" : "\(app.name) Tabs: Allow in System Settings…")
+                picker.lastItem?.representedObject = (access == .notAsked ? "allow:" : "settings:") + app.rawValue
+                picker.lastItem?.image = glyph("lock", size: 14)
             }
         }
         picker.menu?.addItem(.separator())
         picker.addItem(withTitle: "Refresh Window List")
         picker.lastItem?.representedObject = "refresh"
         picker.lastItem?.image = glyph("refresh", size: 14)
-        if let selected, let index = targets.firstIndex(where: { $0.id == selected }) { picker.selectItem(at: index + 1) }
-        else { picker.selectItem(at: 0) }
+        if let selected, let index = picker.itemArray.firstIndex(where: { $0.representedObject as? String == selected }) {
+            picker.selectItem(at: index)
+        } else { picker.selectItem(at: 0) }
     }
 
     /// The status line, with up to two small buttons for a question it asks.
@@ -450,9 +506,12 @@ final class HandoffBar: NSViewController {
                 guard let self else { return }
                 self.registry.apply(found)
                 self.targets = found.targets
+                self.blocked = found.blocked
                 self.discovering = false
                 if let composer = self.composer, self.registry.id(of: composer) == nil { self.composer = nil }
-                if self.composer == nil { self.restoreLastTarget() }
+                // A tab that is still open is taken as listed now, with what it runs now.
+                if let tab = self.terminal { self.terminal = self.registry.id(of: tab).flatMap(self.registry.tab) }
+                if !self.hasDestination { self.restoreLastTarget() }
                 // The target may show another conversation by now; read it again.
                 if !self.busy { self.select(self.composer) } else { self.render() }
             }
@@ -464,6 +523,14 @@ final class HandoffBar: NSViewController {
         if id == "refresh" {
             pickerSignature = "" // Re-render restores the selection the refresh item displaced.
             return findWindows()
+        }
+        if id.hasPrefix("allow:") || id.hasPrefix("settings:") {
+            pickerSignature = ""
+            return allowTerminal(id)
+        }
+        if let tab = registry.tab(id) {
+            say("")
+            return select(tab)
         }
         let (chosen, problem) = registry.composer(id)
         if let chosen { remember(chosen) }
@@ -488,6 +555,22 @@ final class HandoffBar: NSViewController {
                   return choice.app.bundleIdentifier == last["app"] && choice.title == last["title"]
               }) else { return }
         composer = registry.composer(target.id).composer
+    }
+
+    /// macOS asks once whether Add may control a terminal; after a refusal only System Settings can change it.
+    private func allowTerminal(_ choice: String) {
+        guard let app = TerminalApp(rawValue: String(choice.split(separator: ":", maxSplits: 1)[1])) else { return }
+        if choice.hasPrefix("settings:") {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
+            say("Turn on \(app.name) under Add to Claude in Privacy & Security → Automation, then refresh the window list.")
+            return render()
+        }
+        // The prompt is an ordinary window; the floating panel would cover it.
+        view.window?.orderOut(nil)
+        TerminalScripting.queue.async { [weak self] in
+            _ = TerminalScripting.access(app, ask: true)
+            DispatchQueue.main.async { self?.findWindows() }
+        }
     }
 
     @objc private func allowAccess() {
@@ -619,7 +702,7 @@ final class HandoffBar: NSViewController {
     /// Add: the scope shown, unless it is exactly what was just added (then it asks first), or there is
     /// nothing new (then it offers the last batch again).
     @objc private func addContext() {
-        guard !busy, composer != nil, prepared != nil, let scope = currentScope, let analysis else { return }
+        guard !busy, hasDestination, prepared != nil, let scope = currentScope, let analysis else { return }
         if scope.mode == "new" && scope.turns.isEmpty {
             guard !analysis.lastBatch.isEmpty else { return }
             let again = resolveScope(.again, turns: prepared!.turnList, analysis: analysis)
@@ -638,25 +721,24 @@ final class HandoffBar: NSViewController {
     /// Prepares the text for these turns, downloads their files, appends to the draft, and records each
     /// step: prepared → insertion_attempted → composer_inserted, failed or unknown.
     private func run(_ scope: ResolvedScope) {
-        guard !busy, var current = composer, let frozen = prepared, !scope.turns.isEmpty else { return }
+        guard !busy, hasDestination, let frozen = prepared, !scope.turns.isEmpty else { return }
         // Web editors (Claude's among them) rebuild their message box. Only when the chosen one is gone,
         // take the window's current one, checked exactly as choosing the window again would check it;
         // a box that still exists is never swapped for another, such as an open edit field.
         var role: CFTypeRef?
-        if AXUIElementCopyAttributeValue(current.editor, kAXRoleAttribute as CFString, &role) == .invalidUIElement {
+        if let current = composer, AXUIElementCopyAttributeValue(current.editor, kAXRoleAttribute as CFString, &role) == .invalidUIElement {
             let (field, problem) = inspectComposer(current.choice)
             guard let field else {
                 say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error", result: true)
                 return render()
             }
-            current = Composer(choice: current.choice, editor: field)
-            composer = current
+            composer = Composer(choice: current.choice, editor: field)
         }
-        let selected = current
+        let selected = composer, tab = terminal
         // The target is read again right before writing: a window that now shows another conversation is
         // not the one the scope was worked out for.
-        let identity = identify(selected)
-        guard identity == target else {
+        let identity = identifyDestination()
+        guard let identity, identity == target else {
             target = identity
             scopeChoice = .auto
             say("The target conversation changed. Check the turns to add, then Add again.", glyph: "error", result: true)
@@ -666,16 +748,16 @@ final class HandoffBar: NSViewController {
         operation = UUID()
         let id = operation
         let trace = HandoffTrace()
-        trace.record(.started, turns: scope.turns.count, scope: scope.mode, target: selected.choice.app.bundleIdentifier)
+        trace.record(.started, turns: scope.turns.count, scope: scope.mode, target: selected?.choice.app.bundleIdentifier ?? tab?.app.rawValue)
         let receipt = frozen.sourceId.map {
             log.begin(source: $0, target: identity, mode: scope.mode, turns: scope.turns, attachments: scope.turns.flatMap(\.files))
         }
         let valid: () -> Bool = { [weak self] in
             guard let self, self.operation == id, let current = self.prepared else { return false }
             // Files can take a while: the target window may show another conversation by the time we write.
-            return current.revision == frozen.revision && self.isCurrent(frozen) && self.identify(selected) == identity
+            return current.revision == frozen.revision && self.isCurrent(frozen) && self.identifyDestination() == identity
         }
-        let app = safeLabel(selected.choice.app.localizedName ?? "the app", limit: 24)
+        let app = selected.map { safeLabel($0.choice.app.localizedName ?? "the app", limit: 24) } ?? tab?.app.name ?? "the app"
         let what = scope.everything ? "all \(scope.turns.count) turn\(scope.turns.count == 1 ? "" : "s")"
             : "\(scope.turns.count) turn\(scope.turns.count == 1 ? "" : "s")"
         say("Preparing \(what)…", glyph: "waiting")
@@ -689,14 +771,32 @@ final class HandoffBar: NSViewController {
         let append = { [weak self] (text: Prepared) in
             guard let self, valid() else { return fail("The conversation changed. Nothing was added.") }
             let (markdown, filesNote) = self.withFiles(text)
-            guard markdown.utf8.count <= maximumTextBytes else {
+            guard tab != nil || markdown.utf8.count <= maximumTextBytes else {
                 return fail("\(what.prefix(1).uppercased() + what.dropFirst()) come to \(ByteCountFormatter.string(fromByteCount: Int64(markdown.utf8.count), countStyle: .file)), over the 2 MB a message box takes. Choose fewer turns, or Save.")
+            }
+            // A terminal tab gets the text as a file and a one-line mention of it.
+            var mention = ""
+            if tab != nil {
+                switch HandoffFiles.shared.write(markdown, title: frozen.title) {
+                case .failure(let problem): return fail(problem.message)
+                case .success(let path):
+                    guard let line = handoffMention(path.path) else {
+                        return fail("The files folder's path has a double quote or a control character, which a one-line mention cannot carry. Choose another folder in Settings.")
+                    }
+                    mention = line
+                }
             }
             trace.record(.insertAttempted, files: text.attachments.count, bytes: markdown.utf8.count, checks: text.checks)
             if let receipt { self.log.move(receipt, to: .insertionAttempted) }
             self.say("Adding \(what) to \(app)…", glyph: "waiting")
-            appendToComposer(selected, text: markdown, operationValid: valid,
-                             revalidateSource: { reply in reply(valid()) }) { [weak self] message, outcome in
+            let deliver = { (done: @escaping (String, AddOutcome) -> Void) in
+                if let selected {
+                    appendToComposer(selected, text: markdown, operationValid: valid, revalidateSource: { reply in reply(valid()) }, completion: done)
+                } else if let tab {
+                    appendToTerminal(tab, line: mention, operationValid: valid, completion: done)
+                }
+            }
+            deliver { [weak self] message, outcome in
                 guard let self else { return }
                 let files = filesNote.isEmpty ? "" : " " + filesNote
                 switch outcome {
@@ -704,7 +804,8 @@ final class HandoffBar: NSViewController {
                     trace.record(.inserted)
                     if let receipt { self.log.move(receipt, to: .composerInserted) }
                     self.scopeChoice = .auto
-                    self.finish("Added \(what) to the draft in \(app). Nothing was sent.\(files)", glyph: "done")
+                    self.finish(tab != nil ? "Saved \(what) as \(HandoffFiles.name) and put a mention of it in the \(app) tab. Nothing was run.\(files)"
+                                : "Added \(what) to the draft in \(app). Nothing was sent.\(files)", glyph: "done")
                 case .unconfirmed:
                     trace.record(.unconfirmed)
                     if let receipt { self.log.move(receipt, to: .unknown) }

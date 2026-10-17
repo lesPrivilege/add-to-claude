@@ -52,6 +52,17 @@ Today the source is ChatGPT. The destination can be any app with a text box.
   - Shift-click selects a run; All and None select everything or nothing. The choice applies to the next Add only.
 - **Files.** A chosen turn brings its own files and references, and only the checks that concern it. The text says which turns it carries, e.g. "Selected turns: 3, 5–9 of 42".
 
+### Terminal tabs
+
+A terminal may be showing a shell rather than an agent, so a tab never receives the conversation itself.
+
+- **The picker** lists the tabs of Terminal and iTerm2 under **Terminal tabs**, each with what runs in it (`claude`, `codex`, `zsh`…). The first time, choose **Allow Listing Terminal Tabs…** and macOS asks once whether Add to Claude may control that terminal.
+- **Add** saves the text as `handoff.add-to-claude.md` in the conversation's files folder, then puts one line into the tab: `@"/path/to/handoff.add-to-claude.md"`. No newline, and Return is never pressed. In an agent it is a file mention; at a shell prompt it is an unexecuted line.
+- **Before writing**, the tab must still be open and still run what the picker showed. iTerm2 takes the line directly. Terminal brings the tab forward in its own window and the line is pasted there with ⌘V; Terminal itself is not activated.
+- **Confirmed** only when the line shows on the tab's screen. Otherwise the bar says it could not confirm, and asks.
+- **One file per conversation**, replaced by each Add. Clear History removes them, and each is removed a day after it was written, when the app next starts. A file of that name that Add did not write is left alone.
+- A terminal never says which conversation an agent in it holds, so Add treats each tab as a window that doesn't say (above).
+
 ### Privacy
 
 - It reads only the conversation the page has loaded.
@@ -62,6 +73,7 @@ Today the source is ChatGPT. The destination can be any app with a text box.
   - `delivery-log.json` holds which turns went into which identified conversation: message ids, positions, content hashes, states and times. It never holds message text.
   - `saved-files.json` holds where Add saved each file and its SHA-256, so a later Add reuses the copy while its bytes are unchanged.
   - Both are kept for 30 days by default. Settings → History turns it off, changes how long it is kept, or clears it.
+- The hand-off file for a terminal tab sits in the conversation's files folder for at most a day (see Terminal tabs).
 - No telemetry, no history archive, no server of its own.
 
 ### Install the beta
@@ -109,7 +121,7 @@ CHROMIUM_PATH='<Chrome for Testing binary>' npm run test:browser
 ```
 
 - `npm test` covers the model, the adapters, the compiler, the page observer, and the bundled bridge.
-- `test:native` checks the delivery log and the scope rule, runs the real chat controller in a real `WKWebView`, then the Accessibility checks against a synthetic app. The Accessibility checks report NOT RUN unless the terminal has Accessibility access.
+- `test:native` checks the delivery log and the scope rule, runs the real chat controller in a real `WKWebView`, checks the terminal adapter's logic (listings, the one-line mention, read-back, hand-off files), then the Accessibility checks against a synthetic app. No real terminal is touched. The Accessibility checks report NOT RUN unless the terminal has Accessibility access.
 - `test:browser` runs the page observer in a real browser.
 
 [docs/support-matrix.md](docs/support-matrix.md) records what has been verified and what has not. [docs/roadmap.md](docs/roadmap.md) has what comes next, and [docs/README.md](docs/README.md) lists the rest of the documentation.
@@ -163,6 +175,17 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
   - 按住 Shift 点击可选中一段，All / None 全选或全不选。这个选择只用于下一次 Add。
 - **文件。** 选中的轮次会带上它自己的文件和引用，以及只与它相关的检查项。文字里会写明包含哪些轮次，例如「Selected turns: 3, 5–9 of 42」。
 
+### 终端标签页
+
+终端里显示的可能是 shell 而不是 agent，所以标签页从不直接接收对话正文。
+
+- **选择器**在 **Terminal tabs** 下列出 Terminal 和 iTerm2 的标签页，并标出其中正在运行的程序（`claude`、`codex`、`zsh`…）。第一次使用时选 **Allow Listing Terminal Tabs…**，macOS 会询问一次是否允许 Add to Claude 控制该终端。
+- **Add** 把文字存为这段对话文件夹里的 `handoff.add-to-claude.md`，然后只往标签页放一行：`@"/path/to/handoff.add-to-claude.md"`。不带换行，也从不按回车。在 agent 里它是一个文件引用；在 shell 提示符下它只是一行未执行的文字。
+- **写入前**会确认标签页仍然开着，且运行的仍是选择器里显示的程序。iTerm2 直接写入这一行；Terminal 先在自己的窗口里把该标签页切到前面，再用 ⌘V 粘贴，Terminal 本身不会被激活。
+- **确认**：只有这一行出现在标签页屏幕上才算添加成功；否则底栏显示无法确认，并询问你。
+- **每段对话一个文件**，每次 Add 覆盖。清除历史（Clear History）会删除它们；每个文件写入一天后，在应用下次启动时删除。同名但不是 Add 写的文件不会被动。
+- 终端无法说明其中的 agent 是哪个对话，所以 Add 把每个标签页当作「无法说明是哪个对话的窗口」（见上文）。
+
 ### 隐私
 
 - 只读取页面已经加载的对话。
@@ -173,6 +196,7 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
   - `delivery-log.json` 记录哪些轮次进入了哪个已识别的对话：消息 ID、位置、内容哈希、状态和时间，从不保存消息正文。
   - `saved-files.json` 记录 Add 把每个文件存在哪里及其 SHA-256，之后再 Add 时只要文件内容未变就直接复用。
   - 两者默认保留 30 天。在 设置 → History 中可以关闭、改变保留时长或清除。
+- 给终端标签页的交接文件放在这段对话的文件夹里，最多保留一天（见「终端标签页」）。
 - 没有遥测，没有历史存档，也没有自己的服务器。
 
 ### 安装测试版

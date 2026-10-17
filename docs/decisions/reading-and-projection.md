@@ -36,9 +36,16 @@ Choices a well-meant pull request could undo. Each says what was decided, why, a
 
 ## 4. Terminals receive one line
 
-- **Decision (owner, 2026-10-16), for the terminal destination still to come.**
+- **Decision (owner, 2026-10-16).**
   - The hand-off goes to a file.
-  - The terminal tab receives a single `@"/path/handoff.md"` reference (or the bare path), with no newline. Multi-line text is never typed or pasted, and Return is never pressed.
+  - The terminal tab receives a single `@"/path/handoff.md"` reference, with no newline. Multi-line text is never typed or pasted, and Return is never pressed.
   - The adapter works at the level of the window or tab, not per agent TUI.
 - **Why.** A terminal may be showing a shell, not an agent. An unexecuted one-line path is harmless at a shell prompt and is a file mention in an agent.
-- The full rules are in [roadmap.md](../roadmap.md#next-forms). Until that adapter exists, terminals stay out of the window picker.
+- **How it was built (owner, 2026-10-17).**
+  - Terminal and iTerm2 first; other terminals stay out of the picker.
+  - The file is `handoff.add-to-claude.md` in the conversation's files folder: one per conversation, replaced by each Add, removed by Clear History and, at launch, once a day old. It is the next message's material, not an archive. A file of that name that Add did not write is never replaced or removed.
+  - Folder names carry no double quote, so the mention never needs escaping; a files folder whose own path has one is refused.
+  - The picker shows each tab's foreground process, and Add refuses when it changed since the tab was chosen.
+  - Listing tabs needs macOS's Automation permission for each terminal, asked for only when the user chooses to.
+  - A tab never says which conversation an agent holds, so its identity is the tab's session: unconfirmed until the user says Continue in this conversation.
+- Code: `native/Terminal.swift`. Tests: `tests/native/TerminalTests.swift`.

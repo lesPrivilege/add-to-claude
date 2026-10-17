@@ -1,6 +1,6 @@
 # Hand-off format
 
-What Add writes into a composer, and what Copy and Save give. It is the outward contract: an agent or person on the receiving side may rely on what this page says, and nothing else. This is **format 1**, as of 0.6.1.
+What Add writes into a composer or a terminal tab's hand-off file, and what Copy and Save give. It is the outward contract: an agent or person on the receiving side may rely on what this page says, and nothing else. This is **format 1**, as of 0.6.1.
 
 - `projectMarkdown` in `src/projection.js` produces it.
 - The app points file lines at local copies with `linkFiles` in `native/Prepared.swift`.
@@ -82,6 +82,16 @@ The arrows and what follows them are annotations, not part of the text. Lines wi
   - `available`.
 
   A link follows when the source gave one. Once Add has saved a file, its line reads ``- <name> — `<absolute path>` · sha256 <hex>``. The path is in backticks; when it contains a backtick itself, double backticks are used. When every file has a copy and only the files kept the text partial, the source line reads `verification: verified`.
+
+## In a terminal tab
+
+The text above goes to `handoff.add-to-claude.md` in the conversation's files folder, and the tab receives one line naming it, with no newline:
+
+```text
+@"/Users/<you>/Downloads/Add to Claude/<conversation title>/handoff.add-to-claude.md"
+```
+
+The path is absolute and never contains a double quote or a control character, so the line needs no escaping. The file is replaced by the next Add from the same conversation, so a receiver should read it when the line arrives.
 
 ## Guarantees
 

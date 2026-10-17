@@ -55,12 +55,17 @@ Settings (SwiftUI, in the panel's place) · global shortcut (Carbon hot key) · 
   3. Apps known to ignore step 1 skip its wait. The target is never activated, and nothing is sent.
   - It reports `inserted` only when the text reads back. A draft that changed but cannot be confirmed (a reformatting paste, for one) is `unconfirmed`; nothing added is `failed`.
   - `conversationIdentity` reads which conversation a window shows from its `AXWebArea`'s `AXURL` or the window's `AXDocument`. Only `https://claude.ai/chat/<uuid>` or `https://claude.ai/epitaxy/local_<uuid>` counts; the walk is bounded to 1 s.
+- **`Terminal.swift`**: terminal tabs as destinations (the owner's rules: [decisions/reading-and-projection.md §4](decisions/reading-and-projection.md#4-terminals-receive-one-line)).
+  - Lists the tabs of Terminal and iTerm2 over Apple Events (one serial queue; values reach a script only as handler arguments), and each tab's foreground process with `ps -t <tty>` (the executable's name only).
+  - Writes the hand-off to `handoff.add-to-claude.md` in the conversation's files folder (`HandoffFiles`), and gives the tab one line, `@"<path>"`, with no newline. iTerm2: `write text … without newline` to that session. Terminal: the tab is brought forward in its window and ⌘V is posted to Terminal alone; neither app is activated.
+  - Before writing, the tab must still be listed and run the process the picker showed. `inserted` means the line was read on the tab's screen once more than before; otherwise `unconfirmed`.
+- **`Destinations.swift`**: one discovery of composer windows and terminal tabs for the picker, valid until the next.
 - **`Files.swift`**: the files folder and the downloader. **`Settings.swift`**: preferences, the hot key and the Settings window. **`Diagnostics.swift`**: each hand-off's stages, times, sizes, outcome and content checks by code in the unified log (counts and fixed names only, never text, titles, file names or paths), and Export…. **`Views.swift`**: SVG template glyphs and small controls.
 
 ## Limits
 
 - Text that goes into a composer is capped at 2 MiB, and the Markdown at 16 MiB. Larger contexts can be saved to a file from the bar, or added a few turns at a time with Choose turns…; nothing is truncated.
-- Terminal-hosted agents are excluded. A terminal needs its own adapter, and shell pasting is not acceptable.
+- Terminals get a file mention, never the text. Only Terminal and iTerm2 are listed; other terminals (Ghostty, WezTerm, Warp, VS Code's) stay out of the picker, and `Composer.swift` never treats any terminal as a composer.
 - A Partial verification still allows Add. The text carries the verification line and its checks.
 - Google may refuse sign-in inside embedded web views. The owner's sign-in works.
 
@@ -73,6 +78,7 @@ Settings (SwiftUI, in the panel's place) · global shortcut (Carbon hot key) · 
 | Settings                                                                              | UserDefaults                                                                                                           | not cleared                                                         |
 | Delivery history and saved files (ids, positions, hashes, paths, times)               | `~/Library/Application Support/add-to-claude/`, each file `{version, items}`; another version is dropped, not migrated | Clear History; pruned at launch by retention                        |
 | Downloaded files                                                                      | the files folder the user chose                                                                                        | never cleared by the app                                            |
+| Hand-off files for terminal tabs, and their paths and times                           | `handoff.add-to-claude.md` in the conversation's files folder; the paths in UserDefaults                               | replaced by each Add; Clear History; at launch, once a day old      |
 | Hand-off diagnostics (stages, times, sizes, outcomes, content-check codes and counts) | the unified log, subsystem `io.lesprivilege.add-to-claude`, category `handoff`                                         | the system's own log rotation; Export… saves this session's events  |
 
-The conversation itself lives only in memory: the page observer keeps at most eight recent conversations, capped in size, and the app keeps the prepared one.
+The conversation itself lives only in memory: the page observer keeps at most eight recent conversations, capped in size, and the app keeps the prepared one. The exceptions are what the user asks for: Save, and the hand-off file an Add to a terminal tab writes.

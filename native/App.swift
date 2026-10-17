@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         Preferences.register()
         DeliveryLog.shared.load() // Also drops what is past the retention period.
         SavedFiles.shared.load()
+        HandoffFiles.shared.remove(olderThan: 24 * 3600) // A hand-off is for the next message, not an archive.
         NSApp.mainMenu = mainMenu()
         panel = ChatPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 760),
                           styleMask: [.titled, .resizable, .nonactivatingPanel, .fullSizeContentView],

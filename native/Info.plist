@@ -14,6 +14,7 @@
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>LSFileQuarantineEnabled</key><true/>
+  <key>NSAppleEventsUsageDescription</key><string>Add to Claude lists your Terminal and iTerm2 tabs and puts a one-line mention of a hand-off file into the tab you choose. It never runs anything there.</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict>

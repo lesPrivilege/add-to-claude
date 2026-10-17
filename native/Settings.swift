@@ -303,9 +303,10 @@ private struct SettingsView: View {
             Button("Clear History", role: .destructive) {
                 DeliveryLog.shared.clear()
                 SavedFiles.shared.clear()
+                HandoffFiles.shared.clear()
             }
         } message: {
-            Text("The next Add into any conversation offers all turns again and downloads its files again. Your conversations, drafts and saved files are not touched.")
+            Text("The next Add into any conversation offers all turns again and downloads its files again. The hand-off files written for terminal tabs are removed. Your conversations, drafts and saved files are not touched.")
         }
         .confirmationDialog("Sign out of ChatGPT in Add to Claude?", isPresented: $confirmSignOut) {
             Button("Sign Out", role: .destructive) { signOut() }
