@@ -30,10 +30,9 @@ final class HandoffBar: NSViewController {
     private var source = SourceState.waiting
     private let registry = ComposerRegistry()
     private var targets: [Target] = []
-    private var blocked: [(TerminalApp, TerminalAccess)] = []
-    /// The chosen destination: a composer window, or a terminal tab. Never both.
+    /// The chosen destination: a composer window, or a terminal window. Never both.
     private var composer: Composer?
-    private var terminal: TerminalTab?
+    private var terminal: WindowChoice?
     private var hasDestination: Bool { composer != nil || terminal != nil }
     private var discovering = false
     private var busy = false
@@ -217,13 +216,13 @@ final class HandoffBar: NSViewController {
         targetRow.isHidden = !trusted
         renderPicker(trusted: trusted)
         picker.isEnabled = !targets.isEmpty && !busy && !discovering
-        let destination = composer.map { safeLabel($0.choice.app.localizedName ?? "app", limit: 24) } ?? terminal?.app.name
+        let destination = (composer?.choice ?? terminal).map { safeLabel($0.app.localizedName ?? "app", limit: 24) }
         add.title = destination.map { "Add to \($0)" } ?? "Add"
         let scope = currentScope
         renderScope(scope, trusted: trusted)
         let what = scope.map { $0.everything ? "this conversation" : $0.detail.lowercased() } ?? "this conversation"
         add.toolTip = composer.map { "Adds \(what) to \($0.choice.displayLabel(limit: 60)) without sending it" }
-            ?? terminal.map { "Saves \(what) as a hand-off file and puts a one-line mention of it in \($0.label) without running it" }
+            ?? terminal.map { "Saves \(what) as a hand-off file, copies a one-line mention of it, and brings \($0.displayLabel(limit: 60)) forward for you to paste" }
         // A terminal gets a file, so only a composer is held to the 2 MB a message box takes.
         let limit = terminal != nil ? maximumMarkdownBytes : maximumTextBytes
         let addable = scope.map { scope in
@@ -404,10 +403,10 @@ final class HandoffBar: NSViewController {
                 window: composer.choice.window, title: composer.choice.title)
     }
 
-    /// A tab's session lasts while it lives and runs the same process: a tty number reused by a new tab,
-    /// or an agent restarted in the same tab, is a new session.
-    private func session(for tab: TerminalTab) -> WindowSession {
-        session(slot: "\(tab.key)|\(tab.launchDate.timeIntervalSince1970)", window: nil, title: "\(tab.tty)|\(tab.processID)")
+    /// A terminal window's session lasts while the window lives; its title is not part of it, since
+    /// terminals retitle windows by what runs in them.
+    private func session(forTerminal choice: WindowChoice) -> WindowSession {
+        session(slot: "\(choice.app.processIdentifier)|\(choice.launchDate.timeIntervalSince1970)", window: choice.window, title: "")
     }
 
     /// Which conversation the window shows: verified when the window names it (its page URL), else this
@@ -421,13 +420,14 @@ final class HandoffBar: NSViewController {
         return TargetIdentity(app: app, conversation: "window:\(session.id)", confidence: session.bound ? .confirmed : .unconfirmed)
     }
 
-    /// A terminal never says which conversation an agent in it holds: always this tab's session.
-    private func identify(_ tab: TerminalTab) -> TargetIdentity {
-        let session = session(for: tab)
-        return TargetIdentity(app: tab.app.rawValue, conversation: "window:\(session.id)", confidence: session.bound ? .confirmed : .unconfirmed)
+    /// A terminal never says which conversation an agent in it holds: always this window's session.
+    private func identify(terminal choice: WindowChoice) -> TargetIdentity {
+        let session = session(forTerminal: choice)
+        return TargetIdentity(app: choice.app.bundleIdentifier ?? "pid-\(choice.app.processIdentifier)", conversation: "window:\(session.id)",
+                              confidence: session.bound ? .confirmed : .unconfirmed)
     }
 
-    private func identifyDestination() -> TargetIdentity? { composer.map(identify) ?? terminal.map(identify) }
+    private func identifyDestination() -> TargetIdentity? { composer.map(identify) ?? terminal.map { identify(terminal: $0) } }
 
     /// Uses this composer as the target, with its identity read now (or as given, for snapshots).
     func select(_ chosen: Composer?, identity: TargetIdentity? = nil) {
@@ -439,15 +439,15 @@ final class HandoffBar: NSViewController {
         render()
     }
 
-    /// Uses this terminal tab as the target.
-    func select(_ tab: TerminalTab) {
+    /// Uses this terminal window as the target.
+    func select(terminal choice: WindowChoice) {
         composer = nil
-        terminal = tab
+        terminal = choice
         select(nil)
     }
 
     @objc private func toggleBinding() {
-        guard let session = composer.map({ session(for: $0) }) ?? terminal.map({ session(for: $0) }) else { return }
+        guard let session = composer.map({ session(for: $0) }) ?? terminal.map({ session(forTerminal: $0) }) else { return }
         session.bound.toggle()
         target = identifyDestination()
         scopeChoice = .auto
@@ -456,9 +456,8 @@ final class HandoffBar: NSViewController {
 
     /// Rebuilt only when its rows change, so page updates never disturb an open menu.
     private func renderPicker(trusted: Bool) {
-        let selected = composer.flatMap { registry.id(of: $0) } ?? terminal.flatMap { registry.id(of: $0) }
+        let selected = composer.flatMap { registry.id(of: $0) } ?? terminal.flatMap { registry.id(ofTerminal: $0) }
         let signature = "\(trusted)|\(discovering)|\(selected ?? "")|" + targets.map(\.id).joined(separator: ",")
-            + "|" + blocked.map { "\($0.0.rawValue):\($0.1)" }.joined(separator: ",")
         guard signature != pickerSignature else { return }
         pickerSignature = signature
         picker.removeAllItems()
@@ -476,18 +475,13 @@ final class HandoffBar: NSViewController {
             self.picker.menu?.addItem(item)
         }
         targets.filter { !$0.terminal }.forEach(row)
-        // Terminal tabs get a one-line mention of a hand-off file; the header says so before one is chosen.
-        let tabs = targets.filter(\.terminal)
-        if !tabs.isEmpty || !blocked.isEmpty {
+        // Terminals get a one-line mention of a hand-off file to paste; the header says so before one is chosen.
+        let terminals = targets.filter(\.terminal)
+        if !terminals.isEmpty {
             picker.menu?.addItem(.separator())
-            picker.addItem(withTitle: "Terminal tabs · a one-line file mention, never run")
+            picker.addItem(withTitle: "Terminals · a one-line file mention for you to paste")
             picker.lastItem?.isEnabled = false
-            tabs.forEach(row)
-            for (app, access) in blocked {
-                picker.addItem(withTitle: access == .notAsked ? "Allow Listing \(app.name) Tabs…" : "\(app.name) Tabs: Allow in System Settings…")
-                picker.lastItem?.representedObject = (access == .notAsked ? "allow:" : "settings:") + app.rawValue
-                picker.lastItem?.image = glyph("lock", size: 14)
-            }
+            terminals.forEach(row)
         }
         picker.menu?.addItem(.separator())
         picker.addItem(withTitle: "Refresh Window List")
@@ -537,17 +531,8 @@ final class HandoffBar: NSViewController {
     func apply(_ found: Discovery) {
         registry.apply(found)
         targets = found.targets
-        blocked = found.blocked
         if let composer, registry.id(of: composer) == nil { self.composer = nil }
-        // A tab that still runs the very process it ran when chosen stays chosen; anything else is chosen again.
-        if let tab = terminal {
-            let now = registry.id(of: tab).flatMap(registry.tab)
-            terminal = now.flatMap { $0.processID == tab.processID && $0.process == tab.process ? $0 : nil }
-            if terminal == nil && !busy {
-                say(now.map { "The \(tab.app.name) tab now runs \($0.process.isEmpty ? "something else" : $0.process). Choose it again." }
-                        ?? "The \(tab.app.name) tab closed.", glyph: "info")
-            }
-        }
+        if let terminal, registry.id(ofTerminal: terminal) == nil { self.terminal = nil }
         if !hasDestination { restoreLastTarget() }
         // The target may show another conversation by now; read it again.
         if !busy { select(composer) } else { render() }
@@ -559,13 +544,9 @@ final class HandoffBar: NSViewController {
             pickerSignature = "" // Re-render restores the selection the refresh item displaced.
             return findWindows()
         }
-        if id.hasPrefix("allow:") || id.hasPrefix("settings:") {
-            pickerSignature = ""
-            return allowTerminal(id)
-        }
-        if let tab = registry.tab(id) {
+        if let choice = registry.terminal(id) {
             say("")
-            return select(tab)
+            return select(terminal: choice)
         }
         let (chosen, problem) = registry.composer(id)
         if let chosen { remember(chosen) }
@@ -590,23 +571,6 @@ final class HandoffBar: NSViewController {
                   return choice.app.bundleIdentifier == last["app"] && choice.title == last["title"]
               }) else { return }
         composer = registry.composer(target.id).composer
-    }
-
-    /// macOS asks once whether Add may control a terminal; after a refusal only System Settings can change it.
-    private func allowTerminal(_ choice: String) {
-        guard let app = TerminalApp(rawValue: String(choice.split(separator: ":", maxSplits: 1)[1])) else { return }
-        if choice.hasPrefix("settings:") {
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
-            say("Turn on \(app.name) under Add to Claude in Privacy & Security → Automation, then refresh the window list.")
-            return render()
-        }
-        // The prompt is an ordinary window; the floating panel would cover it.
-        view.window?.orderOut(nil)
-        say("Answer macOS's question about \(app.name), then reopen this panel; its tabs are listed once allowed.")
-        TerminalScripting.queue.async { [weak self] in
-            _ = TerminalScripting.access(app, ask: true)
-            DispatchQueue.main.async { self?.findWindows() }
-        }
     }
 
     @objc private func allowAccess() {
@@ -759,15 +723,8 @@ final class HandoffBar: NSViewController {
 
     /// Prepares the text for these turns, downloads their files, appends to the draft, and records each
     /// step: prepared → insertion_attempted → composer_inserted, failed or unknown.
-    private func run(_ scope: ResolvedScope, anyProcess: Bool = false) {
+    private func run(_ scope: ResolvedScope) {
         guard !busy, hasDestination, let frozen = prepared, !scope.turns.isEmpty else { return }
-        // Shells and agent CLIs edit a typed line until Return; another program may act on each character.
-        if let tab = terminal, !anyProcess, !editsLines(tab.process) {
-            let running = tab.process.isEmpty ? "a program Add cannot name" : tab.process
-            return say("This tab runs \(running), which may act on typed characters rather than edit a line. Add the line anyway?",
-                       glyph: "info", actions: [("Add Anyway", { [weak self] in self?.run(scope, anyProcess: true) }),
-                                                ("Cancel", { [weak self] in self?.say("") })])
-        }
         // Web editors (Claude's among them) rebuild their message box. Only when the chosen one is gone,
         // take the window's current one, checked exactly as choosing the window again would check it;
         // a box that still exists is never swapped for another, such as an open edit field.
@@ -794,7 +751,7 @@ final class HandoffBar: NSViewController {
         operation = UUID()
         let id = operation
         let trace = HandoffTrace()
-        trace.record(.started, turns: scope.turns.count, scope: scope.mode, target: selected?.choice.app.bundleIdentifier ?? tab?.app.rawValue)
+        trace.record(.started, turns: scope.turns.count, scope: scope.mode, target: (selected?.choice ?? tab)?.app.bundleIdentifier)
         let receipt = frozen.sourceId.map {
             log.begin(source: $0, target: identity, mode: scope.mode, turns: scope.turns, attachments: scope.turns.flatMap(\.files))
         }
@@ -803,7 +760,7 @@ final class HandoffBar: NSViewController {
             // Files can take a while: the target window may show another conversation by the time we write.
             return current.revision == frozen.revision && self.isCurrent(frozen) && self.identifyDestination() == identity
         }
-        let app = selected.map { safeLabel($0.choice.app.localizedName ?? "the app", limit: 24) } ?? tab?.app.name ?? "the app"
+        let app = safeLabel((selected?.choice ?? tab)?.app.localizedName ?? "the app", limit: 24)
         let what = scope.everything ? "all \(scope.turns.count) turn\(scope.turns.count == 1 ? "" : "s")"
             : "\(scope.turns.count) turn\(scope.turns.count == 1 ? "" : "s")"
         say("Preparing \(what)…", glyph: "waiting")
@@ -814,7 +771,7 @@ final class HandoffBar: NSViewController {
         let copyLine = { [weak self] in
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(mention, forType: .string)
-            self?.say("The line is on the clipboard: click the tab and paste it. Nothing was run.", glyph: "done", result: true)
+            self?.say("The line is on the clipboard again: click where it should go and press ⌘V. Nothing was run.", glyph: "done", result: true)
         }
         let fail = { [weak self] (message: String) in
             trace.record(.failed)
@@ -827,7 +784,7 @@ final class HandoffBar: NSViewController {
             guard tab != nil || markdown.utf8.count <= maximumTextBytes else {
                 return fail("\(what.prefix(1).uppercased() + what.dropFirst()) come to \(ByteCountFormatter.string(fromByteCount: Int64(markdown.utf8.count), countStyle: .file)), over the 2 MB a message box takes. Choose fewer turns, or Save.")
             }
-            // A terminal tab gets the text as a file and a one-line mention of it.
+            // A terminal gets the text as a file and a one-line mention of it, for the user to paste.
             var fileName = ""
             if tab != nil {
                 switch HandoffFiles.shared.write(markdown, title: frozen.title, conversation: frozen.sourceId) {
@@ -847,7 +804,7 @@ final class HandoffBar: NSViewController {
                 if let selected {
                     appendToComposer(selected, text: markdown, operationValid: valid, revalidateSource: { reply in reply(valid()) }, completion: done)
                 } else if let tab {
-                    appendToTerminal(tab, line: mention, operationValid: valid, completion: done)
+                    handToTerminal(tab, line: mention, operationValid: valid, completion: done)
                 }
             }
             deliver { [weak self] message, outcome in
@@ -858,17 +815,18 @@ final class HandoffBar: NSViewController {
                     trace.record(.inserted)
                     if let receipt { self.log.move(receipt, to: .composerInserted) }
                     self.scopeChoice = .auto
-                    self.finish(tab != nil ? "Saved \(what) as \(fileName) and put a mention of it in the \(app) tab. Nothing was run.\(files)"
-                                : "Added \(what) to the draft in \(app). Nothing was sent.\(files)", glyph: "done")
+                    self.finish("Added \(what) to the draft in \(app). Nothing was sent.\(files)", glyph: "done")
                 case .unconfirmed:
                     trace.record(.unconfirmed)
                     if let receipt { self.log.move(receipt, to: .unknown) }
-                    self.finish("Could not confirm. \(message)\(files)", glyph: "unverified", actions: receipt.map { receipt in
+                    // A terminal's line is pasted by the user, so whether it landed is theirs to say.
+                    let text = tab != nil ? "Saved \(what) as \(fileName). \(message)" : "Could not confirm. \(message)"
+                    self.finish(text + files, glyph: tab != nil ? "info" : "unverified", actions: receipt.map { receipt in
                         [("It's There", { [weak self] in trace.record(.confirmedByUser); self?.settle(receipt, inserted: true) }),
                          ("It's Not", { [weak self] in
                              trace.record(.declinedByUser)
                              self?.settle(receipt, inserted: false)
-                             if tab != nil { copyLine() } // So it can be pasted by hand.
+                             if tab != nil { copyLine() } // So it can be pasted again.
                          })]
                     } ?? [])
                 case .failed:

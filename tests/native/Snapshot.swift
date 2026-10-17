@@ -107,13 +107,13 @@ import AppKit
         let bound = TargetIdentity(app: "com.example.composer", conversation: "window:snapshot", confidence: .confirmed)
         render(trustedBar(sessionLog, prepared(42), identity: bound).view, width: 480, to: output.appendingPathComponent("bar-scope-continuing.png"))
 
-        // A terminal tab as the target: Add names the terminal; nothing about the tab is inferred.
+        // A terminal window as the target: Add names the terminal; nothing about the window is inferred.
         let terminal = trustedBar(memory(), prepared(42), identity: verified)
-        let tab = TerminalTab(app: .terminal, pid: NSRunningApplication.current.processIdentifier, launchDate: Date(), window: "12",
-                              index: 2, tty: "/dev/ttys004", session: "12:/dev/ttys004", title: "agent", process: "claude", processID: 300, numbered: true)
-        terminal.apply(Discovery(targets: [Target(id: "tab", app: "Terminal", window: tab.label, icon: nil, terminal: true)],
-                                 tabs: ["tab": tab], blocked: [(.iterm, .notAsked)]))
-        terminal.select(tab)
+        let app = NSRunningApplication.current
+        let terminalWindow = WindowChoice(app: app, launchDate: app.launchDate ?? Date(), window: AXUIElementCreateApplication(app.processIdentifier), title: "claude — 80×24")
+        terminal.apply(Discovery(targets: [Target(id: "terminal", app: "Terminal", window: terminalWindow.title, icon: nil, terminal: true)],
+                                 terminals: ["terminal": terminalWindow]))
+        terminal.select(terminal: terminalWindow)
         render(terminal.view, width: 480, to: output.appendingPathComponent("bar-terminal.png"))
 
         // Just added everything: Add asks before inserting the same turns twice.

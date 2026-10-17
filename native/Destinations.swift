@@ -1,7 +1,7 @@
 import AppKit
 import ApplicationServices
 
-// What the window picker offers: composer windows (Composer.swift) and terminal tabs (Terminal.swift).
+// What the window picker offers: composer windows (Composer.swift) and terminal windows (Terminal.swift).
 
 struct Target {
     let id: String
@@ -11,24 +11,22 @@ struct Target {
     var terminal = false
 }
 
-/// One scan of open windows and terminal tabs. Built off the main thread, then handed to the registry on main.
+/// One scan of open windows. Built off the main thread, then handed to the registry on main.
 struct Discovery {
     let targets: [Target]
     var choices: [String: WindowChoice] = [:]
-    var tabs: [String: TerminalTab] = [:]
-    /// Terminals that are running but whose tabs Add may not list yet.
-    var blocked: [(TerminalApp, TerminalAccess)] = []
+    var terminals: [String: WindowChoice] = [:]
 }
 
-/// Live windows of regular apps and tabs of the terminals, re-read each time the panel opens. Ids are
-/// valid until the next discovery.
+/// Live windows of regular apps, composers and terminals apart, re-read each time the panel opens. Ids
+/// are valid until the next discovery.
 final class ComposerRegistry {
     private var choices: [String: WindowChoice] = [:]
-    private var tabs: [String: TerminalTab] = [:]
+    private var terminals: [String: WindowChoice] = [:]
 
     func apply(_ discovery: Discovery) {
         choices = discovery.choices
-        tabs = discovery.tabs
+        terminals = discovery.terminals
     }
 
     static func discover() -> Discovery {
@@ -64,21 +62,33 @@ final class ComposerRegistry {
                 ?? (choice.title == choice.app.localizedName && !choice.needsIdentityCue ? nil : choice.displayLabel(limit: 60))
             return Target(id: id, app: app, window: label ?? "", icon: choice.app.icon)
         }
-        let terminals = discoverTerminalTabs()
-        var tabs: [String: TerminalTab] = [:]
-        let tabTargets = terminals.tabs.map { tab in
-            let id = UUID().uuidString
-            tabs[id] = tab
-            return Target(id: id, app: tab.app.name, window: tab.label,
-                          icon: NSRunningApplication(processIdentifier: tab.pid)?.icon, terminal: true)
+        // Terminal windows: any terminal app's windows, whatever it is. Each gets the line on the clipboard.
+        var terminals: [String: WindowChoice] = [:]
+        let terminalApps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && !$0.isTerminated && isTerminal($0) }
+            .sorted { ($0.localizedName ?? "").localizedCaseInsensitiveCompare($1.localizedName ?? "") == .orderedAscending }
+        var terminalTargets: [Target] = []
+        for app in terminalApps.prefix(20) {
+            guard let windows = attribute(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute) as? [AXUIElement] else { continue }
+            let listed = windows.prefix(30).compactMap { WindowChoice(app: app, window: $0) }
+            for (index, choice) in listed.enumerated() {
+                let id = UUID().uuidString
+                terminals[id] = choice
+                // Window titles repeat across terminal windows ("zsh"); the position keeps rows apart.
+                choice.identityOrdinal = index + 1
+                choice.needsIdentityCue = listed.filter { $0.title == choice.title }.count > 1
+                terminalTargets.append(Target(id: id, app: safeLabel(app.localizedName ?? "Terminal", limit: 48),
+                                              window: choice.displayLabel(limit: 60), icon: app.icon, terminal: true))
+            }
         }
-        return Discovery(targets: targets + tabTargets, choices: choices, tabs: tabs, blocked: terminals.blocked)
+        return Discovery(targets: targets + terminalTargets, choices: choices, terminals: terminals)
     }
 
-    /// The current row for an already chosen tab, by its session, if it is still listed.
-    func id(of tab: TerminalTab) -> String? { tabs.first { $0.value.key == tab.key }?.key }
+    /// The current row for an already chosen terminal window, if it is still listed.
+    func id(ofTerminal choice: WindowChoice) -> String? {
+        terminals.first { $0.value.app.processIdentifier == choice.app.processIdentifier && CFEqual($0.value.window, choice.window) }?.key
+    }
 
-    func tab(_ id: String) -> TerminalTab? { tabs[id] }
+    func terminal(_ id: String) -> WindowChoice? { terminals[id] }
 
     /// The id of the current row for an already chosen composer, if its window is still listed.
     func id(of composer: Composer) -> String? {

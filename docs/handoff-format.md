@@ -1,6 +1,6 @@
 # Hand-off format
 
-What Add writes into a composer or a terminal tab's hand-off file, and what Copy and Save give. It is the outward contract: an agent or person on the receiving side may rely on what this page says, and nothing else. This is **format 1**, as of 0.6.1.
+What Add writes into a composer or a terminal's hand-off file, and what Copy and Save give. It is the outward contract: an agent or person on the receiving side may rely on what this page says, and nothing else. This is **format 1**, as of 0.6.1.
 
 - `projectMarkdown` in `src/projection.js` produces it.
 - The app points file lines at local copies with `linkFiles` in `native/Prepared.swift`.
@@ -83,9 +83,9 @@ The arrows and what follows them are annotations, not part of the text. Lines wi
 
   A link follows when the source gave one. Once Add has saved a file, its line reads ``- <name> — `<absolute path>` · sha256 <hex>``. The path is in backticks; when it contains a backtick itself, double backticks are used. When every file has a copy and only the files kept the text partial, the source line reads `verification: verified`.
 
-## In a terminal tab
+## For a terminal
 
-The text above goes to `handoff-<id>.add-to-claude.md` in the conversation's files folder, `<id>` being the first eight letters and digits of the ChatGPT conversation id (`unsaved` before it has one),, and the tab receives one line naming it, with no newline:
+The text above goes to `handoff-<id>.add-to-claude.md` in the conversation's files folder, `<id>` being the first eight letters and digits of the ChatGPT conversation id (`unsaved` before it has one),, and the clipboard receives one line naming it, with no newline, for the user to paste into the terminal:
 
 ```text
 @"/Users/<you>/Downloads/Add to Claude/<conversation title>/handoff-6812a3f0.add-to-claude.md"

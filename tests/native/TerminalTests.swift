@@ -1,68 +1,12 @@
 import Foundation
 
-// The terminal adapter's own logic: reading tab listings and `ps`, the one-line mention, reading a
-// line back off a screen, and the hand-off files' lifecycle. Synthetic rows and a throwaway folder;
-// no Apple Events are sent and no real terminal is touched.
+// The terminal adapter's own logic: the one-line mention a terminal is given and the hand-off files'
+// lifecycle. A throwaway folder; no real terminal is touched.
 @main enum TerminalTests {
     static var checks = 0
     static func check(_ condition: Bool, _ label: String) {
         guard condition else { print("FAIL: \(label)"); exit(1) }
         checks += 1
-    }
-
-    static let launch = Date(timeIntervalSince1970: 1_800_000_000)
-
-    static func listings() {
-        let rows = [
-            ["12", "1", "/dev/ttys003", "zsh", ""],
-            ["12", "2", "/dev/ttys004", "claude", ""],
-            ["13", "1", "/dev/ttys009", "", ""],
-            ["13", "1", "/dev/tty003", "not a pty", ""],
-            ["x1", "1", "/dev/ttys010", "bad window", ""],
-            ["14", "0", "/dev/ttys011", "bad index", ""],
-            ["14", "1", "/dev/ttys012"],
-        ]
-        let tabs = terminalTabs(.terminal, pid: 42, launchDate: launch, rows: rows)
-        check(tabs.map(\.tty) == ["/dev/ttys003", "/dev/ttys004", "/dev/ttys009"], "only well-formed rows become tabs")
-        check(tabs[0].session == "12:/dev/ttys003" && tabs[0].key == "com.apple.Terminal|42|12:/dev/ttys003", "a Terminal tab is named by its window and tty")
-        check(tabs[0].numbered && tabs[1].numbered && !tabs[2].numbered, "tab numbers only where a window has several")
-        var shown = tabs[1]
-        shown.process = "claude"
-        check(shown.label == "claude — claude · tab 2", "label: process, title, tab")
-        check(tabs[2].label == "window 13", "an untitled tab names its window")
-        let title = terminalTabs(.terminal, pid: 42, launchDate: launch, rows: [["1", "1", "/dev/ttys001", "a\u{1b}[31mb\nc", ""]])
-        check(title.first?.title == "a[31mbc", "control characters are dropped from titles")
-
-        let iterm = terminalTabs(.iterm, pid: 7, launchDate: launch, rows: [
-            ["5", "1", "/dev/ttys020", "codex", "w0t0p0:6B1E9F2A-1C2D-4E5F-8A9B-0C1D2E3F4A5B"],
-            ["5", "1", "/dev/ttys021", "split pane", "w0t0p1:7C2E"],
-            ["5", "2", "/dev/ttys022", "bad session", "a b"],
-            ["5", "3", "/dev/ttys023", "no session", ""],
-        ])
-        check(iterm.map(\.tty) == ["/dev/ttys020", "/dev/ttys021"], "an iTerm2 row needs a plain session id")
-        check(iterm[0].session == "w0t0p0:6B1E9F2A-1C2D-4E5F-8A9B-0C1D2E3F4A5B", "an iTerm2 pane is named by its session id")
-        check(!iterm[0].numbered, "two panes of one tab are not numbered tabs")
-        check(terminalTabs(.terminal, pid: 1, launchDate: launch, rows: Array(repeating: ["1", "1", "/dev/ttys001", "", ""], count: 500)).count == 200,
-              "at most 200 tabs are read")
-        // Rows that would read the same get their tty, so none can hide another in the picker.
-        let panes = distinguish(terminalTabs(.iterm, pid: 7, launchDate: launch, rows: [
-            ["5", "1", "/dev/ttys020", "-zsh", "s1"], ["5", "1", "/dev/ttys021", "-zsh", "s2"], ["6", "1", "/dev/ttys030", "other", "s3"],
-        ]).map { tab in var tab = tab; tab.process = "zsh"; return tab })
-        check(panes.map(\.label) == ["zsh — -zsh · ttys020", "zsh — -zsh · ttys021", "zsh — other"], "same labels get their tty")
-        check(Set(panes.map(\.label)).count == panes.count, "every row differs")
-        check(isTTY("/dev/ttys000") && !isTTY("/dev/ttys") && !isTTY("/dev/ttys0001 ") && !isTTY("ttys001"), "tty shape")
-    }
-
-    static func processes() {
-        let leader = foregroundProcess("  100   100   300 -zsh\n  300   300   300 /opt/homebrew/bin/claude\n  301   300   300 node\n")
-        check(leader?.name == "claude" && leader?.id == 300, "the foreground group's leader, with its id")
-        check(foregroundProcess("  100   100   100 -zsh\n")?.name == "zsh", "a login shell at its prompt")
-        check(foregroundProcess("  100   100   300 -zsh\n  301   300   300 /usr/bin/python3\n")?.name == "python3", "a member when the leader is gone")
-        check(foregroundProcess("  100   100   200 -zsh\n") == nil, "no process in the foreground group")
-        check(foregroundProcess("garbage\n\n  1 2\n") == nil, "unreadable output")
-        check(foregroundProcess("  9  9  9 /Applications/My Tool.app/Contents/MacOS/my tool\n")?.name == "my tool", "a name with spaces")
-        check(editsLines("zsh") && editsLines("claude") && editsLines("codex") && editsLines("fish"), "shells and agents edit a line")
-        check(!editsLines("vim") && !editsLines("less") && !editsLines("") && !editsLines("node"), "anything else is asked about first")
     }
 
     static func mentions() {
@@ -83,23 +27,6 @@ import Foundation
         check(risky.lastPathComponent == "Fix _(curl x|sh) 'id' a_b now", "folder names carry nothing a shell acts on")
         check(handoffMention(risky.appendingPathComponent("h.md").path) != nil || FilesFolder.root.path.rangeOfCharacter(from: shellActiveCharacters) != nil,
               "so a mention of a file there is accepted")
-    }
-
-    static func readback() {
-        let line = "@\"/Users/a/Downloads/Add to Claude/A long conversation title/handoff.add-to-claude.md\""
-        check(occurrences(of: line, in: "% " + line) == 1, "on one line")
-        let wrapped = "╭────────╮\n│ > @\"/Users/a/Downloads/Add to Claude/A long conv │\n│ ersation title/handoff.add-to-claude.md\"     │\n╰────────╯"
-        check(occurrences(of: line, in: wrapped) == 1, "wrapped inside a TUI's frame")
-        check(occurrences(of: line, in: wrapped + "\n" + wrapped) == 2, "counted each time it shows")
-        check(occurrences(of: line, in: "% ls") == 0, "absent")
-        check(occurrences(of: "  ", in: "a  b") == 0, "an empty line never matches")
-    }
-
-    static func access() {
-        check(terminalAccess(noErr) == .allowed, "allowed")
-        check(terminalAccess(OSStatus(errAEEventWouldRequireUserConsent)) == .notAsked, "not asked yet")
-        check(terminalAccess(OSStatus(errAEEventNotPermitted)) == .refused, "refused")
-        check(terminalAccess(OSStatus(procNotFound)) == .refused, "anything else does not list tabs")
     }
 
     static func files() throws {
@@ -150,11 +77,7 @@ import Foundation
     }
 
     static func main() throws {
-        listings()
-        processes()
         mentions()
-        readback()
-        access()
         try files()
         print("PASS terminal: \(checks) checks")
     }

@@ -2,17 +2,15 @@
 
 Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release notes](release/0.6.1.md#review-and-checks): `npm test` 120/120, delivery log 120, WebKit 34, Accessibility 54 (owner's terminal), browser 14/14 carried over from 0.6.0 (observer unchanged), and the owner's run on rc.2 and rc.3. Everything below is unchanged by 0.6.1 unless that page says otherwise.
 
-### On `main`, not yet released: terminal tabs (2026-10-17)
+### On `main`, not yet released: terminals (2026-10-17)
 
-| Area                                                                                                   | Result                                                                                                       |
-| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Terminal adapter logic: listings, foreground process, the one-line mention, read-back, hand-off files  | Synthetic: 63 checks (`tests/native/TerminalTests.swift`)                                                    |
-| Terminal's AppleScript compiles against Terminal's dictionary (`osacompile`, no events sent)           | Synthetic                                                                                                    |
-| iTerm2's AppleScript compiles                                                                          | **Not run**: iTerm2 is not installed on the build Mac                                                        |
-| Listing tabs, the Automation prompt, and Add into Terminal and iTerm2 with a real agent and at a shell | **Not run**: needs the owner's run; no real terminal is touched by the suites                                |
-| Terminal: pressing its Paste menu item in the background lands in the tab brought forward              | **Not run**: the open question of this adapter; if it does not, the bar says so and It's Not copies the line |
-| Delivery log and scope, WebKit                                                                         | Synthetic: 128 and 45, unchanged by this work                                                                |
-| Accessibility suite                                                                                    | Synthetic: 54, run from the owner's terminal at `5715845` (2026-10-17)                                       |
+| Area                                                                                              | Result                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Terminal adapter logic: the one-line mention and the hand-off files                               | Synthetic: 33 checks (`tests/native/TerminalTests.swift`)                                                                                                            |
+| Automatic delivery into a Terminal tab (Apple Events, then its Paste menu item in the background) | Owner, on the first build (`5715845`): tabs listed after the Automation prompt, but the line did not land; the copied line pasted by hand worked. Path removed after |
+| Add to a terminal window: file written, line copied, window brought forward, pasted by hand       | **Not run** on this build; the owner's paste of the copied line worked on the first build                                                                            |
+| Delivery log and scope, WebKit                                                                    | Synthetic: 128 and 45                                                                                                                                                |
+| Accessibility suite                                                                               | Synthetic: 54, run from the owner's terminal at `5715845` (2026-10-17)                                                                                               |
 
 ### 0.6.1 on the owner's Mac (installed release build, 2026-10-17)
 

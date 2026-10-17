@@ -38,16 +38,14 @@ Choices a well-meant pull request could undo. Each says what was decided, why, a
 
 - **Decision (owner, 2026-10-16).**
   - The hand-off goes to a file.
-  - The terminal tab receives a single `@"/path/handoff.md"` reference, with no newline. Multi-line text is never typed or pasted, and Return is never pressed.
+  - The terminal receives a single `@"/path/handoff.md"` reference, with no newline. Multi-line text is never typed or pasted, and Return is never pressed.
   - The adapter works at the level of the window or tab, not per agent TUI.
 - **Why.** A terminal may be showing a shell, not an agent. An unexecuted one-line path is harmless at a shell prompt and is a file mention in an agent.
 - **How it was built (owner, 2026-10-17).**
-  - Terminal and iTerm2 first; other terminals stay out of the picker.
+  - Add never types or pastes into a terminal. It writes the file, puts the line on the clipboard and brings the chosen terminal window forward; the user pastes with ⌘V. This works the same in any terminal app, needs no Automation permission and no per-terminal script.
+  - Why not automatic: delivering into a chosen tab was built first, for Terminal and iTerm2 over Apple Events. On the owner's Mac, Terminal did not take the line while in the background (its Paste menu item, pressed over Accessibility), and iTerm2 was not available to try. The owner chose one paste-by-hand path for every terminal over two fragile automatic ones.
+  - So a target is a terminal window, not a tab, and Add neither reads the screen nor names the foreground process; the user sees both when pasting. A copied line is not a pasted one: the outcome waits for It's There or It's Not.
   - The file is `handoff-<id>.add-to-claude.md` in the conversation's files folder, named by the source conversation's id: one per conversation, replaced by each Add, removed by Clear History and once a day old (at launch or when the panel opens). It is the next message's material, not an archive. A file of that name that Add did not write, or that changed since, is never replaced or removed.
   - The path carries nothing a shell acts on inside double quotes (`"`, `$`, backticks, `\`, `!`): folder names are cleaned of them, and a files folder whose own path has one is refused. A line left at a prompt and run by Return then runs nothing.
-  - The picker shows each tab's foreground process first, and Add refuses when the process (its id, not just its name) changed since the tab was chosen.
-  - A program that is not a shell or a known agent CLI may act on each character (vim, less), so Add asks before giving it the line (owner, 2026-10-17).
-  - Terminal gets the line by its own Paste menu item, found by its ⌘V shortcut, rather than a posted keystroke that a keyboard layout could turn into another command.
-  - Listing tabs needs macOS's Automation permission for each terminal, asked for only when the user chooses to.
-  - A tab never says which conversation an agent holds, so its identity is the tab's session: unconfirmed until the user says Continue in this conversation.
+  - A terminal never says which conversation an agent holds, so its identity is the window's session: unconfirmed until the user says Continue in this conversation.
 - Code: `native/Terminal.swift`. Tests: `tests/native/TerminalTests.swift`.
