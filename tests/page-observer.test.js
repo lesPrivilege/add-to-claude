@@ -7,7 +7,7 @@ import { importBrowserResponse } from '../src/chatgpt-response.js';
 const page = 'https://chatgpt.com/c/a';
 const endpoint = (id) => `https://chatgpt.com/backend-api/conversation/${id}`;
 const tick = () => new Promise((resolve) => setImmediate(resolve));
-function harness(initialURL = page, { socketSupport = false } = {}) {
+function harness(initialURL = page, { socketSupport = false, timers = globalThis } = {}) {
   const messages = [],
     requests = [];
   let observerPort;
@@ -72,8 +72,8 @@ function harness(initialURL = page, { socketSupport = false } = {}) {
         observerPort = this.port1;
       }
     },
-    setTimeout,
-    clearTimeout,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
     addEventListener() {},
   });
   vm.runInContext(createPageObserverScript(), context);
@@ -285,6 +285,8 @@ test('a failed stream releases its job so a later normal GET can recover the sou
   await sending;
   await tick();
   assert.equal(h.messages.at(-1).kind, 'unavailable');
+  // A failed reply is not a failed refetch: the app drops what it showed.
+  assert.equal(h.messages.at(-1).refetch, false);
   const loading = h.request('a');
   h.reply(1, JSON.stringify(sourceRecord()));
   await loading;
@@ -342,6 +344,8 @@ test('GET decoding failure cancels only the observer branch before releasing it'
   assert.equal(await loading, 'website body remains readable');
   await tick();
   assert.equal(h.messages.at(-1).kind, 'unavailable');
+  // The page could not load the conversation again: what was read of it before still stands.
+  assert.equal(h.messages.at(-1).refetch, true);
   assert.equal(observerCancelled, 1);
   h.navigate('/c/b');
   await tick();
@@ -610,4 +614,338 @@ test('sending a message tells the app a reply is in progress, before any answer 
     h.messages.map((message) => message.kind),
     ['changed', 'replying'],
   );
+});
+
+// A manual clock for the socket's inactivity timeout.
+function manualClock() {
+  let now = 0,
+    next = 1;
+  const pending = new Map();
+  return {
+    setTimeout: (callback, ms) => {
+      pending.set(next, { at: now + ms, callback });
+      return next++;
+    },
+    clearTimeout: (id) => pending.delete(id),
+    advance(ms) {
+      now += ms;
+      for (const [id, timer] of [...pending])
+        if (timer.at <= now && pending.delete(id)) timer.callback();
+    },
+  };
+}
+
+const socketTopic = 'conversation-turn-synthetic';
+const socketFrame = (encoded) => ({
+  type: 'message',
+  topic_id: socketTopic,
+  payload: { payload: { encoded_item: encoded } },
+});
+const socketAnswer = (text) =>
+  socketFrame(
+    `data: ${JSON.stringify({ conversation_id: 'a', message: originalMessage('a1', 'assistant', text) })}`,
+  );
+const handoffWire = (id = 'a') =>
+  `data: ${JSON.stringify({ type: 'stream_handoff', conversation_id: id, options: [{ type: 'subscribe_ws_topic', topic_id: socketTopic }] })}\n\ndata: [DONE]\n\n`;
+
+// The conversation is loaded, a question is sent, and its POST stream hands the answer to the socket.
+async function socketReply(options = {}) {
+  const h = harness(page, { socketSupport: true, ...options });
+  const loading = h.request('a');
+  h.reply(0, JSON.stringify(sourceRecord()));
+  await loading;
+  await tick();
+  const socket = h.socket();
+  const sending = h.post({
+    action: 'next',
+    conversation_id: 'a',
+    parent_message_id: 'a0',
+    messages: [originalMessage('u1', 'user', 'Synthetic question.')],
+  });
+  socket.send(
+    JSON.stringify([{ command: { type: 'subscribe', topic_id: socketTopic, offset: '0' } }]),
+  );
+  h.reply(1, handoffWire(), 'text/event-stream');
+  await sending;
+  await tick();
+  return { h, socket };
+}
+const responses = (h) => h.messages.filter((packet) => packet.kind === 'response');
+
+test('a socket handoff keeps the reply in progress until the socket part completes', async () => {
+  const { h, socket } = await socketReply();
+  assert.equal(
+    responses(h).length,
+    1,
+    'only the earlier GET: the POST part alone is not published',
+  );
+  assert.equal(h.messages.at(-1).kind, 'replying');
+  socket.emit(
+    'message',
+    JSON.stringify([socketAnswer('Socket answer.'), socketFrame('data: [DONE]')]),
+  );
+  await tick();
+  const packet = responses(h).at(-1);
+  assert.equal(packet.method, 'POST');
+  const model = importBrowserResponse(packet.body, packet);
+  assert.deepEqual(
+    model.turns.map((turn) => turn.id),
+    ['u0', 'a0', 'u1', 'a1'],
+  );
+  assert.equal(model.turns[3].markdown, 'Socket answer.');
+  assert.equal(responses(h).length, 2);
+});
+
+test('a socket that closes before its answer, and is not renewed, publishes the POST part as partial', async () => {
+  const clock = manualClock();
+  const { h, socket } = await socketReply({ timers: clock });
+  socket.emit('close');
+  await tick();
+  assert.equal(responses(h).length, 1, 'the page may still reconnect');
+  clock.advance(120000);
+  await tick();
+  const packet = responses(h).at(-1);
+  assert.equal(packet.method, 'POST');
+  const model = importBrowserResponse(packet.body, packet);
+  assert.deepEqual(
+    model.turns.map((turn) => turn.id),
+    ['u0', 'a0', 'u1'],
+  );
+  assert.equal(model.verification.status, 'partial');
+});
+
+test('the socket times out only after two minutes with nothing for its turn', async () => {
+  const clock = manualClock();
+  const { h, socket } = await socketReply({ timers: clock });
+  // Five minutes of a long answer, a frame every 90 s, never fails.
+  for (let minute = 0; minute < 3; minute++) {
+    clock.advance(90000);
+    socket.emit('message', JSON.stringify(socketAnswer(`Part ${minute}.`)));
+  }
+  // Frames for another topic on the same socket do not keep this turn alive.
+  clock.advance(90000);
+  socket.emit('message', JSON.stringify({ type: 'message', topic_id: 'presence', payload: {} }));
+  assert.equal(responses(h).length, 1, 'still in progress after 360 s');
+  clock.advance(30000);
+  await tick();
+  const packet = responses(h).at(-1);
+  assert.equal(packet.method, 'POST', 'silent for 120 s: the POST part, as partial');
+  assert.equal(importBrowserResponse(packet.body, packet).verification.status, 'partial');
+  socket.emit('message', JSON.stringify([socketAnswer('Too late.'), socketFrame('data: [DONE]')]));
+  await tick();
+  assert.equal(responses(h).length, 2, 'a late answer after the timeout is not published');
+});
+
+test('a socket handoff the page never subscribes to still ends in a partial result', async () => {
+  const clock = manualClock();
+  const h = harness(page, { socketSupport: true, timers: clock });
+  const sending = h.post({
+    action: 'next',
+    conversation_id: 'a',
+    parent_message_id: 'a0',
+    messages: [originalMessage('u1', 'user', 'Synthetic question.')],
+  });
+  h.reply(0, handoffWire(), 'text/event-stream');
+  await sending;
+  await tick();
+  assert.equal(responses(h).length, 0);
+  clock.advance(120000);
+  assert.equal(responses(h).at(-1)?.method, 'POST');
+});
+
+test('a new chat that gets its address while the socket streams publishes once, when it completes', async () => {
+  const h = harness('https://chatgpt.com/', { socketSupport: true });
+  const socket = h.socket();
+  const sending = h.post({
+    action: 'next',
+    parent_message_id: 'root',
+    messages: [originalMessage('u1', 'user', 'New chat.')],
+  });
+  socket.send(
+    JSON.stringify([{ command: { type: 'subscribe', topic_id: socketTopic, offset: '0' } }]),
+  );
+  h.reply(0, handoffWire(), 'text/event-stream');
+  await sending;
+  await tick();
+  h.navigate('/c/a');
+  assert.equal(responses(h).length, 0, 'the address alone publishes nothing');
+  assert.equal(h.messages.at(-1).kind, 'replying', 'and does not end the reply');
+  socket.emit(
+    'message',
+    JSON.stringify([socketAnswer('Socket answer.'), socketFrame('data: [DONE]')]),
+  );
+  await tick();
+  const packet = responses(h).at(-1);
+  assert.equal(packet.pageUrl, page);
+  const model = importBrowserResponse(packet.body, packet);
+  assert.equal(model.source.id, 'a');
+  assert.equal(model.turns.at(-1).markdown, 'Socket answer.');
+});
+
+test('a refetch while the answer arrives over the socket leaves the socket part to end the reply', async () => {
+  const { h, socket } = await socketReply();
+  const before = h.messages.length;
+  // Shown again, the website refetches the conversation with its answer only partway.
+  const partway = sourceRecord();
+  partway.mapping.a0.children = ['u1'];
+  partway.mapping.u1 = {
+    id: 'u1',
+    parent: 'a0',
+    children: ['a1'],
+    message: originalMessage('u1', 'user', 'Synthetic question.'),
+  };
+  partway.mapping.a1 = {
+    id: 'a1',
+    parent: 'u1',
+    children: [],
+    message: { ...originalMessage('a1', 'assistant', 'Socket'), status: 'in_progress' },
+  };
+  partway.current_node = 'a1';
+  const loading = h.request('a');
+  h.reply(2, JSON.stringify(partway));
+  await loading;
+  await tick();
+  assert.equal(h.messages.length, before, 'no change notice and no partial result');
+  socket.emit(
+    'message',
+    JSON.stringify([socketAnswer('Socket answer.'), socketFrame('data: [DONE]')]),
+  );
+  await tick();
+  const packet = h.messages.at(-1);
+  assert.equal(packet.kind, 'response');
+  assert.equal(packet.method, 'POST');
+  const model = importBrowserResponse(packet.body, packet);
+  assert.deepEqual(
+    model.turns.map((turn) => turn.id),
+    ['u0', 'a0', 'u1', 'a1'],
+  );
+  assert.equal(model.turns[3].markdown, 'Socket answer.');
+});
+
+test('a refetch with the body the app already shows posts nothing', async () => {
+  const h = harness();
+  const body = JSON.stringify(sourceRecord());
+  const first = h.request('a');
+  h.reply(0, body);
+  await first;
+  await tick();
+  assert.deepEqual(
+    h.messages.map((packet) => packet.kind),
+    ['changed', 'response'],
+  );
+  const again = h.request('a');
+  h.reply(1, body);
+  await again;
+  await tick();
+  assert.equal(h.messages.length, 2, 'an identical refetch is a no-op');
+  // A different body replaces the result directly; nothing was announced while it loaded.
+  const edited = sourceRecord();
+  edited.title = 'Edited title';
+  const third = h.request('a');
+  h.reply(2, JSON.stringify(edited));
+  await third;
+  await tick();
+  assert.deepEqual(
+    h.messages.map((packet) => packet.kind),
+    ['changed', 'response', 'response'],
+  );
+  assert.match(h.messages.at(-1).body, /Edited title/u);
+  // A refetch that publishes nothing still tells the app its result may be stale.
+  const failed = h.fetchWith(endpoint('a'));
+  h.requests[3].resolve(new Response('', { status: 503 }));
+  await failed;
+  await tick();
+  assert.equal(h.messages.at(-1).kind, 'changed');
+  // After that notice the same body is sent again.
+  const after = h.request('a');
+  h.reply(4, JSON.stringify(edited));
+  await after;
+  await tick();
+  assert.deepEqual(
+    h.messages.slice(-2).map((packet) => packet.kind),
+    ['changed', 'response'],
+  );
+});
+
+// The answer's frames: its first part, then the rest of its text.
+const answerStart = () =>
+  socketFrame(
+    `data: ${JSON.stringify({ conversation_id: 'a', message: { ...originalMessage('a1', 'assistant', 'Socket'), status: 'in_progress' } })}`,
+  );
+const answerMore = (text) =>
+  socketFrame(`data: ${JSON.stringify({ p: '/message/content/parts/0', o: 'append', v: text })}`);
+const subscribe = (socket, offset = '0') =>
+  socket.send(JSON.stringify([{ command: { type: 'subscribe', topic_id: socketTopic, offset } }]));
+const replay = (...frames) =>
+  JSON.stringify({ type: 'reply', reply: { topic_id: socketTopic, catchups: frames } });
+const socketText = (h) => {
+  const packet = responses(h).at(-1);
+  assert.equal(packet.method, 'POST');
+  return importBrowserResponse(packet.body, packet).turns.map((turn) => turn.markdown);
+};
+
+test('a page that reconnects mid-reply is followed to one complete answer', async () => {
+  const { h, socket } = await socketReply();
+  socket.emit('message', JSON.stringify([answerStart(), answerMore(' answer')]));
+  // Reopened: the page opens a new socket, subscribes from the start and closes the old one.
+  const renewed = h.socket();
+  subscribe(renewed);
+  socket.emit('close');
+  socket.emit('message', JSON.stringify(answerMore(' stray')));
+  await tick();
+  assert.equal(responses(h).length, 1, 'still in progress');
+  assert.equal(h.messages.at(-1).kind, 'replying');
+  // The replay repeats what the old socket delivered; the reader is rebuilt from it.
+  renewed.emit('message', replay(answerStart(), answerMore(' answer')));
+  renewed.emit('message', JSON.stringify([answerMore(' continues.'), socketFrame('data: [DONE]')]));
+  await tick();
+  assert.equal(responses(h).length, 2);
+  assert.deepEqual(socketText(h), [
+    'Earlier question.',
+    'Earlier answer.',
+    'Synthetic question.',
+    'Socket answer continues.',
+  ]);
+});
+
+test('a subscription renewed on the same socket replays the turn without repeating text', async () => {
+  const { h, socket } = await socketReply();
+  socket.emit('message', JSON.stringify([answerStart(), answerMore(' answer')]));
+  socket.send(JSON.stringify([{ command: { type: 'unsubscribe', topic_id: socketTopic } }]));
+  subscribe(socket);
+  socket.emit(
+    'message',
+    replay(answerStart(), answerMore(' answer'), answerMore('.'), socketFrame('data: [DONE]')),
+  );
+  await tick();
+  assert.equal(socketText(h).at(-1), 'Socket answer.');
+});
+
+test('a renewal the reader cannot place ends the reply partial, never with repeated text', async () => {
+  for (const renew of [
+    // A catch-up from an offset the observer never saw.
+    (socket) => subscribe(socket, '50'),
+    // On the same socket, data before the replay may be the old subscription's: it is not trusted.
+    (socket) => {
+      subscribe(socket);
+      socket.emit('message', JSON.stringify(answerMore(' answer')));
+    },
+  ]) {
+    const { h, socket } = await socketReply();
+    socket.emit('message', JSON.stringify([answerStart(), answerMore(' answer')]));
+    renew(socket);
+    socket.emit(
+      'message',
+      replay(answerStart(), answerMore(' answer'), socketFrame('data: [DONE]')),
+    );
+    await tick();
+    const packet = responses(h).at(-1);
+    const model = importBrowserResponse(packet.body, packet);
+    assert.deepEqual(
+      model.turns.map((turn) => turn.id),
+      ['u0', 'a0', 'u1'],
+    );
+    assert.equal(model.verification.status, 'partial');
+    assert.equal(responses(h).length, 2, 'published once');
+  }
 });

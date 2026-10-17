@@ -82,12 +82,21 @@ final class Hotkey {
     }
 }
 
+/// What Settings shows of the updater (Updates.swift, which links Sparkle); nil in tests and snapshots.
+protocol UpdateControls: AnyObject {
+    var automaticallyChecks: Bool { get set }
+    var automaticallyInstalls: Bool { get set }
+    var lastCheck: Date? { get }
+    func checkNow()
+}
+
 /// The separate Settings window. It floats above the chat panel and keeps it shown while open.
 final class SettingsWindow: NSObject, NSWindowDelegate {
     var reload: () -> Void = {}
     var signOut: () -> Void = {}
     var clearWebCache: () -> Void = {}
     var shortcutTaken: () -> Bool = { false }
+    var updates: UpdateControls?
     /// Called when the window closes, so whatever it stood in for can come back.
     var closed: () -> Void = {}
     private var window: NSPanel?
@@ -101,7 +110,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         if window == nil {
             let view = SettingsView(reload: { [weak self] in self?.reload() }, signOut: { [weak self] in self?.signOut() },
                                     clearWebCache: { [weak self] in self?.clearWebCache() },
-                                    shortcutTaken: { [weak self] in self?.shortcutTaken() ?? false })
+                                    shortcutTaken: { [weak self] in self?.shortcutTaken() ?? false }, updates: updates)
             // Like the chat panel, a nonactivating panel: it takes keyboard focus and draws as active
             // without this accessory app becoming active, which macOS refuses while another app is in front.
             let window = NSPanel(contentRect: .zero, styleMask: [.titled, .closable, .nonactivatingPanel],
@@ -153,6 +162,7 @@ private struct SettingsView: View {
     let signOut: () -> Void
     let clearWebCache: () -> Void
     let shortcutTaken: () -> Bool
+    let updates: UpdateControls?
 
     @AppStorage(Preferences.keepPanelOpen) private var pinned = false
     @AppStorage(Preferences.showAtLaunch) private var showAtLaunch = true
@@ -170,6 +180,9 @@ private struct SettingsView: View {
     @State private var trusted = AXIsProcessTrusted()
     @State private var confirmSignOut = false
     @State private var taken = false
+    @State private var lastCheck: Date?
+    @State private var checksDaily = true
+    @State private var installsOnQuit = true
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -285,6 +298,23 @@ private struct SettingsView: View {
                         .help(signing.stable ? "Updates signed the same way keep the Accessibility permission."
                               : "Ad-hoc builds change their signature, so macOS asks for Accessibility after every update. Run scripts/make-signing-identity.sh once, then rebuild.")
                 }
+                if let updates {
+                    // Mirrored in @State: SwiftUI does not observe Sparkle's own settings.
+                    Toggle("Check for updates daily", isOn: $checksDaily)
+                        .onChange(of: checksDaily) { updates.automaticallyChecks = checksDaily }
+                    Toggle("Download and install updates when quitting", isOn: $installsOnQuit)
+                        .onChange(of: installsOnQuit) { updates.automaticallyInstalls = installsOnQuit }
+                        .disabled(!checksDaily)
+                    LabeledContent("Updates") {
+                        HStack(spacing: 6) {
+                            if let lastCheck {
+                                Text("Checked \(lastCheck.formatted(.relative(presentation: .named)))").foregroundStyle(.secondary)
+                            }
+                            Button("Check Now") { updates.checkNow() }
+                        }
+                    }
+                    note("Each check asks GitHub for this project's update feed. GitHub sees your IP address, this app's and Sparkle's versions, and your preferred languages; nothing else is sent. An update is installed only if it is signed with the project's update key.")
+                }
             } header: { sectionHeader("About", glyph: "info") } footer: {
                 Text("Add to Claude · reads only the page you are on, never sends for you")
                     .font(.caption).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
@@ -298,6 +328,16 @@ private struct SettingsView: View {
             trusted = AXIsProcessTrusted()
             login = SMAppService.mainApp.status
             pasteApps = SettingsView.pastedApps()
+            lastCheck = updates?.lastCheck
+            // Sparkle's own alert can change these too.
+            if let updates {
+                if checksDaily != updates.automaticallyChecks { checksDaily = updates.automaticallyChecks }
+                if installsOnQuit != updates.automaticallyInstalls { installsOnQuit = updates.automaticallyInstalls }
+            }
+        }
+        .onAppear {
+            checksDaily = updates?.automaticallyChecks ?? false
+            installsOnQuit = updates?.automaticallyInstalls ?? false
         }
         .confirmationDialog("Clear what Add to Claude remembers adding?", isPresented: $confirmClear) {
             Button("Clear History", role: .destructive) {

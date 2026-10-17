@@ -13,6 +13,7 @@ A release goes out only when each line is checked or carries an explicit owner d
 - [ ] No runtime npm dependency; no telemetry, history archive or credential collection; the delivery log and diagnostics hold no message text. The page's session token stays in the page.
 - [ ] The terms statement in the README and the release notes still says what the app reads and through which session.
 - [ ] Signing: the build is signed with the stable identity, so an update keeps the Accessibility grant. **A public release** also needs Developer ID signing, hardened runtime, notarization and a Gatekeeper launch without Open Anyway; until then a release is a private technical beta marked as a pre-release.
+- [ ] Updates: `native/Info.plist` carries the project's `SUPublicEDKey` (the build refuses without one) and a build number above the last release's. The previous release, installed, finds and installs this one through **Check for Updates…** (from 0.8.0 on). For a release that changes the updater (0.8.0 first of all), also prove it can update _away_: install the candidate, build a throwaway next build (B+1) signed the same way, serve it and a feed for it from `localhost` (`python3 -m http.server` in a folder holding the zip and an `appcast.xml` written like `scripts/appcast.sh` writes it), point the candidate at it with `defaults write io.lesprivilege.add-to-claude SUFeedURL http://localhost:8000/appcast.xml`, check for updates, quit, and see B+1 open with the Accessibility grant kept. Then `defaults delete io.lesprivilege.add-to-claude SUFeedURL`.
 - [ ] [support-matrix.md](support-matrix.md), the README (both languages) and the release notes describe this version.
 
 ## On the owner's Mac
@@ -75,4 +76,14 @@ Use throwaway conversations. Mark each line PASS, FAIL, BLOCKED or NOT RUN. Item
    ```
 
 5. Download the asset from the release page, compare its SHA-256 with the notes, unpack it and run `codesign --verify --strict` on the app.
-6. Afterwards, move the candidates' evidence to `docs/archive/release-X.Y.Z/`, fix the notes' relative links, and update [support-matrix.md](support-matrix.md).
+6. Publish the update feed, only now that the asset is downloadable. On the owner's Mac (`sign_update` reads the EdDSA key from the login keychain, created once with `vendor/Sparkle/bin/generate_keys`):
+
+   ```bash
+   bash scripts/appcast.sh "$PWD/dist/release/add-to-claude-X.Y.Z.zip"
+   git commit -m "Update feed for X.Y.Z" appcast.xml
+   git push origin main
+   ```
+
+   Installed copies find it on their next daily check. Keep the private key backed up (`generate_keys -x`); without it no later update can reach them.
+
+7. Afterwards, move the candidates' evidence to `docs/archive/release-X.Y.Z/`, fix the notes' relative links, and update [support-matrix.md](support-matrix.md).

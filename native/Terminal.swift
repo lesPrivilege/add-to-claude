@@ -34,7 +34,7 @@ func handToTerminal(_ choice: WindowChoice, line: String, operationValid: () -> 
     AXUIElementPerformAction(choice.window, kAXRaiseAction as CFString)
     choice.app.activate()
     let app = safeLabel(choice.app.localizedName ?? "the terminal", limit: 24)
-    completion("The line is on the clipboard and the \(app) window was brought forward: click where it should go and press ⌘V, then Return there when you choose. Nothing was run.", .unconfirmed)
+    completion("Line copied, \(app) in front: click where it goes and press ⌘V. Nothing runs.", .unconfirmed)
 }
 
 /// Characters a shell still acts on inside double quotes (`$` and backticks substitute, `\` escapes, `!`

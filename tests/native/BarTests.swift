@@ -129,7 +129,61 @@ import Foundation
         check(checked == [0], "rows 1–3 cleared")
     }
 
+    static func prepared(_ page: String) -> Prepared {
+        Prepared(revision: UUID(), page: page, markdown: "# Synthetic", title: "Synthetic", turns: 0, files: 0, verification: "verified",
+                 issues: [], attachments: [], verifiedWithFiles: false)
+    }
+
+    /// While a reply streams, the bar keeps the last ready preparation of that same conversation.
+    static func sources() {
+        let a = "https://chatgpt.com/c/a", b = "https://chatgpt.com/c/b", root = "https://chatgpt.com/"
+        let kept = prepared(a)
+        let ready = SourceState.ready(kept)
+        let same = { (state: SourceState) in state.prepared?.revision == kept.revision }
+        let replying = ready.updating("replying", on: a)
+        check(same(replying), "a reply in the same conversation keeps the preparation, revision and all, so an Add of it still applies")
+        if case .ready(_, true) = replying {} else { check(false, "and says a reply is in progress") }
+        check(same(ready.updating("changed", on: a)), "the page loading the same conversation again keeps it until the next result")
+        if case .ready(_, false) = replying.updating("changed", on: a) {} else { check(false, "a change notice ends the note") }
+        if case .replying(a) = SourceState.waiting.updating("replying", on: a) {} else { check(false, "nothing ready: reply in progress, as before") }
+        if case .waiting = ready.updating("changed", on: b) {} else { check(false, "another conversation waits") }
+        if case .replying(b) = ready.updating("replying", on: b) {} else { check(false, "a reply on another conversation keeps nothing") }
+
+        check(same(replying.moved(to: a)), "the address settling on the same page keeps it")
+        if case .waiting = replying.moved(to: b) {} else { check(false, "moving to another conversation drops it") }
+        if case .waiting = ready.moved(to: nil) {} else { check(false, "leaving ChatGPT drops it") }
+        // A new chat: the first reply starts on the chat root and the page gets its address mid-stream.
+        if case .replying("https://chatgpt.com/c/new") = SourceState.replying(page: root).moved(to: "https://chatgpt.com/c/new") {}
+        else { check(false, "a new chat given its address stays in progress") }
+        if case .replying("https://chatgpt.com/g/g-x/c/new") = SourceState.replying(page: "https://chatgpt.com/g/g-x")
+            .moved(to: "https://chatgpt.com/g/g-x/c/new") {} else { check(false, "also in a GPT") }
+        if case .replying(a) = SourceState.replying(page: a).moved(to: a) {} else { check(false, "the same address again changes nothing") }
+        if case .waiting = SourceState.replying(page: a).moved(to: b) {} else { check(false, "a reply in one conversation is not another's") }
+        if case .waiting = SourceState.replying(page: root).moved(to: root + "gpts") {} else { check(false, "a page that is no conversation waits") }
+
+        // A refetch that reads the same keeps the shown revision; a different one replaces it.
+        let refetched = prepared(a)
+        check(same(ready.received(refetched)), "an identical refetch keeps the shown revision, so an Add under way stands")
+        check(same(replying.received(refetched)), "also while a reply was in progress")
+        if case .ready(_, false) = replying.received(refetched) {} else { check(false, "and a result ends the reply note") }
+        let edited = Prepared(revision: UUID(), page: a, markdown: "# Synthetic\n\nmore", title: "Synthetic", turns: 0, files: 0,
+                              verification: "verified", issues: [], attachments: [], verifiedWithFiles: false)
+        check(ready.received(edited).prepared?.revision == edited.revision, "a refetch that reads differently replaces it")
+        check(SourceState.ready(prepared(b)).received(refetched).prepared?.revision == refetched.revision, "another page's result is not kept")
+        // A refetch that fails keeps what was read on that page.
+        check(same(ready.failed("x", on: a, refetch: true)), "a failed refetch of the shown conversation keeps it")
+        if case .ready(_, false) = replying.failed("x", on: a, refetch: true) {} else { check(false, "and ends a reply note") }
+        if case .unavailable = replying.failed("x", on: a, refetch: false) {} else { check(false, "a failed reply or replay is shown, not the kept result") }
+        if case .unavailable = ready.failed("x", on: b, refetch: true) {} else { check(false, "a failure elsewhere is shown") }
+        if case .unavailable = SourceState.waiting.failed("x", on: a, refetch: true) {} else { check(false, "with nothing shown, the failure is shown") }
+
+        for text in ["", "a", "a\n", "\n\n", "one\r\ntwo\nthree", "中文\n✓"] {
+            check(lineCount(text) == text.components(separatedBy: "\n").count, "line count of \(text.debugDescription)")
+        }
+    }
+
     static func main() throws {
+        sources()
         mentions()
         terminals()
         drags()

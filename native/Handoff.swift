@@ -30,8 +30,16 @@ final class HandoffBar: NSViewController {
     private var source = SourceState.waiting
     private let registry = ComposerRegistry()
     private var targets: [Target] = []
-    /// The chosen destination: a composer window, or a terminal window. Never both.
-    private var composer: Composer?
+    /// The chosen destination: a composer window, or a terminal window. Never both. A composer window's
+    /// message box is found when Add runs (`inspectComposer`), so choosing a window never fails on it.
+    private var composer: WindowChoice?
+    /// Shown while the chosen window has no message box Add could use, until it has one.
+    private var statusIsBoxHint = false
+    /// The box the last Add into this window used: kept while it exists, so a box opened later (an edit
+    /// field, say) does not take the next Add.
+    private var lastBox: (box: AXUIElement, conversation: String)?
+    /// Each off-main read of the chosen window; only the latest may settle the target.
+    private var readSequence = 0
     private var terminal: WindowChoice?
     private var hasDestination: Bool { composer != nil || terminal != nil }
     private var discovering = false
@@ -127,7 +135,10 @@ final class HandoffBar: NSViewController {
         statusText.preferredMaxLayoutWidth = 250 // Wraps beside a question's buttons; the row widens it when there are none.
         statusRow.setViews([statusGlyph, statusText, statusActions], in: .leading)
         statusRow.spacing = 6
-        statusRow.isHidden = true
+        // The scope line and two status lines keep their room when empty: the web view above never
+        // changes height (and ChatGPT never scrolls or reflows) because the bar said something.
+        scopeRow.heightAnchor.constraint(equalToConstant: 18).isActive = true
+        statusRow.heightAnchor.constraint(equalToConstant: 30).isActive = true
 
         let separator = NSBox()
         separator.boxType = .separator
@@ -153,16 +164,18 @@ final class HandoffBar: NSViewController {
     // MARK: state
 
     func show(_ state: SourceState) {
-        let before = prepared?.revision
         source = state
-        // An Add or Save result belongs to the conversation it was about; target problems stay.
-        if prepared?.revision != before && !busy && statusIsResult { say("") }
-        // A manual scope is for this conversation only.
         let key = prepared.map { $0.sourceId ?? $0.page }
-        if key != nil && key != sourceKey {
+        let moved = key != sourceKey
+        // An Add or Save result belongs to the conversation it was about, and stays while that conversation
+        // is shown, through its replies and reloads; target problems stay.
+        if moved && !busy && statusIsResult { say("") }
+        // The turn picker chooses from what the bar shows; with nothing shown, or another conversation, it closes.
+        if moved { turnsPopover?.close() }
+        // A manual scope is for this conversation only.
+        if moved && key != nil {
             sourceKey = key
             scopeChoice = .auto
-            turnsPopover?.close()
         }
         render()
     }
@@ -173,13 +186,12 @@ final class HandoffBar: NSViewController {
         findWindows()
     }
 
-    private var prepared: Prepared? {
-        if case .ready(let prepared) = source { return prepared }
-        return nil
-    }
+    private var prepared: Prepared? { source.prepared }
 
     private func render() {
         guard isViewLoaded else { return }
+        renderingAnalysis = .some(analysis)
+        defer { renderingAnalysis = nil }
         switch source {
         case .waiting:
             sourceTitle.stringValue = "No conversation yet"
@@ -190,15 +202,19 @@ final class HandoffBar: NSViewController {
         case .unavailable(let reason):
             sourceTitle.stringValue = "Conversation unavailable"
             sourceDetail.stringValue = reason
-        case .ready(let prepared):
+        case .ready(let prepared, let replying):
             sourceTitle.stringValue = prepared.title
             // A terminal gets a file, so only a composer is held to the 2 MB a message box takes.
             let tooLong = terminal == nil && prepared.markdown.utf8.count > maximumTextBytes
             sourceDetail.stringValue = "\(prepared.turns) turns · \(prepared.files) file\(prepared.files == 1 ? "" : "s")"
+                + (replying ? " · reply in progress, not included" : "")
                 + (tooLong ? " · too long for one Add: choose turns or save" : "")
         }
         sourceTitle.toolTip = prepared?.page
         sourceDetail.toolTip = sourceDetail.stringValue
+        if case .ready(_, true) = source {
+            sourceDetail.toolTip = "A reply is streaming. Add, Copy and Save use the conversation as last read, without that reply; the bar refreshes when it finishes."
+        }
         if let prepared {
             if prepared.verification == "verified" { tag.show("Verified", glyph: "done", dashed: false) }
             else { tag.show("Partial", glyph: "unverified", dashed: true, help: prepared.issues.joined(separator: "\n")) }
@@ -216,13 +232,13 @@ final class HandoffBar: NSViewController {
         access.isHidden = trusted
         targetRow.isHidden = !trusted
         renderPicker(trusted: trusted)
-        picker.isEnabled = !targets.isEmpty && !busy && !discovering
-        let destination = (composer?.choice ?? terminal).map { safeLabel($0.app.localizedName ?? "app", limit: 24) }
+        picker.isEnabled = !targets.isEmpty && !busy
+        let destination = (composer ?? terminal).map { safeLabel($0.app.localizedName ?? "app", limit: 24) }
         add.title = destination.map { "Add to \($0)" } ?? "Add"
         let scope = currentScope
         renderScope(scope, trusted: trusted)
         let what = scope.map { $0.everything ? "this conversation" : $0.detail.lowercased() } ?? "this conversation"
-        add.toolTip = composer.map { "Adds \(what) to \($0.choice.displayLabel(limit: 60)) without sending it" }
+        add.toolTip = composer.map { "Adds \(what) to \($0.displayLabel(limit: 60)) without sending it" }
             ?? terminal.map { "Saves \(what) as a hand-off file, copies a one-line mention of it, and brings \($0.displayLabel(limit: 60)) forward for you to paste" }
         // A terminal gets a file, so only a composer is held to the 2 MB a message box takes.
         let limit = terminal != nil ? maximumMarkdownBytes : maximumTextBytes
@@ -230,7 +246,10 @@ final class HandoffBar: NSViewController {
             scope.everything ? prepared.map { $0.markdown.utf8.count <= limit } == true
                 : !scope.turns.isEmpty || (scope.mode == "new" && !(analysis?.lastBatch.isEmpty ?? true))
         } ?? false
-        add.isEnabled = addable && hasDestination && !busy
+        // A window just chosen is read off the main thread first; until then Add waits for it.
+        let reading = composer != nil && target == nil
+        add.isEnabled = addable && hasDestination && !busy && !reading
+        if reading { add.toolTip = "Reading the window…" }
         // Accent only when it can act; a disabled accent button reads as pale text on blue.
         add.bezelColor = add.isEnabled ? .controlAccentColor : nil
         add.contentTintColor = add.isEnabled ? .white : nil
@@ -238,11 +257,13 @@ final class HandoffBar: NSViewController {
 
     // MARK: scope
 
-    /// What the log knows about this conversation in the chosen target.
+    /// What the log knows about this conversation in the chosen target. Worked out once per render.
     private var analysis: ScopeAnalysis? {
+        if let rendering = renderingAnalysis { return rendering }
         guard let prepared else { return nil }
         return analyzeScope(turns: prepared.turnList, source: prepared.sourceId, target: target, records: log.records)
     }
+    private var renderingAnalysis: ScopeAnalysis??
 
     private var currentScope: ResolvedScope? {
         guard let prepared, let analysis else { return nil }
@@ -271,8 +292,11 @@ final class HandoffBar: NSViewController {
         }
         scopeDetail.stringValue = detail
         scopeDetail.toolTip = detail
-        scopeRow.isHidden = !trusted || scope == nil || !hasDestination
+        let quiet = !trusted || scope == nil || !hasDestination
             || (scope?.mode == "all" && scope?.automatic == true && !canBind && !bound)
+        scopeRow.isHidden = !trusted // With the Accessibility row, as the target row is.
+        scopeDetail.isHidden = quiet
+        if quiet { bindButton.isHidden = true }
 
         guard let scope, let analysis, let prepared else { return }
         let signature = [scope.label, "\(scopeChoice)", "\(analysis.newApplicable)", "\(analysis.newTurns.count)", "\(String(describing: target?.confidence))",
@@ -366,7 +390,7 @@ final class HandoffBar: NSViewController {
     // MARK: target identity
 
     /// One chosen composer or terminal window, from when it was chosen until it closes (or a composer window
-    /// changes its title). Ids name it in the log; `bound` is the user's "Continue in this conversation".
+    /// changes its title: one that does not name its conversation may show another one by then). Ids name it in the log; `bound` is the user's "Continue in this conversation".
     private final class WindowSession {
         /// The app instance.
         let slot: String
@@ -399,9 +423,19 @@ final class HandoffBar: NSViewController {
         return session
     }
 
-    private func session(for composer: Composer) -> WindowSession {
-        session(slot: "\(composer.choice.app.processIdentifier)|\(composer.choice.launchDate.timeIntervalSince1970)",
-                window: composer.choice.window, title: composer.choice.title)
+    private func session(for choice: WindowChoice, title: String) -> WindowSession {
+        session(slot: "\(choice.app.processIdentifier)|\(choice.launchDate.timeIntervalSince1970)", window: choice.window, title: title)
+    }
+
+    /// What identifying a composer window reads over AX: the conversation its page names, and its title.
+    /// The page walk can take up to a second, so the bar reads it off the main thread (`select`).
+    struct WindowReading {
+        let conversation: String?
+        let title: String
+        init(_ choice: WindowChoice) {
+            conversation = conversationIdentity(in: choice.window)
+            title = axString(choice.window, kAXTitleAttribute) ?? choice.title
+        }
     }
 
     /// A terminal window's session lasts while the window lives; its title is not part of it, since
@@ -412,12 +446,13 @@ final class HandoffBar: NSViewController {
 
     /// Which conversation the window shows: verified when the window names it (its page URL), else this
     /// window session, confirmed only if the user said so. App, pid, window and title never decide sameness.
-    private func identify(_ composer: Composer) -> TargetIdentity {
-        let app = composer.choice.app.bundleIdentifier ?? "pid-\(composer.choice.app.processIdentifier)"
-        if let id = conversationIdentity(in: composer.choice.window) {
+    private func identify(composer: WindowChoice, reading: WindowReading? = nil) -> TargetIdentity {
+        let app = composer.app.bundleIdentifier ?? "pid-\(composer.app.processIdentifier)"
+        let reading = reading ?? WindowReading(composer)
+        if let id = reading.conversation {
             return TargetIdentity(app: app, conversation: id, confidence: .verified)
         }
-        let session = session(for: composer)
+        let session = session(for: composer, title: reading.title)
         return TargetIdentity(app: app, conversation: "window:\(session.id)", confidence: session.bound ? .confirmed : .unconfirmed)
     }
 
@@ -428,16 +463,69 @@ final class HandoffBar: NSViewController {
                               confidence: session.bound ? .confirmed : .unconfirmed)
     }
 
-    private func identifyDestination() -> TargetIdentity? { composer.map(identify) ?? terminal.map { identify(terminal: $0) } }
+    private func identifyDestination() -> TargetIdentity? { composer.map { identify(composer: $0) } ?? terminal.map { identify(terminal: $0) } }
 
-    /// Uses this composer as the target, with its identity read now (or as given, for snapshots).
-    func select(_ chosen: Composer?, identity: TargetIdentity? = nil) {
-        let before = target
+    /// Uses this composer window as the target, with its identity read now (or as given, for snapshots),
+    /// and says if it has no message box Add could use yet.
+    func select(_ chosen: WindowChoice?, identity: TargetIdentity? = nil) {
+        let sameWindow: Bool
+        if let chosen, let composer, CFEqual(chosen.window, composer.window) { sameWindow = true } else { sameWindow = false }
+        if !sameWindow { lastBox = nil }
         composer = chosen
         if chosen != nil { terminal = nil }
-        target = identity ?? identifyDestination()
-        if target != before { scopeChoice = .auto; turnsPopover?.close() }
+        if let identity { return settle(identity) }
+        guard let chosen else { return settle(identifyDestination()) } // A terminal or nothing: no walk.
+        // Another window has no identity until it is read; Add reads it again itself before writing.
+        if !sameWindow { settle(nil) }
+        checkMessageBox()
         render()
+        readSequence += 1
+        let sequence = readSequence
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let reading = WindowReading(chosen)
+            DispatchQueue.main.async {
+                guard let self, self.composer === chosen, self.readSequence == sequence, !self.busy else { return }
+                self.settle(self.identify(composer: chosen, reading: reading))
+            }
+        }
+    }
+
+    /// The target's identity is now `identity`; a different one starts the scope over.
+    private func settle(_ identity: TargetIdentity?) {
+        let before = target
+        target = identity
+        if target != before { scopeChoice = .auto; turnsPopover?.close(); lastBox = nil }
+        render()
+    }
+
+    /// A hint, not an error: the window stays chosen, and Add looks for its box again when pressed.
+    /// Read off the main thread: a large window's accessibility tree can take a moment to walk.
+    private func checkMessageBox() {
+        guard let composer, !busy, AXIsProcessTrusted() else { return clearBoxHint() }
+        let window = titledNow(composer)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let (field, problem) = inspectComposer(window)
+            DispatchQueue.main.async {
+                guard let self, self.composer === composer, !self.busy else { return }
+                guard field == nil else { return self.clearBoxHint() }
+                guard self.statusText.stringValue.isEmpty || self.statusIsBoxHint else { return }
+                let app = safeLabel(composer.app.localizedName ?? "the app", limit: 24)
+                self.say(problem == "click into its message box once" ? "Click once into the message box in \(app); Add will use it."
+                         : "\(app): \(problem). Choose another window, or click into the message box you mean.", glyph: "info")
+                self.statusIsBoxHint = true
+            }
+        }
+    }
+
+    /// The chosen window with its title as it is now: a window keeps being the one chosen when the app
+    /// retitles it. Whether it still shows the same conversation is `identify`'s question, not this one's.
+    private func titledNow(_ choice: WindowChoice) -> WindowChoice {
+        WindowChoice(app: choice.app, launchDate: choice.launchDate, window: choice.window,
+                     title: axString(choice.window, kAXTitleAttribute) ?? choice.title)
+    }
+
+    private func clearBoxHint() {
+        if statusIsBoxHint { say("") }
     }
 
     /// Uses this terminal window as the target.
@@ -448,7 +536,7 @@ final class HandoffBar: NSViewController {
     }
 
     @objc private func toggleBinding() {
-        guard let session = composer.map({ session(for: $0) }) ?? terminal.map({ session(forTerminal: $0) }) else { return }
+        guard let session = composer.map({ session(for: $0, title: axString($0.window, kAXTitleAttribute) ?? $0.title) }) ?? terminal.map({ session(forTerminal: $0) }) else { return }
         session.bound.toggle()
         target = identifyDestination()
         scopeChoice = .auto
@@ -457,8 +545,10 @@ final class HandoffBar: NSViewController {
 
     /// Rebuilt only when its rows change, so page updates never disturb an open menu.
     private func renderPicker(trusted: Bool) {
-        let selected = composer.flatMap { registry.id(of: $0) } ?? terminal.flatMap { registry.id(ofTerminal: $0) }
-        let signature = "\(trusted)|\(discovering)|\(selected ?? "")|" + targets.map(\.id).joined(separator: ",")
+        let selected = composer.flatMap { registry.id(ofComposer: $0) } ?? terminal.flatMap { registry.id(ofTerminal: $0) }
+        // A scan in progress changes only an empty list's title: a list being re-read stays as it is.
+        let signature = "\(trusted)|\(targets.isEmpty && discovering)|\(selected ?? "")|"
+            + targets.map { "\($0.id)\u{1F}\($0.app)\u{1F}\($0.window)" }.joined(separator: "\u{1E}")
         guard signature != pickerSignature else { return }
         pickerSignature = signature
         picker.removeAllItems()
@@ -497,11 +587,11 @@ final class HandoffBar: NSViewController {
     private func say(_ text: String, glyph name: String? = nil, result: Bool = false, actions: [(String, () -> Void)] = []) {
         statusIsResult = result
         statusIsAccessHint = false
+        statusIsBoxHint = false
         statusText.stringValue = text
         statusText.toolTip = text
         statusGlyph.image = name.flatMap { glyph($0, size: 14) }
         statusGlyph.isHidden = name == nil
-        statusRow.isHidden = text.isEmpty
         statusActions.setViews(actions.map { title, run in
             let button = ClosureButton(title: title, run: run)
             button.controlSize = .small
@@ -532,11 +622,13 @@ final class HandoffBar: NSViewController {
     func apply(_ found: Discovery) {
         registry.apply(found)
         targets = found.targets
-        if let composer, registry.id(of: composer) == nil { self.composer = nil }
-        if let terminal, registry.id(ofTerminal: terminal) == nil { self.terminal = nil }
-        if !hasDestination { restoreLastTarget() }
+        // A window that closed takes its identity and box with it before anything else is chosen.
+        if let composer, registry.id(ofComposer: composer) == nil { self.composer = nil; lastBox = nil; settle(nil) }
+        if let terminal, registry.id(ofTerminal: terminal) == nil { self.terminal = nil; settle(nil) }
+        let next = hasDestination ? composer : restoredTarget()
         // The target may show another conversation by now; read it again.
-        if !busy { select(composer) } else { render() }
+        if busy { return render() }
+        select(next)
     }
 
     @objc private func choose() {
@@ -549,30 +641,27 @@ final class HandoffBar: NSViewController {
             say("")
             return select(terminal: choice)
         }
-        let (chosen, problem) = registry.composer(id)
-        terminal = nil // A composer row replaces a terminal even when it cannot be used, as the picker shows.
-        if let chosen { remember(chosen) }
-        if chosen == nil {
-            say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error")
-        }
-        else { say("") }
+        guard let chosen = registry.choice(id) else { return findWindows() }
+        terminal = nil
+        remember(chosen)
+        say("")
         select(chosen)
     }
 
     // The last window used, by app and window title, so the next session starts there if it is open.
-    private func remember(_ composer: Composer) {
-        UserDefaults.standard.set(["app": composer.choice.app.bundleIdentifier ?? "", "title": composer.choice.title],
+    private func remember(_ composer: WindowChoice) {
+        UserDefaults.standard.set(["app": composer.app.bundleIdentifier ?? "", "title": composer.title],
                                   forKey: "LastTarget")
     }
 
-    private func restoreLastTarget() {
+    private func restoredTarget() -> WindowChoice? {
         guard UserDefaults.standard.bool(forKey: Preferences.restoreLastWindow),
               let last = UserDefaults.standard.dictionary(forKey: "LastTarget") as? [String: String],
               let target = targets.first(where: { target in
                   guard let choice = registry.choice(target.id) else { return false }
                   return choice.app.bundleIdentifier == last["app"] && choice.title == last["title"]
-              }) else { return }
-        composer = registry.composer(target.id).composer
+              }) else { return nil }
+        return registry.choice(target.id)
     }
 
     @objc private func allowAccess() {
@@ -727,19 +816,27 @@ final class HandoffBar: NSViewController {
     /// step: prepared → insertion_attempted → composer_inserted, failed or unknown.
     private func run(_ scope: ResolvedScope) {
         guard !busy, hasDestination, let frozen = prepared, !scope.turns.isEmpty else { return }
-        // Web editors (Claude's among them) rebuild their message box. Only when the chosen one is gone,
-        // take the window's current one, checked exactly as choosing the window again would check it;
-        // a box that still exists is never swapped for another, such as an open edit field.
-        var role: CFTypeRef?
-        if let current = composer, AXUIElementCopyAttributeValue(current.editor, kAXRoleAttribute as CFString, &role) == .invalidUIElement {
-            let (field, problem) = inspectComposer(current.choice)
+        // The window's message box is found now, as it is (web editors rebuild theirs), and kept for this Add.
+        // Its title is taken now too: a window renamed during the Add is not written to.
+        var selected: Composer?
+        if let chosen = composer {
+            let window = titledNow(chosen)
+            // Only for the conversation it was used in: a window showing another one (another tab, say)
+            // may keep the old box alive but hidden.
+            let kept = lastBox.flatMap { last in
+                last.conversation == target?.conversation && same(axElement(last.box, kAXWindowAttribute), window.window)
+                    && axString(last.box, kAXRoleAttribute) == kAXTextAreaRole ? last.box : nil
+            }
+            let (field, problem) = !validWindow(window) ? (nil, "the window closed") : kept.map { ($0, "") } ?? inspectComposer(window)
             guard let field else {
-                say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error", result: true)
+                let app = safeLabel(window.app.localizedName ?? "the app", limit: 24)
+                say(problem == "click into its message box once" ? "Click once into the message box in \(app), then Add again. Nothing was added."
+                    : "\(app): \(problem). Nothing was added.", glyph: "error", result: true)
                 return render()
             }
-            composer = Composer(choice: current.choice, editor: field)
+            selected = Composer(choice: window, editor: field)
         }
-        let selected = composer, tab = terminal
+        let tab = terminal
         // The target is read again right before writing: a window that now shows another conversation is
         // not the one the scope was worked out for.
         let identity = identifyDestination()
@@ -749,6 +846,7 @@ final class HandoffBar: NSViewController {
             say("The target conversation changed. Check the turns to add, then Add again.", glyph: "error", result: true)
             return render()
         }
+        if let selected { lastBox = (selected.editor, identity.conversation) }
         busy = true
         operation = UUID()
         let id = operation
@@ -836,10 +934,12 @@ final class HandoffBar: NSViewController {
                     func ask(_ text: String) {
                         self.finish(text, glyph: "info", actions: (receipt.map { [there($0)] } ?? []) + [("Copy Again", {
                             copyLine()
-                            ask("The line is on the clipboard again: click where it should go and press ⌘V. Nothing was run.")
+                            ask("Line copied again: click where it goes and press ⌘V. Nothing runs.")
                         })])
                     }
-                    ask("Saved \(what) as \(fileName). \(message)\(files)")
+                    // Two lines fit beside the buttons; the file's name is in the tooltip.
+                    ask("\(message)\(files)")
+                    self.statusText.toolTip = "Saved \(what) as \(fileName). \(message)\(files)"
                 case .failed:
                     fail(message)
                 }

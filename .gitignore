@@ -10,3 +10,4 @@ artifacts/*.tar.gz
 artifacts/*.bundle
 artifacts/releases/
 .local/
+vendor/

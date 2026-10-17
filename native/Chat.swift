@@ -10,7 +10,7 @@ private let signInHosts: Set<String> = ["chatgpt.com", "chat.openai.com", "auth.
                                         "login.live.com"]
 
 /// The chat root (new chat), where a conversation URL is assigned only after the first reply starts.
-private func isChatRoot(_ url: URL?) -> Bool {
+func isChatRoot(_ url: URL?) -> Bool {
     guard pageKey(url) != nil, let path = url?.path else { return false }
     return path == "/" || path.range(of: #"^/g/[A-Za-z0-9_-]+/?$"#, options: .regularExpression) != nil
 }
@@ -36,7 +36,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
     private var backObservation: NSKeyValueObservation?
     private var popups: [NSWindow] = []
     private(set) var panelOpen = false
-    private(set) var prepared: Prepared?
+    private var source = SourceState.waiting
+    /// The preparation the bar shows, kept while a reply streams in the same conversation.
+    var prepared: Prepared? { source.prepared }
     private var fileLinks: [String: FileLink] = [:]
     private lazy var fetcher = FileFetcher(web: web)
     private let scripts: URL?
@@ -65,6 +67,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         web.navigationDelegate = self
         web.uiDelegate = self
         web.allowsBackForwardNavigationGestures = true
+        // Before the page paints (a reload, a page whose tiles were dropped while hidden) the view shows
+        // this, not white, in either appearance.
+        web.underPageBackgroundColor = .windowBackgroundColor
         urlObservation = web.observe(\.url, options: [.new]) { [weak self] view, _ in
             DispatchQueue.main.async { self?.pageMoved(to: view.url) }
         }
@@ -140,7 +145,7 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { [weak self] in
             self?.fileLinks.removeAll()
             self?.saved.clear()
-            self?.set(nil, .waiting)
+            self?.set(.waiting)
             self?.web.load(URLRequest(url: URL(string: "https://chatgpt.com/")!))
         }
     }
@@ -164,16 +169,12 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
 
     // MARK: source
 
-    private func set(_ next: Prepared?, _ state: SourceState) {
-        prepared = next
+    private func set(_ state: SourceState) {
+        source = state
         bar.show(state)
     }
 
-    private func pageMoved(to url: URL?) {
-        guard let page = pageKey(url) else { return set(nil, .waiting) }
-        // The observer can report a new chat before WebKit updates the URL; keep a matching preparation.
-        if prepared?.page != page { set(nil, .waiting) }
-    }
+    private func pageMoved(to url: URL?) { set(source.moved(to: pageKey(url))) }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.webView === web, message.world == .defaultClient, message.frameInfo.isMainFrame,
@@ -191,9 +192,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             // A late answer for a conversation the panel has already left is not the one on screen.
             guard page == pageKey(web.url) || isChatRoot(web.url) else { return }
             guard let prepared = parseReady(body, page: page) else {
-                return set(nil, .unavailable("This conversation could not be read."))
+                return set(.unavailable("This conversation could not be read."))
             }
-            set(prepared, .ready(prepared))
+            set(source.received(prepared))
         case "file":
             // A link the page itself requested for one of its files; only https on ChatGPT's own hosts.
             guard let id = body["id"] as? String, let text = body["url"] as? String, let url = URL(string: text),
@@ -205,10 +206,11 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
             settle(key)
         case "file-missing":
             settle((body["id"] as? String ?? "") + "|" + (body["messageId"] as? String ?? ""))
-        case "changed": set(nil, .waiting)
-        case "replying": set(nil, .replying)
-        case "invalid": set(nil, .unavailable(safeLabel(body["message"] as? String ?? "", limit: 160)))
-        case "unavailable": set(nil, .unavailable("The conversation could not be read. Open it again once any reply has finished."))
+        // A reply, or the page loading this conversation again, keeps what is on the bar until the next result.
+        case "changed", "replying": set(source.updating(kind, on: page))
+        case "invalid": set(.unavailable(safeLabel(body["message"] as? String ?? "", limit: 160)))
+        case "unavailable": set(source.failed("The conversation could not be read. Open it again once any reply has finished.", on: page,
+                                              refetch: body["refetch"] as? Bool == true))
         default: break
         }
     }
@@ -357,20 +359,33 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         decisionHandler(response.canShowMIMEType ? .allow : .download)
     }
 
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        if webView === web { set(nil, .waiting) }
+    /// A new document replaces what was read. Only once it commits: a navigation that becomes a download,
+    /// or fails before committing, leaves the page (and what it showed) as it was.
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        if webView === web { set(.waiting) }
     }
 
     private var lastCrash = Date.distantPast
+    private var reloadWhenShown = false
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         HandoffTrace.event("web-content-process-terminated")
         guard webView === web else { return }
-        // Reload once; a page that keeps crashing waits for the user instead of looping.
+        // Reload once; a page that keeps crashing waits for the user instead of looping. macOS stops hidden
+        // pages under memory pressure: then the reload waits for the panel to open, not landing mid-typing later.
         if Date().timeIntervalSince(lastCrash) > 60 {
-            set(nil, .unavailable("The page stopped. It is reloading."))
-            web.reload()
-        } else { set(nil, .unavailable("The page stopped again. Quit and reopen Add to Claude.")) }
+            set(.unavailable("The page stopped. It is reloading."))
+            if view.window?.isVisible == true { web.reload() } else { reloadWhenShown = true }
+        } else { set(.unavailable("The page stopped again. Quit and reopen Add to Claude.")) }
         lastCrash = Date()
+    }
+
+    /// The panel is about to show.
+    func willShow() {
+        bar.willShow()
+        if reloadWhenShown {
+            reloadWhenShown = false
+            web.reload()
+        }
     }
 
     /// Only web links leave the app, and only to the default browser. Other schemes are dropped.

@@ -72,21 +72,24 @@ A terminal may be showing a shell rather than an agent, so it never receives the
   - `delivery-log.json` holds which turns went into which identified conversation: the source and target conversation ids, message ids, positions, content hashes, file keys, states and times. It never holds message text.
   - `saved-files.json` holds where Add saved each file and its SHA-256, so a later Add reuses the copy while its bytes are unchanged.
   - Both are kept for 30 days by default. Settings → History turns them off, changes how long they are kept, or clears them.
+- **Updates.** Once a day it asks GitHub for this project's update feed, `appcast.xml`. GitHub sees your IP address, the app's and Sparkle's versions and your preferred languages; nothing else is sent. An update is installed only if it is signed with the project's EdDSA update key. Settings → About turns the daily check or the automatic install off.
 - No telemetry, no history archive, no server of its own.
 
 ### Installing the beta
 
 > Add to Claude is an independent tool, not affiliated with or approved by OpenAI or Anthropic. It reads the ChatGPT page you have open through your own session; check that this fits the terms that apply to your account.
 
-0.7.0 is a technical beta, published as a pre-release, for Apple silicon Macs on macOS 14 or later. It is signed with the author's own certificate, not an Apple Developer ID, and not notarized, so macOS asks once before the first launch.
+0.8.0 is a technical beta, published as a pre-release, for Apple silicon Macs on macOS 14 or later. It is signed with the author's own certificate, not an Apple Developer ID, and not notarized, so macOS asks once before the first launch.
 
-1. Download `add-to-claude-0.7.0.zip` from [Releases](https://github.com/lesPrivilege/add-to-claude/releases), check its SHA-256 against the release notes, unzip it and move **Add to Claude** to Applications.
+1. Download `add-to-claude-0.8.0.zip` from [Releases](https://github.com/lesPrivilege/add-to-claude/releases), check its SHA-256 against the release notes, unzip it and move **Add to Claude** to Applications.
 2. Open it. macOS refuses the first time; go to System Settings → Privacy & Security, choose **Open Anyway** for Add to Claude, and confirm.
 3. Sign in to ChatGPT in the panel, then choose **Allow…** in the bar for Accessibility (step 2 of [Building and setting up](#building-and-setting-up)). Later releases signed with the same certificate keep that permission.
 
+From 0.8.0 on, updates arrive by themselves: Add to Claude checks once a day, downloads a new version and installs it when you quit. **Check for Updates…** is in the menu of the menu-bar icon (right-click). An earlier version is replaced by hand, once.
+
 ### Building and setting up
 
-You need macOS 14 or later, the Xcode command-line tools, and Node.js 24 or later.
+You need macOS 14 or later, the Xcode command-line tools, and Node.js 24 or later. The build fetches [Sparkle](https://sparkle-project.org) 2.10.0, the update framework, into `vendor/` and checks its SHA-256 (`scripts/fetch-sparkle.sh`).
 
 ```bash
 npm ci
@@ -102,7 +105,7 @@ open "dist/Add to Claude.app"
 
 1. Sign in to ChatGPT in the panel.
 2. Choose **Allow…** in the bar, then turn on Add to Claude in System Settings → Privacy & Security → Accessibility. An ad-hoc build needs this again after every rebuild; to keep it across updates, run `bash scripts/make-signing-identity.sh` once (it creates a local signing identity in your login keychain), then rebuild.
-3. Click once into the target app's message box, choose its window in the bar, and click **Add**.
+3. Choose the target app's window in the bar and click **Add**. Add finds the window's message box when it runs. If the window has more than one, click once into the one you mean; the bar says so when that is needed.
 
 ### Tests
 
@@ -193,25 +196,28 @@ Add to Claude 把这个按钮找了回来，并让它能去更多地方。聊天
   - `delivery-log.json` 记录哪些轮次进入了哪个已识别的对话：来源和目标对话的 ID、消息 ID、位置、内容哈希、文件键、状态和时间，从不保存消息正文。
   - `saved-files.json` 记录 Add 把每个文件存在哪里及其 SHA-256，之后再 Add 时只要文件内容未变就直接复用。
   - 两者默认保留 30 天。在设置 → History 中可以关闭、改变保留时长或清除。
+- **更新。** 每天向 GitHub 请求一次本项目的更新源 `appcast.xml`。GitHub 能看到你的 IP 地址、应用与 Sparkle 的版本号和你的首选语言，此外不发送任何内容。只有用本项目 EdDSA 更新密钥签名的更新才会安装。可在设置 → About 关闭每日检查或自动安装。
 - 没有遥测，没有历史存档，也没有自己的服务器。
 
 ### 安装测试版
 
 > Add to Claude 是独立工具，与 OpenAI 或 Anthropic 无关联，也未获其认可。它通过你自己的会话读取你打开的 ChatGPT 页面；请自行确认这符合你账号适用的条款。
 
-0.7.0 是面向 Apple 芯片 Mac（macOS 14 或更高版本）的技术测试版，以 pre-release 形式发布。它用作者自己的证书签名，不是 Apple 开发者 ID，也未经公证，所以第一次打开前 macOS 会询问一次。
+0.8.0 是面向 Apple 芯片 Mac（macOS 14 或更高版本）的技术测试版，以 pre-release 形式发布。它用作者自己的证书签名，不是 Apple 开发者 ID，也未经公证，所以第一次打开前 macOS 会询问一次。
 
-1. 从 [Releases](https://github.com/lesPrivilege/add-to-claude/releases) 下载 `add-to-claude-0.7.0.zip`，与发布说明核对 SHA-256，解压后把 **Add to Claude** 移到“应用程序”。
+1. 从 [Releases](https://github.com/lesPrivilege/add-to-claude/releases) 下载 `add-to-claude-0.8.0.zip`，与发布说明核对 SHA-256，解压后把 **Add to Claude** 移到“应用程序”。
 2. 打开它。第一次会被拒绝；到系统设置 → 隐私与安全性，为 Add to Claude 选择 **仍要打开**，再确认。
 3. 在面板里登录 ChatGPT，然后点击底栏的 **Allow…** 开启辅助功能（见「构建与设置」第 2 步）。之后用同一证书签名的版本会保留这项授权。
 
+从 0.8.0 起更新会自动到来：每天检查一次，下载新版本，在你退出时安装。菜单栏图标的右键菜单里有 **Check for Updates…**。更早的版本需要手动替换一次。
+
 ### 构建与设置
 
-需要 macOS 14 或更高版本、Xcode 命令行工具，以及 Node.js 24 或更高版本。构建命令见上文英文部分。
+需要 macOS 14 或更高版本、Xcode 命令行工具，以及 Node.js 24 或更高版本。构建时会把更新框架 [Sparkle](https://sparkle-project.org) 2.10.0 取到 `vendor/` 并核对 SHA-256（`scripts/fetch-sparkle.sh`）。构建命令见上文英文部分。
 
 1. 在面板里登录 ChatGPT。
 2. 点击底栏的 **Allow…**，然后在系统设置 → 隐私与安全性 → 辅助功能中打开 Add to Claude。临时签名（ad-hoc）的构建每次重建后都要重新授权；运行一次 `bash scripts/make-signing-identity.sh`（在登录钥匙串中创建本机签名身份）再重建，之后的更新会保留授权。
-3. 先在目标应用的输入框里点一下，在底栏选中它的窗口，再点击 **Add**。
+3. 在底栏选中目标应用的窗口，点击 **Add**。Add 运行时才去找这个窗口的输入框；窗口里不止一个输入框时，在你要的那个里点一下，需要时底栏会提示。
 
 ### 测试
 

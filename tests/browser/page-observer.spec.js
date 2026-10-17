@@ -388,13 +388,8 @@ async function socketSetup(page, offset = '0') {
     },
     { get: responseURL, post: liveEndpoint },
   );
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => window.receivedSource.filter((packet) => packet.kind === 'response').at(-1)?.method,
-      ),
-    )
-    .toBe('POST');
+  // The POST part alone is not published: the answer is still to come over the socket.
+  await expect.poll(() => page.evaluate(() => window.receivedSource.at(-1)?.kind)).toBe('replying');
   await page.evaluate(
     ({ topic, offset }) =>
       window.websiteSocket.send(

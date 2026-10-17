@@ -1,8 +1,16 @@
 import { createEventStreamDecoder } from './event-stream.js';
 import { createChatGPTStream } from './chatgpt-stream.js';
 
-/** Decode only the turn topic explicitly named by the selected POST's handoff. No socket/network access. */
-export function createChatGPTSocketTurn({ conversationId, topic, maxBytes = 64 * 1024 * 1024 }) {
+/** Decode only the turn topic explicitly named by the selected POST's handoff. No socket/network access.
+ * `replayFirst` is for a subscription renewed on a socket that already carried this topic: frames still
+ * in flight from the old subscription cannot be told apart from the replay, so anything before the
+ * replay's catchup is refused. */
+export function createChatGPTSocketTurn({
+  conversationId,
+  topic,
+  maxBytes = 64 * 1024 * 1024,
+  replayFirst = false,
+}) {
   const identifier = (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,200}$/u.test(value);
   if (
     !identifier(conversationId) ||
@@ -85,6 +93,8 @@ export function createChatGPTSocketTurn({ conversationId, topic, maxBytes = 64 *
           for (const item of frame.reply.catchups) acceptItem(item);
         } else if (frame.topic_id === topic) {
           if (frame.type !== 'message') throw new Error('Unsupported selected-topic event.');
+          if (replayFirst && !catchup)
+            throw new Error('The renewed stream sent data before its replay.');
           live = true;
           selected = true;
           total += encoder.encode(JSON.stringify(frame.payload)).byteLength;

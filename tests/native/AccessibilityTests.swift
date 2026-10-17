@@ -214,6 +214,34 @@ import ApplicationServices
         drafts = await command("snapshot")
         check(!result.1 && drafts["A"] == "Synthetic draft A.", "renamed window rejects old selection")
 
+        // A window whose focus is on something that takes no typing still has its one message box found.
+        selected = await select()
+        _ = await command("focus-button")
+        check(inspectComposer(selected.choice).field.map { CFEqual($0, selected.editor) } == true,
+              "focus on a button: the window's only message box is still found")
+        result = await append(selected)
+        drafts = await command("snapshot")
+        check(result.1 && exact(drafts["A"], "Synthetic draft A.\n\nOriginal **Markdown** 中文 ✓\n"), "focus on a button: the text is added (\(result.0))")
+
+        // A paste-only app with its focus on a button: the box is given focus, then pasted into.
+        selected = await select()
+        _ = await command("ignore-insertion")
+        _ = await command("focus-button")
+        UserDefaults.standard.set([fixture.bundleIdentifier ?? ""], forKey: ignoringKey)
+        result = await append(selected)
+        drafts = await command("snapshot")
+        check(drafts["A"]?.hasPrefix("Synthetic draft A.\n\nOriginal **Markdown**") == true, "paste-only app, focus on a button: the box takes focus and the paste (\(result.0))")
+
+        // The chosen window is not the app's focused one: its own box is found, and only it is written to.
+        selected = await select()
+        _ = await command("focus", window: "B", focus: true)
+        check(inspectComposer(selected.choice).field.map { CFEqual($0, selected.editor) } == true,
+              "another window focused: the chosen window's box is still found")
+        result = await append(selected)
+        drafts = await command("snapshot")
+        check(result.1 && drafts["A"]?.hasSuffix("Original **Markdown** 中文 ✓\n") == true && drafts["B"] == "Synthetic draft B.",
+              "another window focused: the text goes to the chosen window only (\(result.0))")
+
         selected = await select()
         _ = await command("readonly", focus: true)
         result = await append(selected)

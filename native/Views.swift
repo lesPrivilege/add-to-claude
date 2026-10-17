@@ -1,11 +1,20 @@
 import AppKit
 
+/// Each icon is read from disk once; every caller gets its own copy to size or tint.
+private var glyphs: [String: NSImage] = [:]
+
 func glyph(_ name: String, size: CGFloat = 16) -> NSImage? {
-    guard let url = Bundle.main.url(forResource: name, withExtension: "svg", subdirectory: "icons"),
-          let image = NSImage(contentsOf: url) else { return nil }
-    image.isTemplate = true
-    image.size = NSSize(width: size, height: size)
-    return image
+    let image: NSImage
+    if let cached = glyphs[name] { image = cached } else {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "svg", subdirectory: "icons"),
+              let loaded = NSImage(contentsOf: url) else { return nil }
+        loaded.isTemplate = true
+        glyphs[name] = loaded
+        image = loaded
+    }
+    let copy = image.copy() as! NSImage
+    copy.size = NSSize(width: size, height: size)
+    return copy
 }
 
 func label(_ text: String = "", size: CGFloat = 12, weight: NSFont.Weight = .regular,

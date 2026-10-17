@@ -29,10 +29,19 @@ final class FixtureTextView: NSTextView {
     }
 }
 
+/// Something in the window that takes focus but no typing, like a chat's conversation area or a button.
+final class FocusTarget: NSView {
+    override var acceptsFirstResponder: Bool { true }
+    override func isAccessibilityElement() -> Bool { true }
+    override func accessibilityRole() -> NSAccessibility.Role? { .button }
+    override func accessibilityLabel() -> String? { "Synthetic button" }
+}
+
 // An isolated app controlled only through its private temporary FIFOs. No submit action or network code.
 final class AccessibilityFixture: NSObject, NSApplicationDelegate {
     var windows: [String: NSWindow] = [:]
     var editors: [String: FixtureTextView] = [:]
+    var buttons: [String: FocusTarget] = [:]
     var focused = "A"
     func editor(_ key: String) {
         let view = FixtureTextView(frame: NSRect(x: 0, y: 0, width: 460, height: 240))
@@ -40,8 +49,11 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
         view.setAccessibilityLabel("Synthetic composer " + key)
         view.string = "Synthetic draft " + key + "."
         editors[key] = view
-        let container = NSView(frame: view.frame)
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 270))
         container.addSubview(view)
+        let button = FocusTarget(frame: NSRect(x: 0, y: 245, width: 120, height: 22))
+        buttons[key] = button
+        container.addSubview(button)
         windows[key]?.contentView = container
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -107,6 +119,9 @@ final class AccessibilityFixture: NSObject, NSApplicationDelegate {
             attachment.image = NSImage(size: NSSize(width: 12, height: 12))
             current.textStorage?.append(NSAttributedString(attachment: attachment))
         case "code": current.setAccessibilityLabel("Source code editor")
+        case "focus-button":
+            window.makeKeyAndOrderFront(nil)
+            window.makeFirstResponder(buttons[key])
         case "deactivate":
             // NSApp.deactivate() is a no-op under cooperative activation; hand focus to Finder instead.
             if let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first {

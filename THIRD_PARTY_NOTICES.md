@@ -1,6 +1,12 @@
 # Third-party notices
 
-Runtime application code has no npm dependencies. All utility code, SVG interface icons, and synthetic fixtures were written for this project. No Magpie, codex-chatgpt-web, third-party screenshot, font, or external conversation was copied into the application.
+Runtime application code has no npm dependencies. The app bundles one framework:
+
+| Dependency                                            | Version | License | Where                                                                                      |
+| ----------------------------------------------------- | ------- | ------- | ------------------------------------------------------------------------------------------ |
+| [Sparkle](https://github.com/sparkle-project/Sparkle) | 2.10.0  | MIT     | `Contents/Frameworks/Sparkle.framework`, fetched and checked by `scripts/fetch-sparkle.sh` |
+
+Sparkle's licence, with the notices of the code it includes, ships in the app as `Contents/Resources/Sparkle-LICENSE`. All utility code, SVG interface icons, and synthetic fixtures were written for this project. No Magpie, codex-chatgpt-web, third-party screenshot, font, or external conversation was copied into the application.
 
 Development dependencies are locked in `package-lock.json`:
 

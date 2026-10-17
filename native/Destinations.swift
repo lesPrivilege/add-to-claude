@@ -19,7 +19,7 @@ struct Discovery {
 }
 
 /// Live windows of regular apps, composers and terminals apart, re-read each time the panel opens. Ids
-/// are valid until the next discovery.
+/// name a window by its app's run and its AX element, and are looked up in the latest discovery only.
 final class ComposerRegistry {
     private var choices: [String: WindowChoice] = [:]
     private var terminals: [String: WindowChoice] = [:]
@@ -42,7 +42,7 @@ final class ComposerRegistry {
             AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
             guard let windows = attribute(axApp, kAXWindowsAttribute) as? [AXUIElement] else { continue }
             for window in windows.prefix(30) where found.count < 128 {
-                if let choice = WindowChoice(app: app, window: window) { found.append((UUID().uuidString, choice)) }
+                if let choice = WindowChoice(app: app, window: window) { found.append((rowId(choice), choice)) }
             }
         }
         // Same-title windows of one app get a short handle cue so they stay distinguishable.
@@ -71,7 +71,7 @@ final class ComposerRegistry {
             guard let windows = attribute(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute) as? [AXUIElement] else { continue }
             let listed = windows.prefix(30).compactMap { WindowChoice(app: app, window: $0) }
             for (index, choice) in listed.enumerated() {
-                let id = UUID().uuidString
+                let id = rowId(choice)
                 terminals[id] = choice
                 // Window titles repeat across terminal windows ("zsh"); the position keeps rows apart.
                 choice.identityOrdinal = index + 1
@@ -83,6 +83,12 @@ final class ComposerRegistry {
         return Discovery(targets: targets + terminalTargets, choices: choices, terminals: terminals)
     }
 
+    /// A row's id: the same window gets the same id in each scan, so an unchanged list is not rebuilt
+    /// (and an open picker menu not disturbed) whenever the panel opens.
+    private static func rowId(_ choice: WindowChoice) -> String {
+        "\(choice.app.processIdentifier)-\(choice.launchDate.timeIntervalSince1970)-\(CFHash(choice.window))"
+    }
+
     /// The current row for an already chosen terminal window, if it is still listed.
     func id(ofTerminal choice: WindowChoice) -> String? {
         terminals.first { $0.value.app.processIdentifier == choice.app.processIdentifier && CFEqual($0.value.window, choice.window) }?.key
@@ -90,17 +96,10 @@ final class ComposerRegistry {
 
     func terminal(_ id: String) -> WindowChoice? { terminals[id] }
 
-    /// The id of the current row for an already chosen composer, if its window is still listed.
-    func id(of composer: Composer) -> String? {
-        choices.first { $0.value.app.processIdentifier == composer.choice.app.processIdentifier && CFEqual($0.value.window, composer.choice.window) }?.key
+    /// The id of the current row for an already chosen composer window, if it is still listed.
+    func id(ofComposer choice: WindowChoice) -> String? {
+        choices.first { $0.value.app.processIdentifier == choice.app.processIdentifier && CFEqual($0.value.window, choice.window) }?.key
     }
 
     func choice(_ id: String) -> WindowChoice? { choices[id] }
-
-    /// The window's focused text area, or why it cannot be used.
-    func composer(_ id: String) -> (composer: Composer?, problem: String) {
-        guard let choice = choices[id] else { return (nil, "the window list changed") }
-        let (field, problem) = inspectComposer(choice)
-        return (field.map { Composer(choice: choice, editor: $0) }, problem)
-    }
 }

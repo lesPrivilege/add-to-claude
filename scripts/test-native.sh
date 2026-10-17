@@ -6,9 +6,9 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 work="$(mktemp -d "${TMPDIR:-/tmp}/add-to-claude-native.XXXXXX")"
 trap 'rm -r "$work"' EXIT
 native="$project_root/native"
-# The app's sources without its entry point, for the WebKit test's own main.
+# The app's sources without its entry point and the Sparkle updater, for the tests' own mains.
 app=()
-for file in "$native"/*.swift; do [[ $file == */Main.swift || $file == */App.swift ]] || app+=("$file"); done
+for file in "$native"/*.swift; do [[ $file == */Main.swift || $file == */App.swift || $file == */Updates.swift ]] || app+=("$file"); done
 xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \
   "$project_root/tests/native/DeliveryTests.swift" "$native/Delivery.swift" "$native/Composer.swift" -o "$work/delivery-tests"
 "$work/delivery-tests"

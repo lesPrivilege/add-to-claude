@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var panel: ChatPanel!
     private let chat = ChatController()
     private let settings = SettingsWindow()
+    private let updates = Updates()
     private lazy var hotkey = Hotkey { [weak self] in self?.toggle() }
     private var clickMonitor: Any?
 
@@ -23,6 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         SavedFiles.shared.load()
         HandoffFiles.shared.remove(olderThan: 24 * 3600) // A hand-off is for the next message, not an archive.
         NSApp.mainMenu = mainMenu()
+        updates.start()
+        settings.updates = updates
         panel = ChatPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 760),
                           styleMask: [.titled, .resizable, .nonactivatingPanel, .fullSizeContentView],
                           backing: .buffered, defer: false)
@@ -76,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let menu = NSMenu()
         let app = NSMenu()
         app.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        app.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
         app.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         app.addItem(withTitle: "Quit Add to Claude", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let edit = NSMenu(title: "Edit")
@@ -103,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         settings.show(at: corner)
     }
     private var returnToPanel = false
+    @objc private func checkForUpdates() { updates.checkNow() }
     @objc private func reloadPage() { chat.reload() }
     @objc private func goBack() { chat.goBack() }
 
@@ -110,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if NSApp.currentEvent?.type == .rightMouseUp {
             let menu = NSMenu()
             menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+            menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
             menu.addItem(.separator())
             menu.addItem(withTitle: "Quit Add to Claude", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
             item.menu = menu
@@ -149,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if height < panel.frame.height { panel.setFrame(NSRect(x: 0, y: 0, width: panel.frame.width, height: height), display: false) }
         let x = min(max(anchor.x - panel.frame.width / 2, screen.minX + 8), screen.maxX - panel.frame.width - 8)
         panel.setFrameTopLeftPoint(NSPoint(x: x, y: anchor.y - 4))
-        chat.bar.willShow()
+        chat.willShow()
         item.button?.highlight(true)
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)

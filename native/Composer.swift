@@ -118,32 +118,72 @@ func windowTextArea(in window: AXUIElement) -> AXUIElement? {
     return focused.isEmpty && writable.count == 1 ? writable[0] : nil
 }
 
-/// The text area that has focus inside the chosen window, read without activating its app.
+/// The chosen window's message box, read without activating its app.
 func focusedComposer(_ choice: WindowChoice) -> AXUIElement? { inspectComposer(choice).field }
 
-/// The focused text area, or why there is none, in words the bar can show.
+/// The chosen window's message box, or why there is none, in words the bar can show. The box the window
+/// has focus in counts first; otherwise the text area marked focused, or the window's only writable text
+/// area (`windowTextArea`), so a window chosen without clicking into its box still works when its box
+/// is unambiguous. Several boxes and none focused is not guessed at.
 func inspectComposer(_ choice: WindowChoice) -> (field: AXUIElement?, problem: String) {
     guard AXIsProcessTrusted() else { return (nil, "Accessibility is off") }
     guard validWindow(choice) else { return (nil, "the window closed or changed") }
+    if let field = keyboardComposer(choice), messageBoxProblem(field) == nil { return (field, "") }
+    guard let field = windowTextArea(in: choice.window) else { return (nil, "click into its message box once") }
+    if let problem = messageBoxProblem(field) { return (nil, problem) }
+    return (field, "")
+}
+
+/// The text area that has the keyboard in the chosen window: where a ⌘V sent to the app lands. Electron
+/// apps (Claude, for one) report no focused element while in the background, and drop the text area's
+/// own focus mark once another app is used; then the window's message box as `windowTextArea` finds it.
+func keyboardComposer(_ choice: WindowChoice) -> AXUIElement? {
     let app = AXUIElementCreateApplication(choice.app.processIdentifier)
-    guard same(axElement(app, kAXFocusedWindowAttribute), choice.window) else { return (nil, "another window of that app has focus") }
-    // Electron apps (Claude, for one) report no focused element for the app while in the background,
-    // and drop the text area's own focus mark once another app is used; look inside the chosen window.
-    guard let field = axElement(app, kAXFocusedUIElementAttribute) ?? windowTextArea(in: choice.window) else {
-        return (nil, "it has no single writable message box")
-    }
-    guard same(axElement(field, kAXWindowAttribute), choice.window) else { return (nil, "the focused element is in another window") }
+    guard same(axElement(app, kAXFocusedWindowAttribute), choice.window),
+          let field = axElement(app, kAXFocusedUIElementAttribute) ?? windowTextArea(in: choice.window),
+          same(axElement(field, kAXWindowAttribute), choice.window), messageBoxProblem(field) == nil else { return nil }
+    return field
+}
+
+/// Why this element cannot take the conversation, or nil when it can.
+private func messageBoxProblem(_ field: AXUIElement) -> String? {
     let role = axString(field, kAXRoleAttribute) ?? "no role"
-    guard role == kAXTextAreaRole else { return (nil, "the focused element is \(role), not a text area") }
+    guard role == kAXTextAreaRole else { return "click into its message box once" }
     guard axSettable(field, kAXSelectedTextRangeAttribute), axSettable(field, kAXSelectedTextAttribute) else {
-        return (nil, "its text area does not accept inserted text")
+        return "its message box does not accept inserted text"
     }
     let semantics = [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute, "AXIdentifier"].compactMap { axString(field, $0) }.joined(separator: " ").lowercased()
     // Fail closed for accessible names that explicitly identify a shell or code pane.
     guard !["terminal", "shell", "source editor", "code editor", "source code", "editor contents", "monaco"].contains(where: { semantics.contains($0) }) else {
-        return (nil, "it looks like a terminal or code editor")
+        return "it looks like a terminal or code editor"
     }
-    return (field, "")
+    return nil
+}
+
+/// Whether the chosen window has the app's focus on something that takes no typing (not a text field
+/// or text area), so focusing its message box takes nothing from the user.
+private func focusIsNotTyping(_ choice: WindowChoice) -> Bool {
+    let app = AXUIElementCreateApplication(choice.app.processIdentifier)
+    guard same(axElement(app, kAXFocusedWindowAttribute), choice.window) else { return false }
+    guard let focused = axElement(app, kAXFocusedUIElementAttribute) else { return true }
+    let role = axString(focused, kAXRoleAttribute) ?? ""
+    return ![kAXTextAreaRole, kAXTextFieldRole, kAXComboBoxRole, "AXSearchField"].contains(role)
+}
+
+/// Where the app's keyboard focus is (its focused window and element), so an Add can tell that it moved.
+private func appFocus(_ app: NSRunningApplication) -> [AXUIElement?] {
+    let element = AXUIElementCreateApplication(app.processIdentifier)
+    return [axElement(element, kAXFocusedWindowAttribute), axElement(element, kAXFocusedUIElementAttribute)]
+}
+
+private func sameFocus(_ lhs: [AXUIElement?], _ rhs: [AXUIElement?]) -> Bool {
+    zip(lhs, rhs).allSatisfy { a, b in
+        switch (a, b) {
+        case (nil, nil): return true
+        case let (a?, b?): return CFEqual(a, b)
+        default: return false
+        }
+    }
 }
 
 
@@ -206,15 +246,25 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
         completion("The context changed or exceeds the native text limit. Use a context file.", .failed); return
     }
     guard AXIsProcessTrusted(), validWindow(selected.choice) else {
-        completion("The target or its permission changed. Choose the composer again.", .failed); return
+        completion("The target window closed or changed, or Accessibility is off. Nothing was added.", .failed); return
+    }
+    // Focus moving in the target app during an Add (to another window or field) means someone is using
+    // it: nothing is written then. Focus moving onto this very box is not that: web editors take focus
+    // when their selection is set. Cheap checks only: no walk of the window per check.
+    let focus = appFocus(selected.choice.app)
+    let unchanged = {
+        let now = appFocus(selected.choice.app)
+        let ontoBox = same(now[0], selected.choice.window) && same(now[1], selected.editor)
+        return (sameFocus(now, focus) || ontoBox) && same(axElement(selected.editor, kAXWindowAttribute), selected.choice.window)
+            && axString(selected.editor, kAXRoleAttribute) == kAXTextAreaRole
     }
     revalidateSource { valid in
         DispatchQueue.main.async {
             guard valid, operationValid() else { completion("The source changed. Nothing was added.", .failed); return }
-            guard let current = focusedComposer(selected.choice), CFEqual(current, selected.editor),
-                  let old = axString(current, kAXValueAttribute) else {
-                completion("The composer is no longer ready. Nothing was added; choose it again.", .failed); return
+            guard unchanged(), let old = axString(selected.editor, kAXValueAttribute) else {
+                completion("The message box changed while adding. Nothing was added; Add again.", .failed); return
             }
+            let current = selected.editor
             // A blank draft (rich editors report an empty paragraph as "\n") has nothing to keep.
             let blank = old.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let suffix = blank ? text : "\n\n" + text
@@ -230,7 +280,7 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             let setRange = AXValueCreate(.cfRange, &end).map {
                 AXUIElementSetAttributeValue(current, kAXSelectedTextRangeAttribute as CFString, $0)
             }
-            let stillFocused = focusedComposer(selected.choice).map { CFEqual($0, current) } ?? false
+            let stillFocused = unchanged()
             let after = axString(current, kAXValueAttribute)
             let range = selectedRange(current)
             // Rich editors (ProseMirror in Claude, for one) end the draft with a paragraph marker the caret
@@ -240,7 +290,7 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
             guard setRange == .success, stillFocused, sameTextUnits(after, old), let range,
                   (range.location == end.location && range.length == end.length) || beforeFinalBreak,
                   operationValid() else {
-                completion("The insertion point or draft changed. Nothing was added; choose the composer again.", .failed); return
+                completion("The insertion point or draft changed. Nothing was added; Add again.", .failed); return
             }
             let head = String(utf16CodeUnits: Array(units[..<range.location]), count: range.location)
             let tail = String(utf16CodeUnits: Array(units[(range.location + range.length)...]), count: units.count - range.location - range.length)
@@ -300,15 +350,33 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
         return normalizedReadback(written) == normalizedReadback(blank ? text : old + suffix)
     }
     func paste() {
-        // The last check before a keystroke: the source, the target conversation, the draft and the caret
-        // at its end (or just before a rich editor's final paragraph mark) are unchanged.
+        // ⌘V lands where the app has the keyboard, so only when that is this box as far as AX can tell (an
+        // Electron app in the background reports no focus; then the window's one message box is assumed,
+        // as before). If the window's focus is on something that takes no typing (its conversation, a
+        // button), the box is asked to take focus, without activating the app; it is never moved off
+        // another window or another text field.
+        if keyboardComposer(selected.choice) == nil, focusIsNotTyping(selected.choice) {
+            AXUIElementSetAttributeValue(field, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        }
+        guard keyboardComposer(selected.choice).map({ CFEqual($0, field) }) == true else {
+            let app = safeLabel(selected.choice.app.localizedName ?? "The app", limit: 24)
+            return completion("\(app) takes text only by pasting, and its message box does not have the keyboard. Click into it once, then Add again. Nothing was added.", .failed)
+        }
+        // Taking focus can move a web editor's caret, so it goes to the end again here. The last check
+        // before a keystroke: the source, the target conversation, the draft and the caret at its end (or
+        // just before a rich editor's final paragraph mark) are unchanged.
         let units = Array(old.utf16)
+        if !blank {
+            var end = CFRange(location: units.count, length: 0)
+            if let range = AXValueCreate(.cfRange, &end) {
+                AXUIElementSetAttributeValue(field, kAXSelectedTextRangeAttribute as CFString, range)
+            }
+        }
         let caretAtEnd = blank || selectedRange(field).map {
             $0.length == 0 && ($0.location == units.count || (units.last == 10 && $0.location == units.count - 1))
         } == true
-        guard operationValid(), focusedComposer(selected.choice).map({ CFEqual($0, field) }) == true,
-              sameTextUnits(axString(field, kAXValueAttribute), old), caretAtEnd else {
-            return completion("The target or its draft changed. Nothing was added; choose the composer again.", .failed)
+        guard operationValid(), sameTextUnits(axString(field, kAXValueAttribute), old), caretAtEnd else {
+            return completion("The target or its draft changed. Nothing was added; Add again.", .failed)
         }
         let board = NSPasteboard.general
         let saved = board.pasteboardItems?.map { item in item.types.compactMap { type in item.data(forType: type).map { (type, $0) } } } ?? []
@@ -337,7 +405,7 @@ private func fallBack(_ selected: Composer, field: AXUIElement, old: String, bla
             // Editors that turn pasted Markdown into formatting (Claude's does) cannot read back exactly,
             // so the draft changed but whether all of it landed is not known.
             if landed(written) { return completion("Added by pasting into the app. Review the draft there; nothing was sent.", .inserted) }
-            completion("Pasted, but the app reformatted the Markdown, so it could not be confirmed. Check the draft there; nothing was sent.", .unconfirmed)
+            completion("The app reformatted the paste. Check the draft; nothing was sent.", .unconfirmed)
         }
     }
     guard blank, axSettable(field, kAXValueAttribute) else { return paste() }

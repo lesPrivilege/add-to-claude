@@ -4,6 +4,20 @@ Evidence for Add to Claude 0.7.0 (build 15, tag `v0.7.0`) is in its [release not
 
 Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release notes](release/0.6.1.md#review-and-checks).
 
+### 0.8.0 candidate: updates, replies, composer choice, reopening (2026-10-18, uncommitted)
+
+| Area                                                                                                                                  | Result                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Page observer: socket hand-off waits for its answer, inactivity timeout, renewal from a replay, identical refetches, refetch failures | Synthetic: `npm test` 141/141                                                     |
+| Bar logic: kept result during a reply, identical and failed refetches, line count                                                     | Synthetic: 77 checks                                                              |
+| Delivery log and scope, WebKit                                                                                                        | Synthetic: 128 and 45                                                             |
+| Accessibility suite, with the new cases (focus on a button, paste-only app focusing its box, another window focused)                  | **Not run yet**: needs the owner's terminal                                       |
+| Browser suite                                                                                                                         | **Not run**: needs a Chromium download                                            |
+| Sparkle: signed build, Check for Updates, an update from this build to a throwaway next build (release checklist)                     | **Not run yet**: owner                                                            |
+| Real ChatGPT: a long reply over the socket, reopening the panel mid-reply, a reply while adding, waking from sleep                    | **Not run yet**: owner                                                            |
+| Composer choice in Claude for Mac: choose the window without clicking its box; focus on its conversation; a renamed window            | **Not run yet**: owner                                                            |
+| Dark appearance of the bar, turn picker and Settings                                                                                  | Rendered: all snapshots clean (`SNAPSHOT_APPEARANCE=dark`); on screen not run yet |
+
 ### 0.7.0: terminals and turn picker (2026-10-17)
 
 | Area                                                                                              | Result                                                                                                                                                               |
@@ -62,7 +76,7 @@ Nothing here certifies a client that was not tried.
 | Incremental New into a Claude Code session in Claude for Mac                                                         | Owner: "Turns 5–6 of 6 · new since last add" (rc.1 era), "Turns 13–14 of 14 · new since last add" (rc.7)                              |
 | Claude for Mac exposes the conversation id of a Claude Code session (`claude.ai/epitaxy/local_<uuid>`)               | Owner                                                                                                                                 |
 | Close or change the Claude target window between choosing it and Add (E16)                                           | Owner (rc.7): the target follows whichever session window is open; recorded as observed                                               |
-| A reply in progress keeps Add off; the finished reply is read passively                                              | Owner                                                                                                                                 |
+| A reply in progress keeps the last result usable (0.8.0; before, Add was off); the finished reply is read passively  | Owner                                                                                                                                 |
 | Delivery log on disk holds no message text and no account id; diagnostics hold counts only                           | Owner (rc.7: 0 account-id matches in the log)                                                                                         |
 | Accessibility grant kept across an update signed with the same certificate; About shows the version and signature    | Owner (rc.3)                                                                                                                          |
 | Menu-bar mark in light and dark menu bars; Settings at 480 × 560                                                     | Owner (rc.4)                                                                                                                          |

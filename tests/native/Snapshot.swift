@@ -3,11 +3,14 @@ import AppKit
 // Renders the real handoff bar in several source states, the scope control, and the turn picker to
 // PNG files for visual review. Synthetic data only; the target is this process, never a real app.
 @main enum Snapshot {
+    static let dark = ProcessInfo.processInfo.environment["SNAPSHOT_APPEARANCE"] == "dark"
+
     static func render(_ view: NSView, width: CGFloat? = nil, to url: URL) {
         view.appearance = NSApp.appearance
         if let width { view.setFrameSize(NSSize(width: width, height: view.fittingSize.height)) }
         else { view.setFrameSize(view.fittingSize) }
         view.layoutSubtreeIfNeeded()
+        if dark { return renderInWindow(view, to: url) }
         let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
         view.cacheDisplay(in: view.bounds, to: rep)
         let image = NSImage(size: view.bounds.size)
@@ -18,6 +21,20 @@ import AppKit
         image.unlockFocus()
         let png = NSBitmapImageRep(data: image.tiffRepresentation!)!.representation(using: .png, properties: [:])!
         try! png.write(to: url)
+    }
+
+    /// An off-window cache draws dark text on an opaque white ground, so the dark appearance is rendered
+    /// in a borderless window. The snapshot process is never the active app, so accent-colored buttons draw grey there.
+    static func renderInWindow(_ view: NSView, to url: URL) {
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: view.frame.size), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.appearance = NSApp.appearance
+        window.backgroundColor = .windowBackgroundColor
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        let frame = window.contentView!.superview!
+        let rep = frame.bitmapImageRepForCachingDisplay(in: frame.bounds)!
+        frame.cacheDisplay(in: frame.bounds, to: rep)
+        try! rep.representation(using: .png, properties: [:])!.write(to: url)
     }
 
     static func hash(_ seed: Int, edited: Bool = false) -> String {
@@ -56,7 +73,7 @@ import AppKit
         let app = NSRunningApplication.current
         let element = AXUIElementCreateApplication(app.processIdentifier)
         let choice = WindowChoice(app: app, launchDate: Date(), window: element, title: "Synthetic composer")
-        bar.select(Composer(choice: choice, editor: element), identity: identity)
+        bar.select(choice, identity: identity)
         return bar
     }
 
@@ -68,7 +85,8 @@ import AppKit
 
     static func main() {
         _ = NSApplication.shared
-        NSApp.appearance = NSAppearance(named: .aqua)
+        // SNAPSHOT_APPEARANCE=dark renders the dark appearance.
+        NSApp.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         let output = URL(fileURLWithPath: CommandLine.arguments[1])
         let ready = Prepared(revision: UUID(), page: "https://chatgpt.com/c/x", markdown: "# Synthetic", title: "Agent harness handoff design",
                              turns: 128, files: 3, verification: "verified", issues: [],
@@ -79,6 +97,8 @@ import AppKit
                                title: "Research notes with a very long conversation title that truncates", turns: 14, files: 1,
                                verification: "partial", issues: ["report.pdf is a reference only."], attachments: [], verifiedWithFiles: false)
         let states: [(String, SourceState)] = [("waiting", .waiting), ("ready", .ready(ready)), ("partial", .ready(partial)),
+                                               ("replying", .replying(page: "https://chatgpt.com/")),
+                                               ("replying-kept", .ready(ready, replying: true)),
                                                ("unavailable", .unavailable("The conversation could not be read. Open it again once any reply has finished."))]
         for (name, state) in states {
             let bar = HandoffBar()
@@ -95,6 +115,11 @@ import AppKit
         let newLog = memory()
         added(newLog, Array(turns(42)[0..<30]) + Array(turns(42)[32..<36]), to: verified)
         render(trustedBar(newLog, prepared(42), identity: verified).view, width: 480, to: output.appendingPathComponent("bar-scope-new.png"))
+
+        // A reply streaming over the kept result: the bar stays as it was, with a note, and Add stays enabled.
+        let kept = trustedBar(newLog, prepared(42), identity: verified)
+        kept.show(.ready(prepared(42), replying: true))
+        render(kept.view, width: 480, to: output.appendingPathComponent("bar-scope-replying.png"))
 
         // A new target: All · 42, automatic, so no detail line.
         render(trustedBar(memory(), prepared(42), identity: verified).view, width: 480, to: output.appendingPathComponent("bar-scope-all.png"))

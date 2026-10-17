@@ -25,7 +25,9 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     getSequence = 0,
     cached = null,
     job = null,
-    snapshot = null;
+    snapshot = null,
+    // The result the app was last sent for this page, while nothing has been posted since.
+    shown = null;
   let lastLocation = location.href;
   const readers = new Set();
   // The live site loads a long conversation a page at a time as the user scrolls up. Keep every page
@@ -79,6 +81,8 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
   window.postMessage({ type: 'add-to-claude/port' }, location.origin, [channel.port2]);
   const port = channel.port1;
   const post = (value) => {
+    if (value.kind === 'changed' || value.kind === 'unavailable' || value.kind === 'replying')
+      shown = null;
     try {
       port.postMessage(value);
     } catch {}
@@ -170,7 +174,8 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
   port.onmessage = ({ data }) => {
     if (data?.kind === 'resolve') void resolveFiles(data.files);
   };
-  const invalidate = (keepBase = false) => {
+  // Quiet leaves the app showing its result; the caller then posts a result or `changed`.
+  const invalidate = (keepBase = false, quiet = false) => {
     generation++;
     for (const reader of readers) void reader.cancel().catch(() => {});
     readers.clear();
@@ -178,7 +183,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     job = null;
     snapshot = null;
     if (!keepBase) cached = null;
-    post({ kind: 'changed', pageUrl: location.href });
+    if (!quiet) post({ kind: 'changed', pageUrl: location.href });
   };
   // The website keeps conversations it has shown in memory and does not load them again when the
   // user goes back to one. Keep the last few this document published, with the base a later reply
@@ -206,6 +211,8 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
     if (bytes > maxBytes) throw new Error('size');
     snapshot = value;
     remember(value, bytes);
+    // The app already shows exactly this: a refetch of an unchanged conversation is a no-op.
+    if (shown?.pageUrl === selected.pageUrl && shown.body === value.body) return true;
     post({
       kind: 'response',
       pageUrl: selected.pageUrl,
@@ -214,10 +221,13 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       method: value.method,
       body: value.body,
     });
+    shown = { pageUrl: selected.pageUrl, body: value.body };
     return true;
   };
-  const unavailable = (version) => {
-    if (version === generation) post({ kind: 'unavailable', pageUrl: location.href });
+  // `refetch`: the page could not load a conversation again (after waking, say); what was read of it
+  // before still stands. Otherwise a reply or replay failed, and what was shown may not.
+  const unavailable = (version, refetch = false) => {
+    if (version === generation) post({ kind: 'unavailable', pageUrl: location.href, refetch });
   };
   const read = async (response, version, consume, owned = false) => {
     const reader = (owned ? response : response.clone()).body?.getReader();
@@ -318,7 +328,21 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       // The replay already published for this conversation failed; returning must not publish it again.
       if (active.boundId) recent.delete(active.boundId);
       unavailable(active.version);
+    } else if (active.finished && active.ready) {
+      // The socket part never completed: what the POST stream gave is all there is, published as partial.
+      try {
+        if (publish(active.ready)) job = null;
+      } catch {
+        job = null;
+        unavailable(active.version);
+      }
     }
+  };
+  // The socket part of a reply can run for many minutes. It fails after two minutes with nothing for its
+  // turn, or at the byte limit; never at a fixed time from the start.
+  const armSocket = (active) => {
+    if (active.socketTimer) clearTimeout(active.socketTimer);
+    active.socketTimer = setTimeout(() => failSocket(active), 120000);
   };
   const retireSocket = (active) => {
     active.socketRetired = true;
@@ -366,8 +390,19 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       return;
     }
     active.socket = subscription.socket;
-    active.socketReader = createChatGPTSocketTurn({ ...active.handoff, maxBytes });
-    active.socketTimer = setTimeout(() => failSocket(active), 120000);
+    active.socketReader = createChatGPTSocketTurn({
+      ...active.handoff,
+      maxBytes,
+      replayFirst: active.readSockets.has(subscription.socket),
+    });
+    active.readSockets.add(subscription.socket);
+    armSocket(active);
+  };
+  // The page closed or left the reply's subscription before its answer ended. The inactivity timer
+  // keeps running: a renewed subscription within it replays the turn, otherwise the reply is partial.
+  const detachSocket = (active) => {
+    active.socket = null;
+    active.socketReader = null;
   };
   const markEarlySocketFrames = (active, socket, data) => {
     const candidates = [...active.subscriptions.entries()].filter(
@@ -444,6 +479,29 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
                   retireSocket(active);
                   continue;
                 }
+                // Reopened, the page reconnects or subscribes the reply's topic again while its answer
+                // still arrives. A subscription from offset 0 replays the whole turn: a new reader
+                // rebuilds it from that replay, so no text is appended twice. Any other offset is a
+                // catch-up this reader cannot place, and the reply ends partial.
+                if (
+                  active.handoff?.topic === topic &&
+                  active.subscriptions.has(topic) &&
+                  !active.socketReply &&
+                  !active.socketFailed
+                ) {
+                  if (command.type === 'unsubscribe') {
+                    if (active.socket === socket) detachSocket(active);
+                    continue;
+                  }
+                  if (command.offset !== '0' || ++active.renewals > 8) {
+                    failSocket(active);
+                    break;
+                  }
+                  detachSocket(active);
+                  active.subscriptions.set(topic, { socket, bad: false });
+                  bindSocket(active);
+                  continue;
+                }
                 const previous = active.subscriptions.get(topic);
                 active.subscriptions.set(topic, {
                   socket,
@@ -470,7 +528,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
               if (selected && active.socketReader.ended) {
                 active.socketReply = active.socketReader.result();
                 publishSocket(active);
-              }
+              } else if (selected) armSocket(active);
             } catch {
               failSocket(active);
             }
@@ -479,7 +537,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
             socket.addEventListener(event, () => {
               if (job?.socket !== socket) return;
               if (job.socketReply) retireSocket(job);
-              else failSocket(job);
+              else detachSocket(job);
             });
         } catch {
           /* The original socket remains usable even if observation cannot attach. */
@@ -510,6 +568,8 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
           active.replyId = stream.conversationId;
           if (stream.handoff && !active.handoff && stream.result().messages.length === 0) {
             active.handoff = stream.handoff;
+            // The page may never subscribe; the reply then fails as any silent socket does.
+            armSocket(active);
             bindSocket(active);
           }
           if (active.boundId && active.replyId && active.boundId !== active.replyId)
@@ -534,9 +594,10 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
         responseUrl: requested.href,
         capturedAt: new Date().toISOString(),
       };
-      const published = publish(active.ready);
-      if (active.handoff) publishSocket(active);
-      else if (published) job = null;
+      // The answer continues over the socket: the app keeps "reply in progress" until that part
+      // completes (published by publishSocket) or fails (failSocket publishes this part as partial).
+      if (active.handoff && !active.socketFailed) return publishSocket(active);
+      if (publish(active.ready)) job = null;
     } catch {
       if (active.socketTimer) clearTimeout(active.socketTimer);
       active.finished = true;
@@ -612,6 +673,8 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
         isNew: !selected.id,
         boundId: selected.id,
         subscriptions: new Map(),
+        readSockets: new Set(),
+        renewals: 0,
       };
       job = active;
       void captureStream(observed, readRequest(active.version), selected, requested, active);
@@ -625,12 +688,28 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       ].includes(url.split('?')[0]) &&
         !url.includes('#'));
     if (method !== 'GET' || !selected.id || !conversationLoad(requested.href)) return promise;
+    // The website refetches when it is shown again, possibly while the answer still arrives over the
+    // socket. That GET has the answer only partway; the socket part ends the job as it would have.
+    if (
+      job?.boundId === selected.id &&
+      job.finished &&
+      job.handoff &&
+      !job.socketReady &&
+      !job.socketFailed
+    )
+      return promise;
     // The website can hydrate a new conversation while its answer is streaming.
     // Keep that stream alive and use the GET as its base, never as a final answer.
     const associatedJob = job && !job.finished && job.boundId === selected.id ? job : null;
-    if (!associatedJob) invalidate();
+    // A refetch of the result the app shows posts nothing until its body is known.
+    const quiet = !associatedJob && shown?.pageUrl === selected.pageUrl;
+    if (!associatedJob) invalidate(false, quiet);
     const sequence = ++getSequence;
     const version = generation;
+    // A quiet refetch that publishes nothing still owes the app its change notice.
+    const settle = () => {
+      if (quiet && version === generation) post({ kind: 'changed', pageUrl: location.href });
+    };
     void promise
       .then(async (response) => {
         if (
@@ -639,7 +718,7 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
           !conversationLoad(response.url) ||
           response.status !== 200
         )
-          return;
+          return void (sequence === getSequence && settle());
         const decoder = new TextDecoder('utf-8', { fatal: true }),
           parts = [];
         try {
@@ -677,11 +756,11 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
               capturedAt: new Date().toISOString(),
             });
         } catch {
-          if (sequence === getSequence && !associatedJob?.finished) unavailable(version);
+          if (sequence === getSequence && !associatedJob?.finished) unavailable(version, true);
         }
       })
       .catch(() => {
-        if (sequence === getSequence && !associatedJob?.finished) unavailable(version);
+        if (sequence === getSequence && !associatedJob?.finished) unavailable(version, true);
       });
     return promise;
   };
@@ -697,11 +776,13 @@ export function installPageObserver({ maxBytes = 16 * 1024 * 1024 } = {}) {
       (!job.replyId || job.replyId === selected.id)
     ) {
       job.boundId = selected.id;
+      // Publish only a final result: the whole POST answer, the socket's, or what a failed socket left.
+      const final = !job.handoff || job.socketReady || job.socketFailed;
       if (
         job.ready &&
-        !job.socketFailed &&
+        final &&
         publish(job.ready) &&
-        (!job.handoff || job.socketRetired)
+        (!job.handoff || job.socketRetired || job.socketFailed)
       )
         job = null;
       return;
