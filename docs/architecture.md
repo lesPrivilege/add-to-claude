@@ -41,6 +41,7 @@ Settings (SwiftUI, in the panel's place) · global shortcut (Carbon hot key) · 
   - **Hand-off text.** Each saved file's line becomes its local path and SHA-256, and its "download this file" check is dropped. With no checks left, the text reads verified.
   - **Browser chores.** Top-level pages stay on ChatGPT and a small allowlist of sign-in hosts; other http(s) links open in the default browser and other schemes are dropped. After a content-process crash the page reloads once.
 - **`Handoff.swift` (`HandoffBar`)**: the summary, files popover, preview, copy, save, window picker, the scope pull-down ("New · 6", "All · 42", "3 selected") and Add.
+- **`Prepared.swift`**: what a preparation carries (the text, its files and turns), reading the compiler's lists, and pointing file lines at local copies (`linkFiles`). No AppKit.
   - Add freezes the revision, re-reads the target's identity, and records a receipt. It asks the bridge for the chosen turns (or uses the whole text), downloads their files when that setting is on, and right before writing requires that the revision is still current.
   - It asks before adding exactly what was just added. An unconfirmed write becomes "Could not confirm" with It's There / It's Not.
 - **`TurnPicker.swift`**: "Choose turns…", an `NSTableView` of turns (checkbox, role, number, preview, files, added/changed marks; shift-click for runs).

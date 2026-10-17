@@ -110,3 +110,32 @@ final class Tag: NSView {
         path.stroke()
     }
 }
+
+/// A push button that runs a closure; keeps small popover controls free of selector plumbing.
+final class ClosureButton: NSButton {
+    private var run: () -> Void = {}
+    convenience init(title: String, glyph name: String? = nil, run: @escaping () -> Void) {
+        self.init(frame: .zero)
+        self.title = title
+        if let name {
+            image = glyph(name, size: 14)
+            imagePosition = .imageLeading
+        }
+        bezelStyle = .rounded
+        self.run = run
+        target = self
+        action = #selector(fire)
+    }
+    @objc private func fire() { run() }
+
+    /// A borderless-until-hover glyph button with a tooltip, for actions whose meaning is stable.
+    static func icon(_ name: String, _ help: String, run: @escaping () -> Void) -> ClosureButton {
+        let button = ClosureButton(title: "", glyph: name, run: run)
+        button.bezelStyle = .accessoryBarAction
+        button.showsBorderOnlyWhileMouseInside = true
+        button.imagePosition = .imageOnly
+        button.toolTip = help
+        button.setAccessibilityLabel(help)
+        return button
+    }
+}

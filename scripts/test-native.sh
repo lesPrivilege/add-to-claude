@@ -6,13 +6,15 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 work="$(mktemp -d "${TMPDIR:-/tmp}/add-to-claude-native.XXXXXX")"
 trap 'rm -r "$work"' EXIT
 native="$project_root/native"
+# The app's sources without its entry point, for the WebKit test's own main.
+app=()
+for file in "$native"/*.swift; do [[ $file == */Main.swift || $file == */App.swift ]] || app+=("$file"); done
 xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \
   "$project_root/tests/native/DeliveryTests.swift" "$native/Delivery.swift" "$native/Composer.swift" -o "$work/delivery-tests"
 "$work/delivery-tests"
 node "$project_root/scripts/build-webkit.js" "$work/webkit" >/dev/null
 xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos14.0" -parse-as-library \
-  "$project_root/tests/native/WebKitTests.swift" "$native/Chat.swift" "$native/Handoff.swift" "$native/Views.swift" \
-  "$native/Composer.swift" "$native/Files.swift" "$native/Settings.swift" "$native/Diagnostics.swift" "$native/Delivery.swift" "$native/TurnPicker.swift" -o "$work/webkit-tests"
+  "$project_root/tests/native/WebKitTests.swift" "${app[@]}" -o "$work/webkit-tests"
 "$work/webkit-tests" "$work/webkit"
 status=0
 bash "$project_root/scripts/test-native-accessibility.sh" || status=$?
