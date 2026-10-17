@@ -9,13 +9,13 @@ The living documents describe Add to Claude as it is at `main`. The archive keep
 - [architecture.md](architecture.md): how the panel, the page scripts, the compiler and the native app fit together, and what is stored where.
 - [product-contract.md](product-contract.md): the owner's design decisions, the required behaviour (R1–R8) and where each stands.
 - [shapes.md](shapes.md): every ChatGPT data shape the code reads, the test that pins it, and how a change shows up.
-- [support-matrix.md](support-matrix.md): evidence for the current release and for what is on `main`, split into owner-verified, synthetic and not run.
+- [support-matrix.md](support-matrix.md): evidence for the current release, split into owner-verified, synthetic and not run.
 - [release-checklist.md](release-checklist.md): the gates for the next release and how to cut a candidate and publish.
 - [roadmap.md](roadmap.md): maturity and maintenance work, the next forms and the shape that keeps sources and destinations independent.
 - [handoff-format.md](handoff-format.md): the hand-off text as an outward contract (format 1), and the rules for changing it.
 - [threat-model.md](threat-model.md): what is trusted, each boundary's checks, and the accepted risks.
 - [decisions/](decisions/): [incremental hand-off](decisions/incremental-handoff.md), [reading and projection](decisions/reading-and-projection.md) (cards as plain text, passive reading, citation marks, terminals) and the shelved [DeepSeek Harness plugin](decisions/deepseek-harness-plugin.md).
-- [release/](release/): the published release notes for [0.6.0](release/0.6.0.md) and [0.6.1](release/0.6.1.md).
+- [release/](release/): the published release notes for [0.6.0](release/0.6.0.md), [0.6.1](release/0.6.1.md) and [0.7.0](release/0.7.0.md).
 - [design/icons/](design/icons/README.md): the shipped menu-bar glyph and app icon, the icon grammar and the refinement round.
 
 ## Archive

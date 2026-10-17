@@ -1,8 +1,10 @@
 # Support matrix
 
-Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release notes](release/0.6.1.md#review-and-checks): `npm test` 120/120, delivery log 120, WebKit 34, Accessibility 54 (owner's terminal), browser 14/14 carried over from 0.6.0 (observer unchanged), and the owner's run on rc.2 and rc.3. Everything below is unchanged by 0.6.1 unless that page says otherwise.
+Evidence for Add to Claude 0.7.0 (build 15, tag `v0.7.0`) is in its [release notes](release/0.7.0.md#review-and-checks): `npm test` 131/131, delivery log 128, WebKit 45, bar logic 63, Accessibility 54 (owner's terminal), browser 14/14 on `9d1cfab` (observer unchanged since `v0.6.1`), and the owner's terminal runs below. Evidence for 0.6.1 follows; everything after it is unchanged unless those pages say otherwise.
 
-### On `main`, not yet released: terminals (2026-10-17)
+Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release notes](release/0.6.1.md#review-and-checks).
+
+### 0.7.0: terminals and turn picker (2026-10-17)
 
 | Area                                                                                              | Result                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -10,7 +12,7 @@ Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release not
 | Automatic delivery into a Terminal tab (Apple Events, then its Paste menu item in the background) | Owner, on the first build (`48ca545`): tabs listed after the Automation prompt, but the line did not land; the copied line pasted by hand worked. Path removed after |
 | Add to a terminal window: file written, line copied, window brought forward, pasted by hand       | Owner, on `960ffe3` (2026-10-17): the pasted line worked                                                                                                             |
 | Delivery log and scope, WebKit                                                                    | Synthetic: 128 and 45                                                                                                                                                |
-| Accessibility suite                                                                               | Synthetic: 54, run from the owner's terminal at `5984c4f` (2026-10-17)                                                                                               |
+| Accessibility suite                                                                               | Synthetic: 54, run from the owner's terminal at `5984c4f` (2026-10-17); `native/Composer.swift` unchanged since                                                      |
 
 ### 0.6.1 on the owner's Mac (installed release build, 2026-10-17)
 

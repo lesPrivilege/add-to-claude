@@ -4,7 +4,7 @@ Recorded 2026-10-16 from the owner's plan. Order matters more than dates.
 
 ## Where things stand
 
-The menu-bar app (0.6.0) is the form that ships. ChatGPT is the source, and the destination is any open app with a text box, reached through Accessibility.
+The menu-bar app is the form that ships (0.7.0). ChatGPT is the source; the destination is any open app with a text box, reached through Accessibility, or a terminal, given a hand-off file to paste.
 
 ## 0.6.1
 
@@ -34,7 +34,7 @@ Recorded 2026-10-17 from the owner's review. Worked in this order; CI and releas
 
 1. **Claude mod.** Waits until Claude's newly released mod format settles, so the port is an adaptation rather than a rewrite.
 2. **Your own browser as an optional source.** No second sign-in: a browser extension reads the conversation in the tab you already use. Prefer a plain content script limited to chatgpt.com and the few hosts it needs; ask for `debugger` only if something turns out to need it, since it shows a permanent "being debugged" bar and draws stricter store review. It feeds the same shared format, so nothing downstream changes.
-3. **Terminals as destinations.** Built on `main` for the next release (2026-10-17), for any terminal app: Add writes the hand-off file, copies a one-line mention and brings the terminal window forward; the user pastes. Automatic delivery into a chosen tab was tried for Terminal and iTerm2 and dropped (it did not land in Terminal in the background); the record is in [decisions/reading-and-projection.md §4](decisions/reading-and-projection.md#4-terminals-receive-one-line). Owner's decision (2026-10-16): adapt at the level of the terminal window or tab, not per TUI agent, since agent TUIs are many and change often. Safety rules, because a terminal may be showing a shell rather than an agent:
+3. **Terminals as destinations.** Shipped in [0.7.0](release/0.7.0.md), for any terminal app: Add writes the hand-off file, copies a one-line mention and brings the terminal window forward; the user pastes. Automatic delivery into a chosen tab was tried for Terminal and iTerm2 and dropped (it did not land in Terminal in the background); the record is in [decisions/reading-and-projection.md §4](decisions/reading-and-projection.md#4-terminals-receive-one-line). Owner's decision (2026-10-16): adapt at the level of the terminal window or tab, not per TUI agent, since agent TUIs are many and change often. Safety rules, because a terminal may be showing a shell rather than an agent:
    - Never type or paste multi-line text, and never press Return. The hand-off goes to a file in the conversation's folder, and the terminal receives one line: an `@"/path/handoff.md"` reference, with no newline. At a shell prompt that is an unexecuted line; in an agent TUI it is a file mention.
    - Say which window, so the user can see whether it shows an agent or a shell. (Per-tab targeting needed Apple Events per terminal and is gone with the automatic path.)
    - The terminal's own paste, by the user, so bracketed paste applies.

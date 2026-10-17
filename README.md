@@ -49,12 +49,12 @@ Today the source is ChatGPT. The destination can be any app with a text box, or 
   - If the app took the text but it could not be read back exactly, the bar says **Could not confirm** and asks whether it is in the draft. Only a confirmed Add counts as added.
 - **Choosing turns.**
   - **Choose turns…** lists every turn with its role, number, a short preview and its files; turns already added are marked "added".
-  - Shift-click covers a run; All and None select everything or nothing. On `main`, for the next release: click anywhere on a row to check or clear it, or drag across rows to give them all the same state. The choice applies to the next Add only.
+  - Shift-click covers a run; All and None select everything or nothing. Click anywhere on a row to check or clear it, or drag across rows to give them all the same state. The choice applies to the next Add only.
 - **What a selection carries.** A chosen turn brings its own files and references, and only the checks that concern it. The text says which turns it carries, e.g. "Selected turns: 3, 5–9 of 42".
 
 ### Terminals
 
-A terminal may be showing a shell rather than an agent, so it never receives the conversation itself, and Add never types or pastes into it. Terminals arrive with the next release; 0.6.1 does not have them yet.
+A terminal may be showing a shell rather than an agent, so it never receives the conversation itself, and Add never types or pastes into it.
 
 - **Picker.** It lists the windows of any terminal app (Terminal, iTerm2, Ghostty, WezTerm, Warp, Kitty…) under **Terminals**.
 - **Add.** It saves the text as a hand-off file in the conversation's files folder, named `handoff-<conversation>-<window>.add-to-claude.md` after the ChatGPT conversation and the terminal window. It puts one line on the clipboard, `@"/path/to/handoff-….add-to-claude.md"`, and brings that terminal window forward. Click into the tab you want and press ⌘V. In an agent the line is a file mention; at a shell prompt it is an unexecuted line, and the path holds nothing a shell would act on (`$`, backticks, `\`, `!`, `"`).
@@ -78,9 +78,9 @@ A terminal may be showing a shell rather than an agent, so it never receives the
 
 > Add to Claude is an independent tool, not affiliated with or approved by OpenAI or Anthropic. It reads the ChatGPT page you have open through your own session; check that this fits the terms that apply to your account.
 
-0.6.1 is a technical beta, published as a pre-release, for Apple silicon Macs on macOS 14 or later. It is signed with the author's own certificate, not an Apple Developer ID, and not notarized, so macOS asks once before the first launch.
+0.7.0 is a technical beta, published as a pre-release, for Apple silicon Macs on macOS 14 or later. It is signed with the author's own certificate, not an Apple Developer ID, and not notarized, so macOS asks once before the first launch.
 
-1. Download `add-to-claude-0.6.1.zip` from [Releases](https://github.com/lesPrivilege/add-to-claude/releases), check its SHA-256 against the release notes, unzip it and move **Add to Claude** to Applications.
+1. Download `add-to-claude-0.7.0.zip` from [Releases](https://github.com/lesPrivilege/add-to-claude/releases), check its SHA-256 against the release notes, unzip it and move **Add to Claude** to Applications.
 2. Open it. macOS refuses the first time; go to System Settings → Privacy & Security, choose **Open Anyway** for Add to Claude, and confirm.
 3. Sign in to ChatGPT in the panel, then choose **Allow…** in the bar for Accessibility (step 2 of [Building and setting up](#building-and-setting-up)). Later releases signed with the same certificate keep that permission.
 
@@ -170,12 +170,12 @@ Add to Claude 把这个按钮找了回来，并让它能去更多地方。聊天
   - 如果目标应用收下了文字但无法逐字读回，底栏会显示 **Could not confirm**，并问你草稿里是否已有。只有确认过的才算已添加。
 - **选择轮次。**
   - **Choose turns…** 列出每一轮的角色、序号、简短预览和文件；已添加的标为「added」。
-  - 按住 Shift 点击可选中一段，All / None 全选或全不选。`main` 上已有、随下一个版本发布：点击一行的任意位置即可勾选或取消，拖过多行可一次设为同一状态。这个选择只用于下一次 Add。
+  - 按住 Shift 点击可选中一段，All / None 全选或全不选。点击一行的任意位置即可勾选或取消，拖过多行可一次设为同一状态。这个选择只用于下一次 Add。
 - **所选轮次带上的内容。** 选中的轮次会带上它自己的文件和引用，以及只与它相关的检查项。文字里会写明包含哪些轮次，例如「Selected turns: 3, 5–9 of 42」。
 
 ### 终端
 
-终端里显示的可能是 shell 而不是 agent，所以终端从不直接接收对话正文，Add 也从不往终端里输入或粘贴。终端支持随下一个版本发布，0.6.1 的选择器里还没有终端。
+终端里显示的可能是 shell 而不是 agent，所以终端从不直接接收对话正文，Add 也从不往终端里输入或粘贴。
 
 - **选择器。** 在 **Terminals** 下列出任意终端应用的窗口（Terminal、iTerm2、Ghostty、WezTerm、Warp、Kitty…）。
 - **Add。** 把文字存为这段对话文件夹里的交接文件，按 ChatGPT 对话和终端窗口命名为 `handoff-<对话>-<窗口>.add-to-claude.md`；再把一行 `@"/path/to/handoff-….add-to-claude.md"` 放到剪贴板，并把那个终端窗口带到前台。点进你要的标签页，按 ⌘V。在 agent 里它是一个文件引用；在 shell 提示符下它只是一行未执行的文字，路径里也不含 shell 会处理的字符（`$`、反引号、`\`、`!`、`"`）。
@@ -199,9 +199,9 @@ Add to Claude 把这个按钮找了回来，并让它能去更多地方。聊天
 
 > Add to Claude 是独立工具，与 OpenAI 或 Anthropic 无关联，也未获其认可。它通过你自己的会话读取你打开的 ChatGPT 页面；请自行确认这符合你账号适用的条款。
 
-0.6.1 是面向 Apple 芯片 Mac（macOS 14 或更高版本）的技术测试版，以 pre-release 形式发布。它用作者自己的证书签名，不是 Apple 开发者 ID，也未经公证，所以第一次打开前 macOS 会询问一次。
+0.7.0 是面向 Apple 芯片 Mac（macOS 14 或更高版本）的技术测试版，以 pre-release 形式发布。它用作者自己的证书签名，不是 Apple 开发者 ID，也未经公证，所以第一次打开前 macOS 会询问一次。
 
-1. 从 [Releases](https://github.com/lesPrivilege/add-to-claude/releases) 下载 `add-to-claude-0.6.1.zip`，与发布说明核对 SHA-256，解压后把 **Add to Claude** 移到“应用程序”。
+1. 从 [Releases](https://github.com/lesPrivilege/add-to-claude/releases) 下载 `add-to-claude-0.7.0.zip`，与发布说明核对 SHA-256，解压后把 **Add to Claude** 移到“应用程序”。
 2. 打开它。第一次会被拒绝；到系统设置 → 隐私与安全性，为 Add to Claude 选择 **仍要打开**，再确认。
 3. 在面板里登录 ChatGPT，然后点击底栏的 **Allow…** 开启辅助功能（见「构建与设置」第 2 步）。之后用同一证书签名的版本会保留这项授权。
 
