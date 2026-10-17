@@ -7,10 +7,10 @@ Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release not
 | Area                                                                                              | Result                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Bar logic: the terminal's one-line mention, terminal apps, hand-off files, turn-list drags        | Synthetic: 63 checks (`tests/native/BarTests.swift`)                                                                                                                 |
-| Automatic delivery into a Terminal tab (Apple Events, then its Paste menu item in the background) | Owner, on the first build (`ca92ca5`): tabs listed after the Automation prompt, but the line did not land; the copied line pasted by hand worked. Path removed after |
-| Add to a terminal window: file written, line copied, window brought forward, pasted by hand       | Owner, on `a4de1dd` (2026-10-17): the pasted line worked                                                                                                             |
+| Automatic delivery into a Terminal tab (Apple Events, then its Paste menu item in the background) | Owner, on the first build (`48ca545`): tabs listed after the Automation prompt, but the line did not land; the copied line pasted by hand worked. Path removed after |
+| Add to a terminal window: file written, line copied, window brought forward, pasted by hand       | Owner, on `960ffe3` (2026-10-17): the pasted line worked                                                                                                             |
 | Delivery log and scope, WebKit                                                                    | Synthetic: 128 and 45                                                                                                                                                |
-| Accessibility suite                                                                               | Synthetic: 54, run from the owner's terminal at `4bc0dd3` (2026-10-17)                                                                                               |
+| Accessibility suite                                                                               | Synthetic: 54, run from the owner's terminal at `5984c4f` (2026-10-17)                                                                                               |
 
 ### 0.6.1 on the owner's Mac (installed release build, 2026-10-17)
 
@@ -85,7 +85,7 @@ Nothing here certifies a client that was not tried.
 
 ## Reviews
 
-- A ChatGPT review of `0dc4997` (F01–F07) and two independent Opus reviews; every finding was adjudicated and fixed or declined with a reason in [archive/release-0.6.0/0.6.0-rc.2.md](archive/release-0.6.0/0.6.0-rc.2.md).
-- An earlier independent Opus review of the 0.5.0 → 0.6.0 work found nine defects (downloads, same-name files, file names, ⌘W); all were fixed with tests in `b30265b`.
+- A ChatGPT review of `c2cd2d3` (F01–F07) and two independent Opus reviews; every finding was adjudicated and fixed or declined with a reason in [archive/release-0.6.0/0.6.0-rc.2.md](archive/release-0.6.0/0.6.0-rc.2.md).
+- An earlier independent Opus review of the 0.5.0 → 0.6.0 work found nine defects (downloads, same-name files, file names, ⌘W); all were fixed with tests in `c1fb33c`.
 
 Whether reading ChatGPT's own page data and requesting file links through its session fits the applicable terms is the user's to check. The owner accepted that risk for this beta; these tests do not settle it.
