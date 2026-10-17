@@ -46,6 +46,16 @@ npm run test:native
 CHROMIUM_PATH='<Chrome for Testing binary>' npm run test:browser
 ```
 
+Or let Playwright fetch its own Chromium into the project's ignored `.local/` folder, then run with the same variable:
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/ms-playwright" npx playwright install chromium
+```
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/ms-playwright" npm run test:browser
+```
+
 ```bash
 npx prettier --check .
 ```
