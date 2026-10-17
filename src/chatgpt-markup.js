@@ -86,10 +86,24 @@ function flatten(lines, start) {
   }
 }
 
-// Marker characters left in the text: each opening one, or one for stray closing and field marks.
+// Marker characters left in prose: each opening one, or one for stray closing and field marks.
+// Code is kept as written on purpose, so what it shows is not counted.
 function unreadableMarkers(text) {
-  const opened = text.match(/\ue200/gu)?.length ?? 0;
-  return opened || Number(/[\ue201\ue202]/u.test(text));
+  let fence = null;
+  const prose = text
+    .split('\n')
+    .filter((line) => {
+      if (fence) {
+        if (new RegExp(`^[ \\t]*${fence}${fence[0]}*[ \\t]*$`, 'u').test(line)) fence = null;
+        return false;
+      }
+      fence = fenceOpen.exec(line)?.[1] ?? null;
+      return !fence;
+    })
+    .map((line) => line.replace(inlineCode, ''))
+    .join('\n');
+  const opened = prose.match(/\ue200/gu)?.length ?? 0;
+  return opened || Number(/[\ue201\ue202]/u.test(prose));
 }
 
 /**

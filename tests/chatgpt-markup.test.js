@@ -252,4 +252,9 @@ test('markers it cannot read stay as written and are counted', () => {
   assert.equal(result.markdown, `See ${entity} and a stray \ue201 mark.`);
   assert.equal(result.unreadable, 1);
   assert.equal(readableMarkdown('\ue200cite\ue202turn0search0\ue201 read').unreadable, 0);
+  // Code shows its text as written; a marker inside it is not ChatGPT's markup failing.
+  const code = 'x = "\ue200cite\ue202turn0search0\ue201"';
+  assert.equal(readableMarkdown(`Here:\n\`\`\`\n${code}\n\`\`\`\n`).unreadable, 0);
+  assert.equal(readableMarkdown(`Use \`${code}\` here.`).unreadable, 0);
+  assert.equal(readableMarkdown(`~~~\n${code}\n~~~\nThen \ue201.`).unreadable, 1);
 });
