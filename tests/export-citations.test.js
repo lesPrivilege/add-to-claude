@@ -68,7 +68,7 @@ test('message citations: inline sources join the list; an unknown id is reported
   assert.deepEqual(issues, ['unresolved-citations']);
 });
 
-test('numbering: cited first by first mention, several in one mark in the order cited, unresolved as [?]', () => {
+test('numbering: cited first by first mention, several in one mark smallest first, unresolved as [?]', () => {
   const turn = {
     markdown: 'one two three',
     citations: [
@@ -84,7 +84,7 @@ test('numbering: cited first by first mention, several in one mark in the order 
     { at: 13, slot: 2 },
   ];
   const result = numberCitations(turn, marks, slots);
-  assert.equal(result.markdown, 'one[1] two[2, 1] three[?]');
+  assert.equal(result.markdown, 'one[1] two[1, 2] three[?]');
   assert.deepEqual(
     result.citations.map((item) => item.title),
     ['C', 'A', 'B'],

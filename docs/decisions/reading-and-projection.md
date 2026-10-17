@@ -31,7 +31,7 @@ Choices a well-meant pull request could undo. Each says what was decided, why, a
 - **Numbering.**
   - Sources cited in the text come first, in order of first mention; the rest follow.
   - When a turn spans several messages, its marks are shifted into the merged text before numbering.
-  - A mark citing several sources lists their numbers in the order the source cites them. For example, `[2, 1]` means the first source cited is the turn's second reference.
+  - A mark citing several sources lists their numbers smallest first, as `[1, 2]` (owner, 2026-10-17).
 - Code: `src/export-citations.js`. Tests: `tests/export-citations.test.js`, and "citation marks never rewrite other text" in `tests/chatgpt-response.test.js`.
 
 ## 4. Terminals receive one line

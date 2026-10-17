@@ -234,7 +234,7 @@ export function messageCitations(metadata, base, cites, { linkedText, sourceById
 
 /**
  * Number a turn's sources: those cited in the text first, in order of first mention, then the
- * rest. Each mark becomes [n] (or [1, 3]), and one that resolves to no listed source [?].
+ * rest. Each mark becomes [n] (or [1, 3], smallest first), and one that resolves to no listed source [?].
  */
 export function numberCitations(turn, marks, slots) {
   const byUrl = new Map();
@@ -246,9 +246,9 @@ export function numberCitations(turn, marks, slots) {
   let { markdown } = turn;
   // From the end, so earlier positions stay put.
   for (const item of marks.toReversed()) {
-    const numbers = [...new Set((slots[item.slot] ?? []).map((url) => number.get(url)))].filter(
-      Boolean,
-    );
+    const numbers = [...new Set((slots[item.slot] ?? []).map((url) => number.get(url)))]
+      .filter(Boolean)
+      .sort((a, b) => a - b);
     const label = numbers.length ? `[${numbers.join(', ')}]` : '[?]';
     markdown = markdown.slice(0, item.at) + label + markdown.slice(item.at);
   }
