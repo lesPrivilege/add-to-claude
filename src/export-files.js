@@ -66,14 +66,22 @@ export function attachmentList(issue) {
  * record that its bytes were not in this export. Never resolve a sandbox path locally.
  */
 export function sandboxLinks(markdown) {
-  return [...markdown.matchAll(/sandbox:\/[^\s<>"')\]]+/gu)].map((match) => {
-    let name = match[0].split('/').at(-1);
+  // A bare link ends at a space, a closing bracket, a quote, a backtick or CJK and full-width punctuation
+  // (Chinese prose runs on without spaces; 〇 and 々 are letters, not punctuation), and a sentence's closing punctuation is not part of it.
+  const links = markdown.matchAll(
+    /sandbox:\/[^\s<>"'`)[\]\u2018\u2019\u201c\u201d\u2026\u3000-\u3004\u3008-\u3011\u3014-\u301f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+/gu,
+  );
+  return [...links].flatMap((match) => {
+    const id = match[0].replace(/[.,;:!?]+$/u, '');
+    let name = id.split('/').at(-1);
+    // A link with no file name, such as a placeholder "sandbox:/mnt/data/...", names no file.
+    if (!name) return [];
     try {
       name = decodeURIComponent(name);
     } catch {
       /* Keep malformed URI text as a display name. */
     }
-    return { id: match[0], name, offset: match.index };
+    return [{ id, name, offset: match.index }];
   });
 }
 

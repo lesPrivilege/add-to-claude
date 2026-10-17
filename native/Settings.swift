@@ -87,6 +87,7 @@ protocol UpdateControls: AnyObject {
     var automaticallyChecks: Bool { get set }
     var automaticallyInstalls: Bool { get set }
     var lastCheck: Date? { get }
+    var canCheck: Bool { get }
     func checkNow()
 }
 
@@ -181,6 +182,7 @@ private struct SettingsView: View {
     @State private var confirmSignOut = false
     @State private var taken = false
     @State private var lastCheck: Date?
+    @State private var canCheck = true
     @State private var checksDaily = true
     @State private var installsOnQuit = true
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -310,7 +312,7 @@ private struct SettingsView: View {
                             if let lastCheck {
                                 Text("Checked \(lastCheck.formatted(.relative(presentation: .named)))").foregroundStyle(.secondary)
                             }
-                            Button("Check Now") { updates.checkNow() }
+                            Button("Check Now") { updates.checkNow() }.disabled(!canCheck) // Not while one downloads.
                         }
                     }
                     note("Each check asks GitHub for this project's update feed. GitHub sees your IP address, this app's and Sparkle's versions, and your preferred languages; nothing else is sent. An update is installed only if it is signed with the project's update key.")
@@ -329,6 +331,7 @@ private struct SettingsView: View {
             login = SMAppService.mainApp.status
             pasteApps = SettingsView.pastedApps()
             lastCheck = updates?.lastCheck
+            canCheck = updates?.canCheck ?? false
             // Sparkle's own alert can change these too.
             if let updates {
                 if checksDaily != updates.automaticallyChecks { checksDaily = updates.automaticallyChecks }

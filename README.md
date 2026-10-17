@@ -85,7 +85,7 @@ A terminal may be showing a shell rather than an agent, so it never receives the
 2. Open it. macOS refuses the first time; go to System Settings → Privacy & Security, choose **Open Anyway** for Add to Claude, and confirm.
 3. Sign in to ChatGPT in the panel, then choose **Allow…** in the bar for Accessibility (step 2 of [Building and setting up](#building-and-setting-up)). Later releases signed with the same certificate keep that permission.
 
-From 0.8.0 on, updates arrive by themselves: Add to Claude checks once a day, downloads a new version and installs it when you quit. **Check for Updates…** is in the menu of the menu-bar icon (right-click). An earlier version is replaced by hand, once.
+From 0.8.0 on, updates arrive by themselves: Add to Claude checks once a day, downloads a new version and installs it when you quit. While one is downloading, and once it is ready, the panel's header says so; **Relaunch to Update** there installs it now. Checks pause until a ready update is installed. No window pops up for a scheduled check. **Check for Updates…** is in the menu of the menu-bar icon (right-click). An earlier version is replaced by hand, once.
 
 ### Building and setting up
 
@@ -209,7 +209,7 @@ Add to Claude 把这个按钮找了回来，并让它能去更多地方。聊天
 2. 打开它。第一次会被拒绝；到系统设置 → 隐私与安全性，为 Add to Claude 选择 **仍要打开**，再确认。
 3. 在面板里登录 ChatGPT，然后点击底栏的 **Allow…** 开启辅助功能（见「构建与设置」第 2 步）。之后用同一证书签名的版本会保留这项授权。
 
-从 0.8.0 起更新会自动到来：每天检查一次，下载新版本，在你退出时安装。菜单栏图标的右键菜单里有 **Check for Updates…**。更早的版本需要手动替换一次。
+从 0.8.0 起更新会自动到来：每天检查一次，下载新版本，在你退出时安装。下载中和下载好之后，面板顶栏会显示；点那里的 **Relaunch to Update** 立即安装。已下载好的更新装上之前不再检查。定时检查不弹窗口。菜单栏图标的右键菜单里有 **Check for Updates…**。更早的版本需要手动替换一次。
 
 ### 构建与设置
 

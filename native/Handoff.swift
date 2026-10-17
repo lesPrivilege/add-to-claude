@@ -135,21 +135,27 @@ final class HandoffBar: NSViewController {
         statusText.preferredMaxLayoutWidth = 250 // Wraps beside a question's buttons; the row widens it when there are none.
         statusRow.setViews([statusGlyph, statusText, statusActions], in: .leading)
         statusRow.spacing = 6
-        // The scope line and two status lines keep their room when empty: the web view above never
-        // changes height (and ChatGPT never scrolls or reflows) because the bar said something.
+        // The scope line and the status share one block that keeps its height when empty: the web view
+        // above never changes height (and ChatGPT never scrolls or reflows) because the bar said something.
+        // Both shown, each takes a line; the status alone takes two (`fitNotes`).
         scopeRow.heightAnchor.constraint(equalToConstant: 18).isActive = true
-        statusRow.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        let notes = NSStackView(views: [scopeRow, statusRow])
+        notes.orientation = .vertical
+        notes.alignment = .leading
+        notes.spacing = 2
+        notes.heightAnchor.constraint(equalToConstant: 38).isActive = true
+        for row in [scopeRow, statusRow] { row.widthAnchor.constraint(equalTo: notes.widthAnchor).isActive = true }
 
         let separator = NSBox()
         separator.boxType = .separator
-        let column = NSStackView(views: [separator, sourceRow, targetRow, scopeRow, access, statusRow])
+        let column = NSStackView(views: [separator, sourceRow, targetRow, access, notes])
         column.orientation = .vertical
         column.alignment = .leading
         column.spacing = 8
         column.setCustomSpacing(4, after: targetRow)
         column.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 10, right: 12)
         separator.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
-        for row in [sourceRow, targetRow, scopeRow, access, statusRow] {
+        for row in [sourceRow, targetRow, access, notes] {
             row.widthAnchor.constraint(equalTo: column.widthAnchor, constant: -24).isActive = true
         }
         view = column
@@ -294,9 +300,9 @@ final class HandoffBar: NSViewController {
         scopeDetail.toolTip = detail
         let quiet = !trusted || scope == nil || !hasDestination
             || (scope?.mode == "all" && scope?.automatic == true && !canBind && !bound)
-        scopeRow.isHidden = !trusted // With the Accessibility row, as the target row is.
         scopeDetail.isHidden = quiet
         if quiet { bindButton.isHidden = true }
+        fitNotes()
 
         guard let scope, let analysis, let prepared else { return }
         let signature = [scope.label, "\(scopeChoice)", "\(analysis.newApplicable)", "\(analysis.newTurns.count)", "\(String(describing: target?.confidence))",
@@ -600,6 +606,15 @@ final class HandoffBar: NSViewController {
             return button
         }, in: .leading)
         statusActions.isHidden = actions.isEmpty
+        fitNotes()
+    }
+
+    /// The scope line shows only with something on it, and not under a question (Add Again says it
+    /// already); the status gets the second line when it is alone.
+    private func fitNotes() {
+        scopeRow.isHidden = (scopeDetail.isHidden && bindButton.isHidden) || !statusActions.isHidden
+        statusRow.isHidden = statusText.stringValue.isEmpty && statusActions.isHidden
+        statusText.maximumNumberOfLines = scopeRow.isHidden ? 2 : 1
     }
 
     // MARK: targets

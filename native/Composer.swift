@@ -250,13 +250,14 @@ func appendToComposer(_ selected: Composer, text: String, operationValid: @escap
     }
     // Focus moving in the target app during an Add (to another window or field) means someone is using
     // it: nothing is written then. Focus moving onto this very box is not that: web editors take focus
-    // when their selection is set. Cheap checks only: no walk of the window per check.
+    // when their selection is set. The box is checked again as a message box (writable, not a terminal or
+    // code pane), since a kept box can change. Cheap checks only: no walk of the window per check.
     let focus = appFocus(selected.choice.app)
     let unchanged = {
         let now = appFocus(selected.choice.app)
         let ontoBox = same(now[0], selected.choice.window) && same(now[1], selected.editor)
         return (sameFocus(now, focus) || ontoBox) && same(axElement(selected.editor, kAXWindowAttribute), selected.choice.window)
-            && axString(selected.editor, kAXRoleAttribute) == kAXTextAreaRole
+            && messageBoxProblem(selected.editor) == nil
     }
     revalidateSource { valid in
         DispatchQueue.main.async {

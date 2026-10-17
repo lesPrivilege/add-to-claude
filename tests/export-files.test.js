@@ -29,6 +29,30 @@ test('sandbox links: the decoded last segment, with its offset', () => {
   );
 });
 
+test('sandbox links: bare links end before CJK punctuation, sentence ends and code marks', () => {
+  assert.deepEqual(
+    sandboxLinks(
+      '文件在 sandbox:/mnt/data/报告.md，早已失效。See sandbox:/mnt/data/plan.md. And `sandbox:/mnt/data/a.csv`（旧）',
+    ),
+    [
+      { id: 'sandbox:/mnt/data/报告.md', name: '报告.md', offset: 4 },
+      { id: 'sandbox:/mnt/data/plan.md', name: 'plan.md', offset: 37 },
+      { id: 'sandbox:/mnt/data/a.csv', name: 'a.csv', offset: 69 },
+    ],
+  );
+  assert.deepEqual(
+    sandboxLinks('见 sandbox:/mnt/data/二〇二四年报告.md 和 sandbox:/mnt/data/佐々木.csv。').map(
+      (link) => link.name,
+    ),
+    ['二〇二四年报告.md', '佐々木.csv'],
+  );
+  // A placeholder path names no file: no reference and no content check.
+  assert.deepEqual(
+    sandboxLinks('它在 sandbox:/mnt/data/...，早已失效。这个文件之所以还在，是因为你用 Code'),
+    [],
+  );
+});
+
 test('settle: folded turns, a sandbox link joined to its attached copy, no account id in names', () => {
   const issues = [];
   const { list, add } = attachmentList((code, message, sourceLocator) =>

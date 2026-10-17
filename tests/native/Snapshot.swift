@@ -148,6 +148,20 @@ import AppKit
         findButton(in: again.view) { $0.title.hasPrefix("Add") }?.performClick(nil)
         render(again.view, width: 480, to: output.appendingPathComponent("bar-add-again.png"))
 
+        // The header's update button, in each state, beside the pin and Settings as in the panel.
+        for (name, offer) in [("available", UpdateOffer.available("0.8.1")), ("downloading", .downloading("0.8.1")), ("ready", .ready("0.8.1"))] {
+            let button = UpdateButton()
+            button.show(offer)
+            button.alphaValue = 1
+            let row = NSStackView(views: [NSView(), button, iconButton("pin", "Pin", #selector(NSObject.copy), NSObject()),
+                                          iconButton("settings", "Settings", #selector(NSObject.copy), NSObject())])
+            row.spacing = 2
+            row.setCustomSpacing(6, after: button)
+            row.edgeInsets = NSEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
+            row.heightAnchor.constraint(equalToConstant: 32).isActive = true
+            render(row, width: 320, to: output.appendingPathComponent("update-\(name).png"))
+        }
+
         // The turn picker: 42 turns, 1–30 and 33–36 added, turn 7 changed since, 37–42 chosen.
         let picker = TurnPicker(turns: turns(42, edited: [7]), added: Set((1...30).map { "m\($0)" } + (33...36).map { "m\($0)" }).subtracting(["m7"]),
                                 lastAdd: Set((9...14).map { "m\($0)" }),

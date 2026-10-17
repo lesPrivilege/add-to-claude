@@ -9,7 +9,7 @@ final class ChatPanel: NSPanel {
     override func performClose(_ sender: Any?) { onEscape() }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     private var item: NSStatusItem!
     private var panel: ChatPanel!
     private let chat = ChatController()
@@ -24,7 +24,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         SavedFiles.shared.load()
         HandoffFiles.shared.remove(olderThan: 24 * 3600) // A hand-off is for the next message, not an archive.
         NSApp.mainMenu = mainMenu()
-        updates.start()
         settings.updates = updates
         panel = ChatPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 760),
                           styleMask: [.titled, .resizable, .nonactivatingPanel, .fullSizeContentView],
@@ -47,6 +46,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.delegate = self
 
         chat.openSettings = { [weak self] in self?.openSettings() }
+        chat.updateButton.onClick = { [weak self] in self?.updates.acceptOffer() }
+        updates.onOffer = { [weak self] in self?.chat.updateButton.show($0) }
+        updates.start()
         settings.reload = { [weak self] in self?.chat.reload() }
         settings.signOut = { [weak self] in self?.chat.signOut() }
         settings.clearWebCache = { [weak self] in self?.chat.clearWebCache() }
@@ -108,6 +110,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     private var returnToPanel = false
     @objc private func checkForUpdates() { updates.checkNow() }
+    /// Check for Updates… is off while an update downloads in the background (the panel's header says so).
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        item.action != #selector(checkForUpdates) || updates.canCheck
+    }
     @objc private func reloadPage() { chat.reload() }
     @objc private func goBack() { chat.goBack() }
 

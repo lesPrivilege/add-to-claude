@@ -148,3 +148,105 @@ final class ClosureButton: NSButton {
         return button
     }
 }
+
+/// What the panel's header shows about an update.
+enum UpdateOffer: Equatable {
+    case none
+    case available(String)   // Found; clicking shows Sparkle's alert.
+    case downloading(String) // Downloading in the background.
+    case ready(String)       // Downloaded; installs on quit, or now by relaunching.
+}
+
+/// The header's update button: absent until there is an update. It fades in and changes with a crossfade,
+/// without either when Reduce Motion is on.
+final class UpdateButton: NSStackView {
+    var onClick: () -> Void = {}
+    private let spinner = NSProgressIndicator()
+    private let button = NSButton(title: "", target: nil, action: nil)
+    private(set) var offer = UpdateOffer.none
+
+    init() {
+        super.init(frame: .zero)
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.isDisplayedWhenStopped = false
+        button.bezelStyle = .push
+        button.controlSize = .small
+        button.font = .systemFont(ofSize: 11, weight: .medium)
+        button.imagePosition = .imageLeading
+        button.target = self
+        button.action = #selector(clicked)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        setViews([spinner, button], in: .leading)
+        spacing = 4
+        wantsLayer = true
+        isHidden = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    @objc private func clicked() { onClick() }
+
+    func show(_ next: UpdateOffer) {
+        guard next != offer else { return }
+        let appearing = offer == .none
+        offer = next
+        let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        switch next {
+        case .none:
+            spinner.stopAnimation(nil)
+            spinner.isHidden = true
+            guard !still else { isHidden = true; return }
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.2
+                animator().alphaValue = 0
+            }, completionHandler: { [weak self] in
+                guard let self, self.offer == .none else { return }
+                self.isHidden = true
+                self.alphaValue = 1
+            })
+            return
+        case let .available(version):
+            spinner.stopAnimation(nil)
+            spinner.isHidden = true
+            set("Update", image: "download", enabled: true, accent: false,
+                tip: "Version \(version) is available. Click to see what is new and install it.")
+        case let .downloading(version):
+            spinner.isHidden = false
+            spinner.startAnimation(nil)
+            set("Downloading…", image: nil, enabled: false, accent: false,
+                tip: "Version \(version) is downloading. It installs when Add to Claude quits.")
+        case let .ready(version):
+            spinner.stopAnimation(nil)
+            spinner.isHidden = true
+            set("Relaunch to Update", image: "refresh", enabled: true, accent: true,
+                tip: "Version \(version) is downloaded. It installs when Add to Claude quits; click to relaunch into it now.")
+        }
+        if still { isHidden = false; alphaValue = 1; return }
+        if appearing {
+            alphaValue = 0
+            isHidden = false
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.25
+                animator().alphaValue = 1
+            }
+        } else {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = 0.2
+            button.wantsLayer = true
+            button.layer?.add(fade, forKey: "change")
+        }
+    }
+
+    private func set(_ title: String, image: String?, enabled: Bool, accent: Bool, tip: String) {
+        button.title = title
+        button.image = image.flatMap { glyph($0, size: 12) }
+        button.isEnabled = enabled
+        button.isBordered = enabled // Downloading is a note beside the spinner, not something to press.
+        button.bezelColor = accent ? .controlAccentColor : nil
+        button.toolTip = tip
+        button.setAccessibilityLabel(title)
+        button.setAccessibilityHelp(tip)
+    }
+}

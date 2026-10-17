@@ -25,6 +25,7 @@ func pageKey(_ url: URL?) -> String? {
 /// The page observer runs in the page world; the compiler and bridge run in an isolated content world.
 final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, NSWindowDelegate {
     let bar = HandoffBar()
+    let updateButton = UpdateButton()
     var openSettings: () -> Void = {}
     private let notice = Notice()
     /// Set once the user has read the sign-in note or a conversation has loaded (so they are signed in).
@@ -111,8 +112,9 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
         let reload = iconButton("refresh", "Reload page", #selector(ChatController.reload), self)
         let browser = iconButton("external", "Open in your browser", #selector(openInBrowser), self)
         let settings = iconButton("settings", "Settings", #selector(showSettings), self)
-        let row = NSStackView(views: [back, reload, browser, NSView(), pin, settings])
+        let row = NSStackView(views: [back, reload, browser, NSView(), updateButton, pin, settings])
         row.spacing = 2
+        row.setCustomSpacing(6, after: updateButton)
         row.edgeInsets = NSEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
         row.heightAnchor.constraint(equalToConstant: 32).isActive = true
         preferencesChanged()
