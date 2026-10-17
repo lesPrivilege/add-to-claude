@@ -140,6 +140,8 @@ test('each file gets its own line, even when two turns make files with the same 
   assert.match(lines[first.check], /^- chart\.png: download this file/);
   assert.equal(result.verification, 'partial');
   assert.equal(result.verifiedWithFiles, true);
+  // Diagnostics get the checks by code and count, never their text.
+  assert.deepEqual(result.checks, { 'attachment-download-needed': 2 });
 });
 
 test("a generated image linked by sandbox path and attached under ChatGPT's long name is one file", () => {

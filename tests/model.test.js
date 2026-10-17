@@ -763,3 +763,12 @@ test('hand-off format: turns in order, original Markdown untouched, references a
     if (!turn.code) assert.ok(projection.includes(`\n\n${turn.markdown}`));
   assert.ok(!projection.includes('Source locator:'));
 });
+
+test('markup ChatGPT changed under the reader is kept as written and makes the turn partial', () => {
+  const input = fixture();
+  input[0].mapping.a1.message.content.parts = ['An entity{"shape":"new"} here.'];
+  const model = importConversation(input, 'conversation-1');
+  assert.equal(model.turns[1].markdown, 'An entity{"shape":"new"} here.');
+  assert.equal(model.turns[1].contentFidelity, 'partial');
+  assert.ok(model.verification.issues.some((issue) => issue.code === 'unreadable-markup'));
+});

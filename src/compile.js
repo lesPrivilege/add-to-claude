@@ -60,6 +60,11 @@ export function handoff(model, { turnIds = null, note = '' } = {}) {
       }).verification.status === 'verified',
     verification: selection.verification.status,
     issues: [...new Set(selection.verification.issues.map((issue) => issue.message))].slice(0, 5),
+    // How many of each content check, by code only: what diagnostics may record about the text.
+    checks: selection.verification.issues.reduce(
+      (counts, { code }) => Object.assign(counts, { [code]: (counts[code] ?? 0) + 1 }),
+      {},
+    ),
   };
 }
 

@@ -151,7 +151,12 @@ test('private-use markers become display text, drop citations and leave out imag
 
 test('text without markup is returned exactly, trailing spaces and blank lines included', () => {
   for (const text of ['  **Exact** 中文 ✓  \n\n\n', 'a < b and c > d', ''])
-    assert.deepEqual(readableMarkdown(text), { markdown: text, cites: [], omitted: 0 });
+    assert.deepEqual(readableMarkdown(text), {
+      markdown: text,
+      cites: [],
+      omitted: 0,
+      unreadable: 0,
+    });
 });
 
 test('bare attribute values and form controls unwrap like the other layout tags', () => {
@@ -239,4 +244,12 @@ test('nested layout goes flush left, so deep boxes never read as code; fenced co
       '```',
     ].join('\n'),
   );
+});
+
+test('markers it cannot read stay as written and are counted', () => {
+  const entity = '\ue200entity\ue202{"shape":"new"}\ue201';
+  const result = readableMarkdown(`See ${entity} and a stray \ue201 mark.`);
+  assert.equal(result.markdown, `See ${entity} and a stray \ue201 mark.`);
+  assert.equal(result.unreadable, 1);
+  assert.equal(readableMarkdown('\ue200cite\ue202turn0search0\ue201 read').unreadable, 0);
 });

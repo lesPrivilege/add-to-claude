@@ -666,7 +666,8 @@ final class HandoffBar: NSViewController {
         operation = UUID()
         let id = operation
         let trace = HandoffTrace()
-        trace.record(.started, turns: scope.turns.count, scope: scope.mode, target: selected.choice.app.bundleIdentifier)
+        trace.record(.started, turns: scope.turns.count, scope: scope.mode, target: selected.choice.app.bundleIdentifier,
+                     checks: frozen.checks)
         let receipt = frozen.sourceId.map {
             log.begin(source: $0, target: identity, mode: scope.mode, turns: scope.turns, attachments: scope.turns.flatMap(\.files))
         }

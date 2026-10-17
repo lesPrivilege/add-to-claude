@@ -8,6 +8,7 @@ The living documents describe Add to Claude as it is at `main`. The archive keep
 - [../CONTRIBUTING.md](../CONTRIBUTING.md) and [../SECURITY.md](../SECURITY.md): the rules a change must keep, the checks to run, and how to report a vulnerability. The project is under the [MIT License](../LICENSE).
 - [architecture.md](architecture.md): how the panel, the page scripts, the compiler and the native app fit together, and what is stored where.
 - [product-contract.md](product-contract.md): the owner's design decisions, the required behaviour (R1–R8) and where each stands.
+- [shapes.md](shapes.md): every ChatGPT data shape the code reads, the test that pins it, and how a change shows up.
 - [support-matrix.md](support-matrix.md): evidence for the current release, split into owner-verified, synthetic and not run.
 - [release-checklist.md](release-checklist.md): the gates for the next release and how to cut a candidate and publish.
 - [roadmap.md](roadmap.md): maturity and maintenance work, the next forms and the shape that keeps sources and destinations independent.

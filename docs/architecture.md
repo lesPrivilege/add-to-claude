@@ -55,7 +55,7 @@ Settings (SwiftUI, in the panel's place) · global shortcut (Carbon hot key) · 
   3. Apps known to ignore step 1 skip its wait. The target is never activated, and nothing is sent.
   - It reports `inserted` only when the text reads back. A draft that changed but cannot be confirmed (a reformatting paste, for one) is `unconfirmed`; nothing added is `failed`.
   - `conversationIdentity` reads which conversation a window shows from its `AXWebArea`'s `AXURL` or the window's `AXDocument`. Only `https://claude.ai/chat/<uuid>` or `https://claude.ai/epitaxy/local_<uuid>` counts; the walk is bounded to 1 s.
-- **`Files.swift`**: the files folder and the downloader. **`Settings.swift`**: preferences, the hot key and the Settings window. **`Diagnostics.swift`**: each hand-off's stages, times, sizes and outcome in the unified log (counts and fixed names only, never text, titles, file names or paths), and Export…. **`Views.swift`**: SVG template glyphs and small controls.
+- **`Files.swift`**: the files folder and the downloader. **`Settings.swift`**: preferences, the hot key and the Settings window. **`Diagnostics.swift`**: each hand-off's stages, times, sizes, outcome and content checks by code in the unified log (counts and fixed names only, never text, titles, file names or paths), and Export…. **`Views.swift`**: SVG template glyphs and small controls.
 
 ## Limits
 
@@ -66,13 +66,13 @@ Settings (SwiftUI, in the panel's place) · global shortcut (Carbon hot key) · 
 
 ## Storage and diagnostics
 
-| Kind                                                  | Where                                                                          | Cleared by                                                          |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| ChatGPT sign-in and site data                         | WebKit's default data store                                                    | Sign Out (all site data)                                            |
-| Web caches                                            | WebKit's default data store                                                    | Clear and Reload (memory, disk and fetch caches only; sign-in kept) |
-| Settings                                              | UserDefaults                                                                   | not cleared                                                         |
-| Delivery history (ids, positions, hashes, times)      | `~/Library/Application Support/add-to-claude/`                                 | Clear History; pruned at launch by retention                        |
-| Downloaded files                                      | the files folder the user chose                                                | never cleared by the app                                            |
-| Hand-off diagnostics (stages, times, sizes, outcomes) | the unified log, subsystem `io.lesprivilege.add-to-claude`, category `handoff` | the system's own log rotation; Export… saves this session's events  |
+| Kind                                                                                  | Where                                                                          | Cleared by                                                          |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| ChatGPT sign-in and site data                                                         | WebKit's default data store                                                    | Sign Out (all site data)                                            |
+| Web caches                                                                            | WebKit's default data store                                                    | Clear and Reload (memory, disk and fetch caches only; sign-in kept) |
+| Settings                                                                              | UserDefaults                                                                   | not cleared                                                         |
+| Delivery history (ids, positions, hashes, times)                                      | `~/Library/Application Support/add-to-claude/`                                 | Clear History; pruned at launch by retention                        |
+| Downloaded files                                                                      | the files folder the user chose                                                | never cleared by the app                                            |
+| Hand-off diagnostics (stages, times, sizes, outcomes, content-check codes and counts) | the unified log, subsystem `io.lesprivilege.add-to-claude`, category `handoff` | the system's own log rotation; Export… saves this session's events  |
 
 The conversation itself lives only in memory: the page observer keeps at most eight recent conversations, capped in size, and the app keeps the prepared one.

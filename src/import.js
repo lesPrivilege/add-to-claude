@@ -177,7 +177,7 @@ export function importConversation(raw, id, leafId) {
     const readable =
       role === 'assistant' && content.content_type !== 'code'
         ? readableMarkdown(raw, marker.mark)
-        : { markdown: raw, cites: [], omitted: 0 };
+        : { markdown: raw, cites: [], omitted: 0, unreadable: 0 };
     const { markdown, marks } = marker.extract(readable.markdown);
     let code;
     if (content.content_type === 'code') {
@@ -247,6 +247,12 @@ export function importConversation(raw, id, leafId) {
         nodeId,
       );
     const citations = messageCitations(metadata, base, readable.cites, sources, issue);
+    if (readable.unreadable)
+      issue(
+        'unreadable-markup',
+        "Some of ChatGPT's inline markup could not be read and is kept as written. Review the original turn.",
+        `${base}.message.content`,
+      );
     if (readable.omitted)
       issue(
         'omitted-inline-content',

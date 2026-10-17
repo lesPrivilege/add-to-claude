@@ -5,7 +5,8 @@
  * answers. Only the tag names below are transformed. Fenced code, inline code and unknown tags
  * stay exactly as written. A scripted widget's template lines ({@body …}, {#each …}, {/each}, a line
  * that is only a bound value such as {t.name}) cannot be read as text: they go, and count as an
- * omitted widget.
+ * omitted widget. A marker it could not read (an unfamiliar entity shape, a broken marker) stays
+ * as written and is counted as unreadable: ChatGPT's markup has changed under it.
  */
 
 // Containers lay out blocks: their own lines go, a closing one separates what follows, and the
@@ -85,10 +86,16 @@ function flatten(lines, start) {
   }
 }
 
+// Marker characters left in the text: each opening one, or one for stray closing and field marks.
+function unreadableMarkers(text) {
+  const opened = text.match(/\ue200/gu)?.length ?? 0;
+  return opened || Number(/[\ue201\ue202]/u.test(text));
+}
+
 /**
  * Returns the readable Markdown, the citations it found (each with its exact source text and
- * reference ids, for resolving against the message metadata) and how many inline images or
- * widgets it had to leave out. `mark(cite)` gives the text that stands in a citation's place.
+ * reference ids, for resolving against the message metadata), how many inline images or
+ * widgets it had to leave out, and how many markers it could not read. `mark(cite)` gives the text that stands in a citation's place.
  */
 export function readableMarkdown(text, mark = () => '') {
   const cites = [];
@@ -242,7 +249,8 @@ export function readableMarkdown(text, mark = () => '') {
     }
   }
   if (region >= 0) (writing ? dedent : flatten)(output, region);
-  if (!changed) return { markdown: text, cites, omitted };
+  if (!changed) return { markdown: text, cites, omitted, unreadable: unreadableMarkers(text) };
   while (output.at(-1) === '') output.pop();
-  return { markdown: output.join('\n') + (text.endsWith('\n') ? '\n' : ''), cites, omitted };
+  const markdown = output.join('\n') + (text.endsWith('\n') ? '\n' : '');
+  return { markdown, cites, omitted, unreadable: unreadableMarkers(markdown) };
 }

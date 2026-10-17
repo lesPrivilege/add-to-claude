@@ -72,6 +72,13 @@ import WebKit
               && !both.contains("\n\n\n"), "both linked: each its own copy, the check gone, verified")
     }
 
+    static func checkCounts() {
+        check(parseChecks(["attachment-download-needed": 2, "unreadable-markup": 1]) == ["attachment-download-needed": 2, "unreadable-markup": 1],
+              "content-check counts read by code")
+        check(parseChecks(["Some text": 1]).isEmpty && parseChecks(["code": "1"]).isEmpty && parseChecks(["code": 0]).isEmpty
+              && parseChecks(nil).isEmpty, "a count that is not a fixed code and a positive number is dropped whole")
+    }
+
     static func fileLinkChoice() {
         let report = Attachment(key: "1:b", id: "sandbox:/mnt/data/report.md", name: "report.md", label: "report.md", turn: 2,
                                 messageId: "b1", line: 9, check: -1)
@@ -175,6 +182,7 @@ import WebKit
 
         linkedFiles()
         fileLinkChoice()
+        checkCounts()
         diagnostics()
         print("PASS: \(checks) WebKit checks in a real WKWebView")
         exit(0)

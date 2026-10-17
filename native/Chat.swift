@@ -200,7 +200,8 @@ final class ChatController: NSViewController, WKScriptMessageHandler, WKNavigati
                                     verification: body["verification"] as? String ?? "",
                                     issues: (body["issues"] as? [String] ?? []).map { safeLabel($0, limit: 200) },
                                     attachments: attachments,
-                                    verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false, turnList: turnList)
+                                    verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false, turnList: turnList,
+                                    checks: parseChecks(body["checks"]))
             set(prepared, .ready(prepared))
         case "file":
             // A link the page itself requested for one of its files; only https on ChatGPT's own hosts.

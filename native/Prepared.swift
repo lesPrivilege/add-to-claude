@@ -15,6 +15,8 @@ struct Prepared {
     let verifiedWithFiles: Bool
     /// Each turn: id, role, position, preview, hash and file keys, for choosing turns and the log.
     var turnList: [TurnInfo] = []
+    /// How many of each content check, by code, for diagnostics.
+    var checks: [String: Int] = [:]
 
     /// The ChatGPT conversation id; nil for a chat that has none yet.
     var sourceId: String? { sourceConversationId(page) }
@@ -23,7 +25,7 @@ struct Prepared {
     func projected(_ text: ProjectedText) -> Prepared {
         Prepared(revision: revision, page: page, markdown: text.markdown, title: title, turns: turns, files: text.attachments.count,
                  verification: text.verification, issues: issues, attachments: text.attachments,
-                 verifiedWithFiles: text.verifiedWithFiles, turnList: turnList)
+                 verifiedWithFiles: text.verifiedWithFiles, turnList: turnList, checks: checks)
     }
 }
 
@@ -47,6 +49,18 @@ func parseAttachments(_ value: Any?, lineCount: Int) -> [Attachment]? {
         result.append(Attachment(key: key, id: id, name: safeLabel(file["name"] as? String ?? "", limit: 200),
                                  label: file["label"] as? String ?? "", turn: file["turn"] as? Int ?? 0,
                                  messageId: file["messageId"] as? String ?? "", line: line, check: check))
+    }
+    return result
+}
+
+/// Reads the compiler's count of content checks by code; codes are the compiler's fixed names, never text.
+func parseChecks(_ value: Any?) -> [String: Int] {
+    guard let counts = value as? [String: Any], counts.count <= 64 else { return [:] }
+    var result: [String: Int] = [:]
+    for (code, count) in counts {
+        guard code.range(of: "^[a-z][a-z-]{0,63}$", options: .regularExpression) != nil,
+              let count = count as? Int, count > 0 else { return [:] }
+        result[code] = count
     }
     return result
 }

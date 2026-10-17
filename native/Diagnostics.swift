@@ -2,7 +2,7 @@ import AppKit
 import OSLog
 
 /// One hand-off as structured events in the unified log: its stages, how long each took, sizes and
-/// the outcome. Only counts, fixed stage names and outcomes are logged: never message text, titles,
+/// the outcome. Only counts, fixed stage and content-check names and outcomes are logged: never message text, titles,
 /// file names or paths, so the record cannot become a second copy of a conversation.
 struct HandoffTrace {
     enum Stage: String {
@@ -14,7 +14,8 @@ struct HandoffTrace {
     let id = String(UUID().uuidString.prefix(8)).lowercased()
     private let start = Date()
 
-    func record(_ stage: Stage, turns: Int? = nil, files: Int? = nil, bytes: Int? = nil, scope: String? = nil, target: String? = nil) {
+    func record(_ stage: Stage, turns: Int? = nil, files: Int? = nil, bytes: Int? = nil, scope: String? = nil, target: String? = nil,
+                checks: [String: Int] = [:]) {
         let ms = Int(Date().timeIntervalSince(start) * 1000)
         var fields = ["op=\(id)", "stage=\(stage.rawValue)", "t=\(ms)ms"]
         if let scope { fields.append("scope=\(scope)") }
@@ -22,6 +23,8 @@ struct HandoffTrace {
         if let files { fields.append("files=\(files)") }
         if let bytes { fields.append("bytes=\(bytes)") }
         if let target { fields.append("target=\(target)") }
+        // Content-check codes are fixed names; a new or rising one is the sign ChatGPT's data changed.
+        if !checks.isEmpty { fields.append("checks=" + checks.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) }
         let line = fields.joined(separator: " ")
         Self.log.notice("\(line, privacy: .public)")
     }
