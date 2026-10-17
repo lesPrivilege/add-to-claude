@@ -15,7 +15,7 @@ struct Prepared {
     let verifiedWithFiles: Bool
     /// Each turn: id, role, position, preview, hash and file keys, for choosing turns and the log.
     var turnList: [TurnInfo] = []
-    /// How many of each content check, by code, for diagnostics.
+    /// How many of each content check this text carries, by code, for diagnostics.
     var checks: [String: Int] = [:]
 
     /// The ChatGPT conversation id; nil for a chat that has none yet.
@@ -25,7 +25,7 @@ struct Prepared {
     func projected(_ text: ProjectedText) -> Prepared {
         Prepared(revision: revision, page: page, markdown: text.markdown, title: title, turns: turns, files: text.attachments.count,
                  verification: text.verification, issues: issues, attachments: text.attachments,
-                 verifiedWithFiles: text.verifiedWithFiles, turnList: turnList, checks: checks)
+                 verifiedWithFiles: text.verifiedWithFiles, turnList: turnList, checks: text.checks)
     }
 }
 
@@ -35,6 +35,7 @@ struct ProjectedText {
     let attachments: [Attachment]
     let verification: String
     let verifiedWithFiles: Bool
+    let checks: [String: Int]
 }
 
 /// The longest hand-off text the app takes, as the compiler's own limit.
@@ -63,7 +64,7 @@ func parseProjection(_ body: [String: Any], turns: Int) -> ProjectedText? {
           let attachments = parseAttachments(body["attachments"], lineCount: markdown.components(separatedBy: "\n").count),
           let verification = body["verification"] as? String else { return nil }
     return ProjectedText(markdown: markdown, attachments: attachments, verification: verification,
-                         verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false)
+                         verifiedWithFiles: body["verifiedWithFiles"] as? Bool ?? false, checks: parseChecks(body["checks"]))
 }
 
 /// Reads a compiler result's file list; nil when any entry is malformed or points outside the text.

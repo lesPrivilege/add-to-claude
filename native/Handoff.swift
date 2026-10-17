@@ -666,8 +666,7 @@ final class HandoffBar: NSViewController {
         operation = UUID()
         let id = operation
         let trace = HandoffTrace()
-        trace.record(.started, turns: scope.turns.count, scope: scope.mode, target: selected.choice.app.bundleIdentifier,
-                     checks: frozen.checks)
+        trace.record(.started, turns: scope.turns.count, scope: scope.mode, target: selected.choice.app.bundleIdentifier)
         let receipt = frozen.sourceId.map {
             log.begin(source: $0, target: identity, mode: scope.mode, turns: scope.turns, attachments: scope.turns.flatMap(\.files))
         }
@@ -693,7 +692,7 @@ final class HandoffBar: NSViewController {
             guard markdown.utf8.count <= maximumTextBytes else {
                 return fail("\(what.prefix(1).uppercased() + what.dropFirst()) come to \(ByteCountFormatter.string(fromByteCount: Int64(markdown.utf8.count), countStyle: .file)), over the 2 MB a message box takes. Choose fewer turns, or Save.")
             }
-            trace.record(.insertAttempted, files: text.attachments.count, bytes: markdown.utf8.count)
+            trace.record(.insertAttempted, files: text.attachments.count, bytes: markdown.utf8.count, checks: text.checks)
             if let receipt { self.log.move(receipt, to: .insertionAttempted) }
             self.say("Adding \(what) to \(app)…", glyph: "waiting")
             appendToComposer(selected, text: markdown, operationValid: valid,

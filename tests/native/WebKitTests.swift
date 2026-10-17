@@ -86,6 +86,11 @@ import WebKit
         let text = parseProjection(result, turns: chosen.count)
         check(text?.attachments.first?.messageId == "a1" && text?.markdown == result["markdown"] as? String,
               "and its projection of chosen turns")
+        if var whole = prepared, let text {
+            whole.checks = ["unreadable-markup": 3, "attachment-download-needed": 5]
+            check(text.checks == ["attachment-download-needed": 1] && whole.projected(text).checks == text.checks,
+                  "a projection carries its own check counts, not the whole conversation's")
+        } else { check(false, "a projection carries its own check counts") }
         func refused(_ change: (inout [String: Any]) -> Void) -> Bool {
             var body = ready
             change(&body)

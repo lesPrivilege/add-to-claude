@@ -5,7 +5,7 @@ ChatGPT changing the shape of its data is the main way this tool goes wrong with
 ## How a change shows up
 
 - **In the hand-off.** Anything the reader does not recognise gets a content check at the top of the text, and its turn is marked partial. The checks include an unknown role or content type, a part that isn't text, an unfamiliar citation structure, a citation with no source (`[?]`), and a marker it cannot read (`unreadable-markup`).
-- **In diagnostics.** Each hand-off records how many of each check it raised, by code only (`checks=unreadable-markup:1,…`). A code that is new, or one that suddenly rises, means the data changed. Diagnostics never hold the text.
+- **In diagnostics.** Each hand-off's insert step records how many of each check the written text carries (only the chosen turns', when some are chosen), by code only (`checks=unreadable-markup:1,…`). A code that is new, or one that suddenly rises, means the data changed. Diagnostics never hold the text.
 - **What to do.**
   1. Write a synthetic fixture for the new shape, saying in words which real case it stands for.
   2. Handle the shape. Following the owner's rule, converge it to plain text rather than rebuild a widget.
@@ -18,7 +18,7 @@ ChatGPT changing the shape of its data is the main way this tool goes wrong with
 | The conversation as a tree (`mapping`, `current_node`), fetched by GET                     | `chatgpt-response.js`, `import.js`          | `chatgpt-response.test.js`    | 2026-10-12    |
 | The paged load: pages of messages, the older ones loaded while scrolling up                | `paged-conversation.js`, `page-observer.js` | `page-observer.test.js`       | 2026-10-14    |
 | A streamed reply: v1 append deltas, classic full-message updates, root envelopes           | `event-stream.js`, `chatgpt-stream.js`      | `chatgpt-stream.test.js`      | 2026-10-13    |
-| A reply over the WebSocket topic: catch-ups, then live deltas                              | `chatgpt-socket.js`                         | `chatgpt-socket.test.js`      | 2026-10-14    |
+| A reply over the WebSocket topic: catch-ups, then live deltas                              | `chatgpt-socket.js`                         | `chatgpt-socket.test.js`      | 2026-10-13    |
 | A streamed exchange laid onto the history that was already loaded                          | `stream-conversation.js`                    | `stream-conversation.test.js` | 2026-10-13    |
 | A file's link, asked through the page's session (`files/download`, `interpreter/download`) | `page-observer.js`                          | `page-observer.test.js`       | 2026-10-16    |
 
