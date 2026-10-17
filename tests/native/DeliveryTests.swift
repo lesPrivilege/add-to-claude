@@ -77,6 +77,12 @@ import Foundation
         relaunched.load()
         check(relaunched.copy(page: page, file: "file-1|m2")?.path.path == copy.path, "after a relaunch a saved copy is reused")
         check(relaunched.copy(page: "https://chatgpt.com/c/other", file: "file-1|m2") == nil, "only in its own conversation")
+        let current = (try? Data(contentsOf: file)) ?? Data()
+        try? Data(String(decoding: current, as: UTF8.self).replacingOccurrences(of: #""version":1"#, with: #""version":0"#).utf8).write(to: file)
+        let otherVersion = make()
+        otherVersion.load()
+        check(otherVersion.copy(page: page, file: "file-1|m2") == nil, "a record of another version is dropped, not migrated")
+        try? current.write(to: file)
 
         try? Data("a,b\nedited\n".utf8).write(to: copy)
         let edited = make()
@@ -311,7 +317,7 @@ import Foundation
         let later = make()
         later.load()
         check(later.records.isEmpty, "receipts older than 30 days are pruned at launch")
-        check(String(decoding: (try? Data(contentsOf: file)) ?? Data(), as: UTF8.self) == "[]", "and from the file")
+        check(String(decoding: (try? Data(contentsOf: file)) ?? Data(), as: UTF8.self) == #"{"items":[],"version":1}"#, "and from the file")
         days = 90
         add(later, secret, target: target)
         clock.now = clock.now.addingTimeInterval(60 * 86400)
@@ -332,7 +338,7 @@ import Foundation
 
         // A damaged or foreign file is ignored, not trusted.
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? Data(#"[{"handoff_id":"x","source":{"provider":"chatgpt","conversation_id":"S1"},"target":{"provider":"a","conversation_id":"b","identity_confidence":"verified"},"mode":"all","messages":[{"id":"m1","position":1,"content_sha256":"zz"}],"attachments":[],"state":"composer_inserted","created_at":"2027-04-16T07:00:00Z","updated_at":"2027-04-16T07:00:00Z","confirmed_by_user":false}]"#.utf8).write(to: file)
+        try? Data(#"{"version":1,"items":[{"handoff_id":"x","source":{"provider":"chatgpt","conversation_id":"S1"},"target":{"provider":"a","conversation_id":"b","identity_confidence":"verified"},"mode":"all","messages":[{"id":"m1","position":1,"content_sha256":"zz"}],"attachments":[],"state":"composer_inserted","created_at":"2027-04-16T07:00:00Z","updated_at":"2027-04-16T07:00:00Z","confirmed_by_user":false}]}"#.utf8).write(to: file)
         let damaged = make()
         damaged.load()
         check(damaged.records.isEmpty, "a receipt with a malformed hash is dropped")
@@ -340,5 +346,28 @@ import Foundation
         let garbage = make()
         garbage.load()
         check(garbage.records.isEmpty, "an unreadable file starts an empty log")
+
+        // A file of another format version, or of none, is dropped and rebuilt, not migrated.
+        let good = make()
+        add(good, secret, target: target)
+        let current = (try? Data(contentsOf: file)) ?? Data()
+        for other in [#"{"version":2,"items":[]}"#, String(decoding: current, as: UTF8.self).replacingOccurrences(of: #""version":1"#, with: #""version":0"#)] {
+            try? Data(other.utf8).write(to: file)
+            let reopened = make()
+            reopened.load()
+            check(reopened.records.isEmpty && String(decoding: (try? Data(contentsOf: file)) ?? Data(), as: UTF8.self).contains(#""version":1"#),
+                  "a log of another version starts empty and is rewritten as this version")
+        }
+        let bare = String(decoding: current, as: UTF8.self)
+        let start = bare.range(of: #""items":"#), end = bare.range(of: #","version""#)
+        check(start != nil && end != nil, "the log is written as items and a version")
+        if let start, let end {
+            let list = String(bare[start.upperBound..<end.lowerBound])
+            check(list.hasPrefix("[{") && list.hasSuffix("}]"), "its items are the receipts")
+            try? Data(list.utf8).write(to: file)
+            let reopened = make()
+            reopened.load()
+            check(reopened.records.isEmpty, "a log without a version (0.6.1's bare list) starts empty")
+        }
     }
 }

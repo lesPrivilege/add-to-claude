@@ -137,7 +137,7 @@ final class DeliveryLog {
     /// run left mid-way as unknown, since nobody saw how they ended.
     func load() {
         guard remember(), let file, let data = try? Data(contentsOf: file), data.count <= 16 * 1024 * 1024,
-              let stored = try? Self.decoder.decode([DeliveryRecord].self, from: data) else { return prune() }
+              let stored = StoredFile<DeliveryRecord>.read(data, with: Self.decoder) else { return prune() }
         let ours = Set(records.map(\.handoffId))
         records = stored.filter { $0.isValid && !ours.contains($0.handoffId) }.map { record in
             var record = record
@@ -204,7 +204,7 @@ final class DeliveryLog {
             let folder = file.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true,
                                                     attributes: [.posixPermissions: 0o700])
-            try Self.encoder.encode(kept).write(to: file, options: .atomic)
+            try Self.encoder.encode(StoredFile(items: kept)).write(to: file, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         } catch {}
     }
@@ -248,7 +248,7 @@ final class SavedFiles {
     /// At launch: read what earlier runs saved, dropping what is past retention.
     func load() {
         guard remember(), let file, let data = try? Data(contentsOf: file), data.count <= 4 * 1024 * 1024,
-              let stored = try? JSONDecoder.iso.decode([Copy].self, from: data) else { return prune() }
+              let stored = StoredFile<Copy>.read(data, with: .iso) else { return prune() }
         for copy in stored where copies[Self.key(copy.page, copy.file)] == nil { copies[Self.key(copy.page, copy.file)] = copy }
         prune()
     }
@@ -301,9 +301,22 @@ final class SavedFiles {
         do {
             try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true,
                                                     attributes: [.posixPermissions: 0o700])
-            try JSONEncoder.iso.encode(copies.values.sorted { $0.savedAt < $1.savedAt }).write(to: file, options: .atomic)
+            try JSONEncoder.iso.encode(StoredFile(items: copies.values.sorted { $0.savedAt < $1.savedAt })).write(to: file, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         } catch {}
+    }
+}
+
+/// A record file on disk: its format version and its entries. A file of another version, or with none
+/// (as 0.6.1 wrote), is dropped and rebuilt rather than migrated.
+struct StoredFile<Item: Codable>: Codable {
+    static var version: Int { 1 }
+    var version = Self.version
+    var items: [Item]
+
+    static func read(_ data: Data, with decoder: JSONDecoder) -> [Item]? {
+        guard let stored = try? decoder.decode(Self.self, from: data), stored.version == Self.version else { return nil }
+        return stored.items
     }
 }
 
