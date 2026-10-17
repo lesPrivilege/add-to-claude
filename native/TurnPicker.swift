@@ -44,7 +44,7 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
         table.dataSource = self
         table.delegate = self
         table.setAccessibilityLabel("Turns")
-        table.paint = { [weak self] rows, on in self?.set(rows: rows, on: on) }
+        table.paint = { [weak self] rows, anchor in self?.set(rows: rows, anchor: anchor) }
         table.isChecked = { [weak self] row in self.map { $0.turns.indices.contains(row) && $0.selected.contains($0.turns[row].id) } ?? false }
         table.shiftRange = { [weak self] row in
             guard let self, NSEvent.modifierFlags.contains(.shift), let anchor = self.anchor else { return nil }
@@ -98,15 +98,16 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
 
     /// The checkbox itself, for VoiceOver and the keyboard; the mouse goes through the table.
     private func toggle(row: Int, on: Bool) {
-        set(rows: [row: on], on: on)
+        set(rows: [row: on], anchor: row)
     }
 
-    /// Gives each row its state (a drag passes the state rows had before it, for rows it left again).
-    private func set(rows: [Int: Bool], on: Bool) {
+    /// Gives each row its state (a drag passes the state rows had before it, for rows it left again);
+    /// `anchor` is where the next shift-click's run starts.
+    private func set(rows: [Int: Bool], anchor: Int) {
         for (index, state) in rows where turns.indices.contains(index) {
             if state { selected.insert(turns[index].id) } else { selected.remove(turns[index].id) }
         }
-        if let last = table.lastPainted { anchor = last }
+        self.anchor = anchor
         table.reloadData(forRowIndexes: IndexSet(rows.keys.filter { turns.indices.contains($0) }), columnIndexes: [0])
         updateFooter()
         changedSelection(selected)
@@ -127,39 +128,67 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
     }
 }
 
+/// One drag across the turn list: the rows it covers take the state the first row took, and rows it
+/// leaves again go back to what they were. No AppKit, so it can be tested alone.
+struct DragPaint {
+    let start: Int
+    let state: Bool
+    private(set) var covered: ClosedRange<Int>
+    private var before: [Int: Bool]
+
+    init(start: Int, wasChecked: Bool) {
+        self.start = start
+        state = !wasChecked
+        covered = start...start
+        before = [start: wasChecked]
+    }
+
+    /// The drag now reaches `row`; returns the rows whose state changes, with their new state.
+    mutating func move(to row: Int, isChecked: (Int) -> Bool) -> [Int: Bool] {
+        let now = min(start, row)...max(start, row)
+        guard now != covered else { return [:] }
+        var changes: [Int: Bool] = [:]
+        for index in now where before[index] == nil {
+            before[index] = isChecked(index)
+            changes[index] = state
+        }
+        for index in covered where !now.contains(index) { changes[index] = before[index] }
+        covered = now
+        return changes
+    }
+}
+
 /// A table whose rows are flipped by clicking anywhere on them, and painted by dragging across them.
 final class PaintingTable: NSTableView {
-    var paint: ([Int: Bool], Bool) -> Void = { _, _ in }
+    /// Rows and their new states, and the row the next shift-click's run starts from.
+    var paint: ([Int: Bool], Int) -> Void = { _, _ in }
     var isChecked: (Int) -> Bool = { _ in false }
     /// The rows a shift-click covers, from the last clicked row; nil without shift.
     var shiftRange: (Int) -> ClosedRange<Int>? = { _ in nil }
-    private(set) var lastPainted: Int?
+
+    /// The row level with `point`, wherever it is sideways: a drag that slips out of the narrow popover
+    /// keeps painting by height alone. Above the rows is the first, below them the last.
+    private func rowLevel(with point: NSPoint) -> Int {
+        guard numberOfRows > 0 else { return -1 }
+        if point.y < 0 { return 0 }
+        let found = row(at: NSPoint(x: bounds.midX, y: min(point.y, bounds.maxY - 1)))
+        return found >= 0 ? found : numberOfRows - 1
+    }
 
     override func mouseDown(with event: NSEvent) {
         let start = row(at: convert(event.locationInWindow, from: nil))
         guard start >= 0 else { return super.mouseDown(with: event) }
-        let state = !isChecked(start)
-        lastPainted = start
+        var drag = DragPaint(start: start, wasChecked: isChecked(start))
         if let range = shiftRange(start) {
-            return paint(Dictionary(uniqueKeysWithValues: range.map { ($0, state) }), state)
+            return paint(Dictionary(uniqueKeysWithValues: range.map { ($0, drag.state) }), start)
         }
-        // Rows a drag passes take `state`; rows it leaves again go back to what they were.
-        var before: [Int: Bool] = [start: isChecked(start)]
-        var covered = start...start
-        paint([start: state], state)
+        paint([start: drag.state], start)
         while let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]), next.type == .leftMouseDragged {
             autoscroll(with: next)
-            let point = convert(next.locationInWindow, from: nil)
-            var current = row(at: point)
-            if current < 0 { current = point.y < 0 ? 0 : numberOfRows - 1 }
-            let now = min(start, current)...max(start, current)
-            guard now != covered else { continue }
-            var changes: [Int: Bool] = [:]
-            for row in now where before[row] == nil { before[row] = isChecked(row); changes[row] = state }
-            for row in covered where !now.contains(row) { changes[row] = before[row] }
-            covered = now
-            lastPainted = current
-            if !changes.isEmpty { paint(changes, state) }
+            let current = rowLevel(with: convert(next.locationInWindow, from: nil))
+            guard current >= 0 else { continue }
+            let changes = drag.move(to: current, isChecked: isChecked)
+            if !changes.isEmpty { paint(changes, current) }
         }
     }
 }

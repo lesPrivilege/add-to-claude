@@ -85,13 +85,13 @@ The arrows and what follows them are annotations, not part of the text. Lines wi
 
 ## For a terminal
 
-The text above goes to `handoff-<id>.add-to-claude.md` in the conversation's files folder, `<id>` being the first eight letters and digits of the ChatGPT conversation id (`unsaved` before it has one),, and the clipboard receives one line naming it, with no newline, for the user to paste into the terminal:
+The text above goes to `handoff-<conversation>-<window>.add-to-claude.md` in the conversation's files folder: the first eight letters and digits of the ChatGPT conversation id (`unsaved-` and a per-Add value before it has one), then the first six of the terminal window's session id, and the clipboard receives one line naming it, with no newline, for the user to paste into the terminal:
 
 ```text
-@"/Users/<you>/Downloads/Add to Claude/<conversation title>/handoff-6812a3f0.add-to-claude.md"
+@"/Users/<you>/Downloads/Add to Claude/<conversation title>/handoff-6812a3f0-9f8e7d.add-to-claude.md"
 ```
 
-The path is absolute and never contains a control character or a character a shell acts on inside double quotes (`"`, `$`, backticks, `\`, `!`), so the line needs no escaping. The file is replaced by the next Add from the same conversation, so a receiver should read it when the line arrives.
+The path is absolute and never contains a control character or a character a shell acts on inside double quotes (`"`, `$`, backticks, `\`, `!`), so the line needs no escaping. The file is replaced by the next Add of the same conversation to the same terminal window, so a receiver should read it when the line arrives.
 
 ## Guarantees
 

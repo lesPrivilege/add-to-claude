@@ -27,17 +27,21 @@ func handToTerminal(_ choice: WindowChoice, line: String, operationValid: () -> 
     }
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(line, forType: .string)
+    // A minimized window is not brought back by raising it; activating would then front another window.
+    if attribute(choice.window, kAXMinimizedAttribute) as? Bool == true {
+        AXUIElementSetAttributeValue(choice.window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+    }
     AXUIElementPerformAction(choice.window, kAXRaiseAction as CFString)
     choice.app.activate()
-    let app = safeLabel(choice.app.localizedName ?? "The terminal", limit: 24)
-    completion("The line is on the clipboard and \(app) is in front: click where it should go and press ⌘V, then Return there when you choose. Nothing was run.", .unconfirmed)
+    let app = safeLabel(choice.app.localizedName ?? "the terminal", limit: 24)
+    completion("The line is on the clipboard and the \(app) window was brought forward: click where it should go and press ⌘V, then Return there when you choose. Nothing was run.", .unconfirmed)
 }
 
 /// Characters a shell still acts on inside double quotes (`$` and backticks substitute, `\` escapes, `!`
 /// expands history), so a mention left at a prompt and run by Return would run more than a missing command.
 let shellActiveCharacters = CharacterSet(charactersIn: "\"$`\\!")
 
-/// What a tab receives: `@"<path>"`, with no newline. Nil for a path a one-line mention cannot carry
+/// What a terminal is given to paste: `@"<path>"`, with no newline. Nil for a path a one-line mention cannot carry
 /// inertly: not absolute, or holding a control character or a character a shell acts on inside quotes.
 func handoffMention(_ path: String) -> String? {
     guard path.hasPrefix("/"), path.utf8.count <= 1024, path.rangeOfCharacter(from: shellActiveCharacters) == nil,
@@ -47,18 +51,24 @@ func handoffMention(_ path: String) -> String? {
 
 // MARK: hand-off files
 
-/// The files a terminal tab's mention points at: one per source conversation, in the folder its files go
-/// to, replaced by each Add. Removed by Clear History, and once a day old (checked at launch and whenever
+/// The files a terminal's mention points at: one per source conversation and terminal window, in the folder
+/// the conversation's files go to, replaced by each Add there. Removed by Clear History, and once a day old (checked at launch and whenever
 /// the panel opens). Each path is remembered with the SHA-256 Add wrote: a file Add did not write, or that
 /// changed since, is never replaced or removed.
 final class HandoffFiles {
     static let shared = HandoffFiles(defaults: .standard, folder: FilesFolder.folder(for:))
 
-    /// `handoff-<first 8 of the conversation id>.add-to-claude.md`, so two conversations with one title
-    /// never share a file; `handoff-unsaved…` for a chat that has no id yet.
-    static func name(for conversation: String?) -> String {
-        let id = String((conversation ?? "").unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) && $0.isASCII }.prefix(8))
-        return "handoff-\(id.isEmpty ? "unsaved" : id.lowercased()).add-to-claude.md"
+    /// `handoff-<first 8 of the conversation id>-<first 6 of the window session>.add-to-claude.md`: two
+    /// conversations with one title, or one conversation added to two terminal windows, never share a file.
+    /// A chat with no id yet is `unsaved-` plus the start of `unsaved`, a value that changes with each Add.
+    static func name(conversation: String?, window: String, unsaved: String) -> String {
+        let plain = { (text: String, count: Int) in
+            String(text.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) && $0.isASCII }.prefix(count)).lowercased()
+        }
+        let id = plain(conversation ?? "", 8)
+        let source = id.isEmpty ? "unsaved-" + plain(unsaved, 6) : id
+        let target = plain(window.hasPrefix("window:") ? String(window.dropFirst(7)) : window, 6)
+        return "handoff-\(source)\(target.isEmpty ? "" : "-" + target).add-to-claude.md"
     }
 
     private let key = "HandoffFiles"
@@ -87,11 +97,13 @@ final class HandoffFiles {
         return hash(URL(fileURLWithPath: path)) == String(recorded)
     }
 
-    /// Writes the conversation's hand-off file, replacing the one Add wrote before, and returns its path.
-    func write(_ markdown: String, title: String, conversation: String?) -> Result<URL, HandoffFileError> {
+    /// Writes the hand-off file `name` in the conversation's folder, replacing the one Add wrote there
+    /// before, and returns its path. A path a one-line mention cannot carry is refused before anything is written.
+    func write(_ markdown: String, title: String, name: String) -> Result<URL, HandoffFileError> {
         guard markdown.utf8.count <= maximumMarkdownBytes else { return .failure(.tooLarge) }
         let directory = folder(title)
-        let path = directory.appendingPathComponent(Self.name(for: conversation))
+        let path = directory.appendingPathComponent(name)
+        guard handoffMention(path.path) != nil else { return .failure(.unsafePath) }
         if FileManager.default.fileExists(atPath: path.path) && !isOurs(path.path) { return .failure(.taken(path)) }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -119,11 +131,12 @@ final class HandoffFiles {
 }
 
 enum HandoffFileError: Error, Equatable {
-    case tooLarge, notWritable, taken(URL)
+    case tooLarge, notWritable, unsafePath, taken(URL)
     var message: String {
         switch self {
         case .tooLarge: return "The hand-off is over 16 MB. Choose fewer turns."
         case .notWritable: return "The files folder is not writable. Choose another in Settings."
+        case .unsafePath: return "The files folder's path holds a character a shell acts on (\" $ ` \\ !) or a control character, so a one-line mention could run something. Choose another folder in Settings."
         case .taken(let path): return "\(path.lastPathComponent) in the conversation's folder was not written by Add, or changed since, so it is left alone. Move it away, then Add again."
         }
     }

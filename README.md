@@ -57,9 +57,9 @@ Today the source is ChatGPT. The destination can be any app with a text box.
 A terminal may be showing a shell rather than an agent, so it never receives the conversation itself, and Add never types or pastes into it.
 
 - **The picker** lists the windows of any terminal app (Terminal, iTerm2, Ghostty, WezTerm, Warp, Kitty…) under **Terminals**.
-- **Add** saves the text as `handoff-<id>.add-to-claude.md` in the conversation's files folder (`<id>` is the start of the ChatGPT conversation's id), puts one line on the clipboard, `@"/path/to/handoff-<id>.add-to-claude.md"`, and brings that terminal window forward. Click into the tab you want and press ⌘V. In an agent the line is a file mention; at a shell prompt it is an unexecuted line, and the path holds nothing a shell would act on (`$`, backticks, `\`, `!`, `"`).
-- **Then say** whether it is there: **It's There** counts it as added; **It's Not** copies the line again. A copied line is not a pasted one, so Add does not assume it.
-- **One file per conversation**, replaced by each Add. Clear History removes them, and each is removed once a day old, when the app starts or the panel opens. A file of that name that Add did not write, or that you edited, is left alone.
+- **Add** saves the text as `handoff-<conversation>-<window>.add-to-claude.md` in the conversation's files folder (the start of the ChatGPT conversation's id, and of the terminal window's), puts one line on the clipboard, `@"/path/to/handoff-….add-to-claude.md"`, and brings that terminal window forward. Click into the tab you want and press ⌘V. In an agent the line is a file mention; at a shell prompt it is an unexecuted line, and the path holds nothing a shell would act on (`$`, backticks, `\`, `!`, `"`).
+- **Then say** whether it is there: **It's There** counts it as added; **Copy Again** puts the line back on the clipboard and keeps the question open. A copied line is not a pasted one, so Add does not assume it.
+- **One file per conversation and terminal window**, replaced by each Add there, so adding the same conversation to another window never changes what the first one points at. Clear History removes them, and each is removed once a day old, when the app starts or the panel opens. A file of that name that Add did not write, or that you edited, is left alone.
 - A terminal never says which conversation an agent in it holds, so Add treats each terminal window as a window that doesn't say (above).
 
 ### Privacy
@@ -120,7 +120,7 @@ CHROMIUM_PATH='<Chrome for Testing binary>' npm run test:browser
 ```
 
 - `npm test` covers the model, the adapters, the compiler, the page observer, and the bundled bridge.
-- `test:native` checks the delivery log and the scope rule, runs the real chat controller in a real `WKWebView`, checks the terminal adapter's logic (the one-line mention and the hand-off files), then the Accessibility checks against a synthetic app. No real terminal is touched. The Accessibility checks report NOT RUN unless the terminal has Accessibility access.
+- `test:native` checks the delivery log and the scope rule, runs the real chat controller in a real `WKWebView`, checks the bar's window-free logic (the terminal's one-line mention, hand-off files, turn-list drags), then the Accessibility checks against a synthetic app. No real terminal is touched. The Accessibility checks report NOT RUN unless the terminal has Accessibility access.
 - `test:browser` runs the page observer in a real browser.
 
 [docs/support-matrix.md](docs/support-matrix.md) records what has been verified and what has not. [docs/roadmap.md](docs/roadmap.md) has what comes next, and [docs/README.md](docs/README.md) lists the rest of the documentation.
@@ -179,9 +179,9 @@ Add to Claude 把这个按钮找了回来，并放宽了它的范围。聊天留
 终端里显示的可能是 shell 而不是 agent，所以终端从不直接接收对话正文，Add 也从不往终端里输入或粘贴。
 
 - **选择器**在 **Terminals** 下列出任意终端应用的窗口（Terminal、iTerm2、Ghostty、WezTerm、Warp、Kitty…）。
-- **Add** 把文字存为这段对话文件夹里的 `handoff-<id>.add-to-claude.md`（`<id>` 是 ChatGPT 对话 id 的开头几位），把一行 `@"/path/to/handoff-<id>.add-to-claude.md"` 放到剪贴板，并把那个终端窗口带到前台。点进你要的标签页，按 ⌘V。在 agent 里它是一个文件引用；在 shell 提示符下它只是一行未执行的文字，路径里也不含 shell 会处理的字符（`$`、反引号、`\`、`!`、`"`）。
-- **然后告诉 Add** 是否已经粘贴：**It's There** 记为已添加；**It's Not** 会再复制一次这一行。复制不等于已粘贴，Add 不会替你假定。
-- **每段对话一个文件**，每次 Add 覆盖。清除历史（Clear History）会删除它们；满一天的文件会在应用启动或面板打开时删除。同名但不是 Add 写的、或你改过的文件不会被动。
+- **Add** 把文字存为这段对话文件夹里的 `handoff-<对话>-<窗口>.add-to-claude.md`（ChatGPT 对话 id 和终端窗口 id 的开头几位），把一行 `@"/path/to/handoff-….add-to-claude.md"` 放到剪贴板，并把那个终端窗口带到前台。点进你要的标签页，按 ⌘V。在 agent 里它是一个文件引用；在 shell 提示符下它只是一行未执行的文字，路径里也不含 shell 会处理的字符（`$`、反引号、`\`、`!`、`"`）。
+- **然后告诉 Add** 是否已经粘贴：**It's There** 记为已添加；**Copy Again** 会把这一行再放回剪贴板，问题保持打开。复制不等于已粘贴，Add 不会替你假定。
+- **每段对话、每个终端窗口一个文件**，在该窗口每次 Add 时覆盖，所以把同一段对话加到另一个窗口，不会改变第一个窗口引用的内容。清除历史（Clear History）会删除它们；满一天的文件会在应用启动或面板打开时删除。同名但不是 Add 写的、或你改过的文件不会被动。
 - 终端无法说明其中的 agent 是哪个对话，所以 Add 把每个终端窗口当作「无法说明是哪个对话的窗口」（见上文）。
 
 ### 隐私

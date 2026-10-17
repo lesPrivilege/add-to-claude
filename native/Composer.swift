@@ -50,9 +50,13 @@ func safeLabel(_ text: String, limit: Int = 90) -> String {
     return String(String.UnicodeScalarView(visible)).prefix(limit).description
 }
 
-func isTerminal(_ app: NSRunningApplication) -> Bool {
-    let identity = ((app.bundleIdentifier ?? "") + " " + (app.localizedName ?? "")).lowercased()
-    return ["terminal", "iterm", "warp", "alacritty", "kitty", "wezterm", "ghostty", "hyper", "tabby", "rio-terminal", "termius"].contains { identity.contains($0) }
+func isTerminal(_ app: NSRunningApplication) -> Bool { isTerminalBundle(app.bundleIdentifier ?? "") }
+
+/// A terminal app by a whole word of its bundle id (`com.apple.Terminal`, `com.mitchellh.ghostty`,
+/// `dev.warp.Warp-Stable`), so an app that merely has such a word inside a longer one is not taken for one.
+func isTerminalBundle(_ id: String) -> Bool {
+    let words = Set(id.lowercased().split { $0 == "." || $0 == "-" || $0 == "_" }.map(String.init))
+    return !words.isDisjoint(with: ["terminal", "iterm2", "warp", "alacritty", "kitty", "wezterm", "ghostty", "hyper", "tabby", "rio", "termius"])
 }
 
 final class WindowChoice: NSObject {

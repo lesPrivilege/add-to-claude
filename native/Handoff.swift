@@ -192,7 +192,8 @@ final class HandoffBar: NSViewController {
             sourceDetail.stringValue = reason
         case .ready(let prepared):
             sourceTitle.stringValue = prepared.title
-            let tooLong = prepared.markdown.utf8.count > maximumTextBytes
+            // A terminal gets a file, so only a composer is held to the 2 MB a message box takes.
+            let tooLong = terminal == nil && prepared.markdown.utf8.count > maximumTextBytes
             sourceDetail.stringValue = "\(prepared.turns) turns · \(prepared.files) file\(prepared.files == 1 ? "" : "s")"
                 + (tooLong ? " · too long for one Add: choose turns or save" : "")
         }
@@ -274,7 +275,7 @@ final class HandoffBar: NSViewController {
             || (scope?.mode == "all" && scope?.automatic == true && !canBind && !bound)
 
         guard let scope, let analysis, let prepared else { return }
-        let signature = [scope.label, "\(scopeChoice)", "\(analysis.newApplicable)", "\(analysis.newTurns.count)",
+        let signature = [scope.label, "\(scopeChoice)", "\(analysis.newApplicable)", "\(analysis.newTurns.count)", "\(String(describing: target?.confidence))",
                          "\(analysis.changedTurns.count)", "\(prepared.turnList.count)"].joined(separator: "|")
         guard signature != scopeSignature else { return }
         scopeSignature = signature
@@ -364,10 +365,10 @@ final class HandoffBar: NSViewController {
 
     // MARK: target identity
 
-    /// One chosen window or terminal tab, from when it was chosen until it closes (or a window changes its
-    /// title). Ids name it in the log; `bound` is the user's "Continue in this conversation".
+    /// One chosen composer or terminal window, from when it was chosen until it closes (or a composer window
+    /// changes its title). Ids name it in the log; `bound` is the user's "Continue in this conversation".
     private final class WindowSession {
-        /// The app instance and, for a tab, its session.
+        /// The app instance.
         let slot: String
         let window: AXUIElement?
         let title: String
@@ -549,6 +550,7 @@ final class HandoffBar: NSViewController {
             return select(terminal: choice)
         }
         let (chosen, problem) = registry.composer(id)
+        terminal = nil // A composer row replaces a terminal even when it cannot be used, as the picker shows.
         if let chosen { remember(chosen) }
         if chosen == nil {
             say("Can't use it: \(problem). Click into its message box once, then choose it again.", glyph: "error")
@@ -766,17 +768,19 @@ final class HandoffBar: NSViewController {
         say("Preparing \(what)…", glyph: "waiting")
         render()
 
-        // For a tab, the line can always be copied by hand once the file is written.
+        // For a terminal, the line can always be copied again once the file is written.
         var mention = ""
-        let copyLine = { [weak self] in
+        let copyLine = {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(mention, forType: .string)
-            self?.say("The line is on the clipboard again: click where it should go and press ⌘V. Nothing was run.", glyph: "done", result: true)
         }
         let fail = { [weak self] (message: String) in
             trace.record(.failed)
             if let receipt { self?.log.move(receipt, to: .failed) }
-            self?.finish("Failed: \(message)", glyph: "error", actions: mention.isEmpty ? [] : [("Copy Line", copyLine)])
+            self?.finish("Failed: \(message)", glyph: "error", actions: mention.isEmpty ? [] : [("Copy Line", { [weak self] in
+                copyLine()
+                self?.say("The line is on the clipboard: click where it should go and press ⌘V. Nothing was run.", glyph: "done", result: true)
+            })])
         }
         let append = { [weak self] (text: Prepared) in
             guard let self, valid() else { return fail("The conversation changed. Nothing was added.") }
@@ -787,13 +791,12 @@ final class HandoffBar: NSViewController {
             // A terminal gets the text as a file and a one-line mention of it, for the user to paste.
             var fileName = ""
             if tab != nil {
-                switch HandoffFiles.shared.write(markdown, title: frozen.title, conversation: frozen.sourceId) {
+                let name = HandoffFiles.name(conversation: frozen.sourceId, window: identity.conversation, unsaved: frozen.revision.uuidString)
+                switch HandoffFiles.shared.write(markdown, title: frozen.title, name: name) {
                 case .failure(let problem): return fail(problem.message)
                 case .success(let path):
-                    guard let line = handoffMention(path.path) else {
-                        return fail("The files folder's path holds a character a shell acts on (\" $ ` \\ !) or a control character, so a one-line mention could run something. Choose another folder in Settings.")
-                    }
-                    mention = line
+                    // The path was checked before writing; a mention of it always exists.
+                    mention = handoffMention(path.path) ?? ""
                     fileName = path.lastPathComponent
                 }
             }
@@ -819,16 +822,24 @@ final class HandoffBar: NSViewController {
                 case .unconfirmed:
                     trace.record(.unconfirmed)
                     if let receipt { self.log.move(receipt, to: .unknown) }
-                    // A terminal's line is pasted by the user, so whether it landed is theirs to say.
-                    let text = tab != nil ? "Saved \(what) as \(fileName). \(message)" : "Could not confirm. \(message)"
-                    self.finish(text + files, glyph: tab != nil ? "info" : "unverified", actions: receipt.map { receipt in
-                        [("It's There", { [weak self] in trace.record(.confirmedByUser); self?.settle(receipt, inserted: true) }),
-                         ("It's Not", { [weak self] in
-                             trace.record(.declinedByUser)
-                             self?.settle(receipt, inserted: false)
-                             if tab != nil { copyLine() } // So it can be pasted again.
-                         })]
-                    } ?? [])
+                    let there = { (receipt: String) in
+                        ("It's There", { [weak self] in trace.record(.confirmedByUser); self?.settle(receipt, inserted: true) })
+                    }
+                    guard tab != nil else {
+                        return self.finish("Could not confirm. \(message)\(files)", glyph: "unverified", actions: receipt.map { receipt in
+                            [there(receipt),
+                             ("It's Not", { [weak self] in trace.record(.declinedByUser); self?.settle(receipt, inserted: false) })]
+                        } ?? [])
+                    }
+                    // A terminal's line is pasted by the user, so whether it landed is theirs to say. Copying
+                    // again keeps the question open, so a second paste can still be counted.
+                    func ask(_ text: String) {
+                        self.finish(text, glyph: "info", actions: (receipt.map { [there($0)] } ?? []) + [("Copy Again", {
+                            copyLine()
+                            ask("The line is on the clipboard again: click where it should go and press ⌘V. Nothing was run.")
+                        })])
+                    }
+                    ask("Saved \(what) as \(fileName). \(message)\(files)")
                 case .failed:
                     fail(message)
                 }
