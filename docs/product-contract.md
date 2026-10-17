@@ -21,7 +21,7 @@ The goal is a small macOS menu-bar utility that passes functional and real-machi
 
 ## Source and interpretation
 
-The user requested that Codex read [开源工具读取ChatGPT会话](chatgpt-conversation://6acb722f-383c-83ec-91f6-66d491c0af55), restructure the project, and complete the goal. The [source record](sources/chatgpt-6acb722f-383c-83ec-91f6-66d491c0af55/README.md) preserves the accessible conversation separately from this accepted project state.
+The project started from one of the owner's ChatGPT conversations (2026-10-12), about how a small open-source tool could read a ChatGPT conversation and hand it to an agent. The conversation itself is not kept in the repository; what it settled is summarized here.
 
 The latest user messages converge on a single action: replace manual per-turn copying, concatenation, downloading, window switching and pasting. The user explicitly wants already-open client windows, role labels, original Markdown, references, attachments, verification, a status-bar GUI and interaction quality comparable to Magpie. Small scope and low ongoing maintenance matter more than expanding features.
 

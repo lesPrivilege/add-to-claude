@@ -6,17 +6,18 @@ Please report a vulnerability privately, through GitHub's **Report a vulnerabili
 
 You can expect an acknowledgement within a week. A fix goes into the next release, and the release notes credit you unless you ask otherwise.
 
-## What counts
+## What matters most
 
-The app sits between a signed-in ChatGPT page and other apps' text boxes, so these matter most:
+The app sits between a signed-in ChatGPT page and other apps' text boxes and terminals, so these matter most:
 
 - text from a conversation that is run, sent, or rendered as active content instead of being written as plain text;
-- the app sending, submitting or pressing Return in a target app;
+- the app sending, submitting or pressing Return in a target app, or typing or pasting into a terminal;
+- a hand-off line that would run something if pasted at a shell prompt and followed by Return;
 - the page's session token, cookies or account id reaching the native app, the disk, a file name or the hand-off text;
-- a page or file that makes the app download from a host other than the one it asked, write outside the chosen folder, or overwrite a file it did not save;
+- a page or file that makes the app download from a host other than the one it asked, write outside the chosen folder, or overwrite or remove a file it did not write;
 - message text reaching the delivery log, saved-files record or diagnostics;
 - a way for a web page other than ChatGPT's to talk to the bridge.
 
 ## Supported versions
 
-Only the latest release is supported. Releases are private technical betas: signed with the author's own certificate, not with a Developer ID, and not notarized.
+Only the latest release is supported. Releases are technical betas published as pre-releases: signed with the author's own certificate, not with a Developer ID, and not notarized.
