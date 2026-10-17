@@ -1,10 +1,12 @@
 # Support matrix
 
+Evidence for Add to Claude 0.8.0 (build 16, tag `v0.8.0`, released 2026-10-18 as a pre-release; its update feed `appcast.xml` is on `main`) is in its [release notes](release/0.8.0.md#review-and-checks) and the table below. The browser suite was not run for it.
+
 Evidence for Add to Claude 0.7.0 (build 15, tag `v0.7.0`) is in its [release notes](release/0.7.0.md#review-and-checks): `npm test` 131/131, delivery log 128, WebKit 45, bar logic 63, Accessibility 54 (owner's terminal), browser 14/14 on `9d1cfab` (observer unchanged since `v0.6.1`), and the owner's terminal runs below. Evidence for 0.6.1 follows; everything after it is unchanged unless those pages say otherwise.
 
 Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release notes](release/0.6.1.md#review-and-checks).
 
-### 0.8.0 candidate: updates, replies, composer choice, reopening (2026-10-18)
+### 0.8.0: updates, replies, composer choice, reopening (2026-10-18)
 
 | Area                                                                                                                                  | Result                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

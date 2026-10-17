@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Add to Claude</title>
+    <link>https://github.com/lesPrivilege/add-to-claude</link>
+    <item>
+      <title>0.8.0</title>
+      <pubDate>Sat, 17 Oct 2026 18:33:27 +0000</pubDate>
+      <sparkle:version>16</sparkle:version>
+      <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <link>https://github.com/lesPrivilege/add-to-claude/releases/tag/v0.8.0</link>
+      <enclosure url="https://github.com/lesPrivilege/add-to-claude/releases/download/v0.8.0/add-to-claude-0.8.0.zip" type="application/octet-stream" sparkle:edSignature="xQe3GhsVvEENblV7oIGwAysBFAVTwjRr4uoYG59Shr0HBjcfyxoSn9i1bUlbK6k0Ov7CWudJMg71mX8SXSG+Bg==" length="2292695" />
+    </item>
+  </channel>
+</rss>
