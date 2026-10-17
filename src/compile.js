@@ -1,5 +1,6 @@
 import { importBrowserResponse } from './chatgpt-response.js';
-import { describeTurns, labelText, projectMarkdown, validateConversation } from './model.js';
+import { validateConversation } from './model.js';
+import { describeTurns, labelText, projectMarkdown } from './projection.js';
 import { sha256Hex } from './sha256.js';
 
 export const MAX_MARKDOWN = 16 * 1024 * 1024;

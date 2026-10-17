@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 import { bundle } from '../scripts/build-webkit.js';
 import { compileModel, handoff } from '../src/compile.js';
-import { describeTurns, projectMarkdown, scopeLine, validateConversation } from '../src/model.js';
+import { validateConversation } from '../src/model.js';
+import { describeTurns, projectMarkdown, scopeLine } from '../src/projection.js';
 import { sha256Hex } from '../src/sha256.js';
 
 const node = (text) => createHash('sha256').update(text, 'utf8').digest('hex');

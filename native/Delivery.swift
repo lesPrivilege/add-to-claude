@@ -388,7 +388,7 @@ struct ResolvedScope: Equatable {
     /// What the receipt calls it: all, new, new_and_changed, chosen or again.
     let mode: String
     let turns: [TurnInfo]
-    /// The scope line's note in the hand-off text (see SCOPE_NOTES in src/model.js).
+    /// The scope line's note in the hand-off text (see SCOPE_NOTES in src/projection.js).
     let note: String
     /// Whether these are all the turns, so the whole prepared text applies.
     let everything: Bool

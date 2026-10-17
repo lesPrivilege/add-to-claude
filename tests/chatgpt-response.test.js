@@ -5,7 +5,8 @@ import {
   isSelectedResponse,
   originalSource,
 } from '../src/chatgpt-response.js';
-import { projectMarkdown, validateConversation } from '../src/model.js';
+import { validateConversation } from '../src/model.js';
+import { projectMarkdown } from '../src/projection.js';
 import { handoff } from '../src/compile.js';
 
 const pageUrl = 'https://chatgpt.com/c/synthetic-original';

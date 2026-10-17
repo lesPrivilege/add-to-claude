@@ -22,7 +22,7 @@ Owner's rule for cards (2026-10-17): do not fit the projection to one snapshot o
 Recorded 2026-10-17 from the owner's review. Worked in this order; CI and release automation wait for the owner's go.
 
 1. **Licence and contributor docs.** A licence (the repo is `UNLICENSED` today, so a community PR cannot be accepted), `CONTRIBUTING.md` (the project's rules for people, how to run the three suites, synthetic fixtures only) and `SECURITY.md` (how to report a vulnerability).
-2. **Split the large modules.** `src/import.js` into the export graph, citation marks and numbering, and attachment matching, each pure and tested on its own (done: `export-graph.js`, `export-citations.js`, `export-files.js`; turn folding stays in `import.js`); `src/model.js` into validation and projection; `native/Handoff.swift` into assembly, file lines and UI state.
+2. **Split the large modules.** `src/import.js` into the export graph, citation marks and numbering, and attachment matching, each pure and tested on its own (done: `export-graph.js`, `export-citations.js`, `export-files.js`; turn folding stays in `import.js`); `src/model.js` into validation and projection (done: `projection.js`; the demo fixture moved to `tests/`); `native/Handoff.swift` into assembly, file lines and UI state.
 3. **Drift signal.** ChatGPT changing its response shape is the main long-term risk. The importer counts node and content types it does not recognise and names them in the top notice, as `[?]` already does for citations; diagnostics keep the counts only, never content. A synthetic shape corpus records each known shape and the period it stands for.
 4. **Written knowledge.** Short decision records for choices a PR could undo: cards converge to plain text, reading is passive, terminals receive one `@path` line, citations are marked by position. A versioned spec for the hand-off format (`projectMarkdown` is the outward contract). A one-page threat model: trust boundaries, what each validates, accepted risks.
 5. **Versioned state on disk.** `saved-files.json` and the delivery log carry a `version`; a mismatch is discarded and rebuilt, with no migration.
@@ -49,7 +49,7 @@ Recorded 2026-10-17 from the owner's review. Worked in this order; CI and releas
 
 Sources and destinations meet at one format, so a new provider or a new form adds one adapter on its side only.
 
-- **Shared format.** The validated conversation model in `src/model.js`: turns with roles, original Markdown, references, files and verification. The hand-off text is projected from it (`projectMarkdown`).
+- **Shared format.** The validated conversation model in `src/model.js`: turns with roles, original Markdown, references, files and verification. The hand-off text is projected from it (`projectMarkdown` in `src/projection.js`).
 - **Source adapters.** A page observer and an importer per provider that produce that model. Today: `src/page-observer.js`, `src/chatgpt-response.js`, and `src/import.js` with its `export-*.js` parts.
 - **Destination adapters.** Whatever writes the projected text and file list into a composer. Today: `native/Composer.swift` (Accessibility). The shelved DeepSeek Harness mod showed that a harness form replaces only this layer, plus a host for the source page, and keeps the rest.
 

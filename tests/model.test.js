@@ -1,12 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  demoConversation,
-  LIMITS,
-  projectMarkdown,
-  safeUrl,
-  validateConversation,
-} from '../src/model.js';
+import { LIMITS, safeUrl, validateConversation } from '../src/model.js';
+import { projectMarkdown } from '../src/projection.js';
+import { demoConversation } from './demo-conversation.js';
 import { importConversation, listConversations } from '../src/import.js';
 
 function node(id, parent, role, text, extra = {}) {

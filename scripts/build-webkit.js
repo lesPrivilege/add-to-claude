@@ -10,6 +10,7 @@ const out = path.resolve(process.argv[2] ?? path.join(root, 'dist/webkit'));
 const order = [
   'message-visibility',
   'model',
+  'projection',
   'sha256',
   'chatgpt-markup',
   'export-graph',
