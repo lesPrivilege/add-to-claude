@@ -4,15 +4,15 @@ Evidence for Add to Claude 0.6.1 (build 14, tag `v0.6.1`) is in its [release not
 
 ### On `main`, not yet released: terminal tabs (2026-10-17)
 
-| Area                                                                                                   | Result                                                                                                      |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Terminal adapter logic: listings, foreground process, the one-line mention, read-back, hand-off files  | Synthetic: 47 checks (`tests/native/TerminalTests.swift`)                                                   |
-| Terminal's AppleScript compiles against Terminal's dictionary (`osacompile`, no events sent)           | Synthetic                                                                                                   |
-| iTerm2's AppleScript compiles                                                                          | **Not run**: iTerm2 is not installed on the build Mac                                                       |
-| Listing tabs, the Automation prompt, and Add into Terminal and iTerm2 with a real agent and at a shell | **Not run**: needs the owner's run; no real terminal is touched by the suites                               |
-| Terminal: ⌘V sent to Terminal in the background lands in the tab brought forward                       | **Not run**: the open question of this adapter; if it does not, the bar leaves the line on the clipboard    |
-| Delivery log and scope, WebKit                                                                         | Synthetic: 128 and 45, unchanged by this work                                                               |
-| Accessibility suite                                                                                    | **Not run** here (no Accessibility for the runner); `native/Composer.swift` lost only the registry it moved |
+| Area                                                                                                   | Result                                                                                                       |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Terminal adapter logic: listings, foreground process, the one-line mention, read-back, hand-off files  | Synthetic: 63 checks (`tests/native/TerminalTests.swift`)                                                    |
+| Terminal's AppleScript compiles against Terminal's dictionary (`osacompile`, no events sent)           | Synthetic                                                                                                    |
+| iTerm2's AppleScript compiles                                                                          | **Not run**: iTerm2 is not installed on the build Mac                                                        |
+| Listing tabs, the Automation prompt, and Add into Terminal and iTerm2 with a real agent and at a shell | **Not run**: needs the owner's run; no real terminal is touched by the suites                                |
+| Terminal: pressing its Paste menu item in the background lands in the tab brought forward              | **Not run**: the open question of this adapter; if it does not, the bar says so and It's Not copies the line |
+| Delivery log and scope, WebKit                                                                         | Synthetic: 128 and 45, unchanged by this work                                                                |
+| Accessibility suite                                                                                    | **Not run** here (no Accessibility for the runner); `native/Composer.swift` lost only the registry it moved  |
 
 ### 0.6.1 on the owner's Mac (installed release build, 2026-10-17)
 

@@ -1,8 +1,9 @@
 import AppKit
 
 /// "Choose turns…": one row per turn with a checkbox, role, number, preview and file count; turns
-/// already added to this target are marked. Shift-click checks or clears a run. A table view, so a
-/// conversation of thousands of turns scrolls as smoothly as one of ten.
+/// already added to this target are marked. A click anywhere on a row flips it; dragging across rows
+/// gives each the state the first one took; shift-click sets the run from the last clicked row. A table
+/// view, so a conversation of thousands of turns scrolls as smoothly as one of ten.
 final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDelegate {
     private let turns: [TurnInfo]
     private let added: Set<String>
@@ -10,7 +11,7 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
     private(set) var selected: Set<String>
     private let changedSelection: (Set<String>) -> Void
     private let done: () -> Void
-    private let table = NSTableView()
+    private let table = PaintingTable()
     private let footer = label(size: 11, color: .secondaryLabelColor)
     private var anchor: Int?
 
@@ -43,6 +44,12 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
         table.dataSource = self
         table.delegate = self
         table.setAccessibilityLabel("Turns")
+        table.paint = { [weak self] rows, on in self?.set(rows: rows, on: on) }
+        table.isChecked = { [weak self] row in self.map { $0.turns.indices.contains(row) && $0.selected.contains($0.turns[row].id) } ?? false }
+        table.shiftRange = { [weak self] row in
+            guard let self, NSEvent.modifierFlags.contains(.shift), let anchor = self.anchor else { return nil }
+            return min(anchor, row)...max(anchor, row)
+        }
         let scroll = NSScrollView()
         scroll.documentView = table
         scroll.hasVerticalScroller = true
@@ -68,6 +75,9 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
         stack.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
         for row in [header, bottom] { row.widthAnchor.constraint(equalTo: scroll.widthAnchor).isActive = true }
         view = stack
+        // A popover takes its size from here; without it the edges could be clipped against the insets.
+        stack.layoutSubtreeIfNeeded()
+        preferredContentSize = stack.fittingSize
         updateFooter()
         // Open on the first chosen turn, or at the end, where new turns are.
         let first = turns.firstIndex { selected.contains($0.id) } ?? max(turns.count - 1, 0)
@@ -86,14 +96,18 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
         return cell
     }
 
+    /// The checkbox itself, for VoiceOver and the keyboard; the mouse goes through the table.
     private func toggle(row: Int, on: Bool) {
-        // Shift-click: the run from the last clicked row to this one takes this row's new state.
-        let range = NSEvent.modifierFlags.contains(.shift) && anchor != nil ? min(anchor!, row)...max(anchor!, row) : row...row
-        for index in range where turns.indices.contains(index) {
-            if on { selected.insert(turns[index].id) } else { selected.remove(turns[index].id) }
+        set(rows: [row: on], on: on)
+    }
+
+    /// Gives each row its state (a drag passes the state rows had before it, for rows it left again).
+    private func set(rows: [Int: Bool], on: Bool) {
+        for (index, state) in rows where turns.indices.contains(index) {
+            if state { selected.insert(turns[index].id) } else { selected.remove(turns[index].id) }
         }
-        anchor = row
-        table.reloadData(forRowIndexes: IndexSet(integersIn: range), columnIndexes: [0])
+        if let last = table.lastPainted { anchor = last }
+        table.reloadData(forRowIndexes: IndexSet(rows.keys.filter { turns.indices.contains($0) }), columnIndexes: [0])
         updateFooter()
         changedSelection(selected)
     }
@@ -110,6 +124,43 @@ final class TurnPicker: NSViewController, NSTableViewDataSource, NSTableViewDele
         let chosen = turns.filter { selected.contains($0.id) }
         let files = chosen.reduce(0) { $0 + $1.files.count }
         footer.stringValue = "\(chosen.count) of \(turns.count) selected" + (files > 0 ? " · \(files) file\(files == 1 ? "" : "s")" : "")
+    }
+}
+
+/// A table whose rows are flipped by clicking anywhere on them, and painted by dragging across them.
+final class PaintingTable: NSTableView {
+    var paint: ([Int: Bool], Bool) -> Void = { _, _ in }
+    var isChecked: (Int) -> Bool = { _ in false }
+    /// The rows a shift-click covers, from the last clicked row; nil without shift.
+    var shiftRange: (Int) -> ClosedRange<Int>? = { _ in nil }
+    private(set) var lastPainted: Int?
+
+    override func mouseDown(with event: NSEvent) {
+        let start = row(at: convert(event.locationInWindow, from: nil))
+        guard start >= 0 else { return super.mouseDown(with: event) }
+        let state = !isChecked(start)
+        lastPainted = start
+        if let range = shiftRange(start) {
+            return paint(Dictionary(uniqueKeysWithValues: range.map { ($0, state) }), state)
+        }
+        // Rows a drag passes take `state`; rows it leaves again go back to what they were.
+        var before: [Int: Bool] = [start: isChecked(start)]
+        var covered = start...start
+        paint([start: state], state)
+        while let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]), next.type == .leftMouseDragged {
+            autoscroll(with: next)
+            let point = convert(next.locationInWindow, from: nil)
+            var current = row(at: point)
+            if current < 0 { current = point.y < 0 ? 0 : numberOfRows - 1 }
+            let now = min(start, current)...max(start, current)
+            guard now != covered else { continue }
+            var changes: [Int: Bool] = [:]
+            for row in now where before[row] == nil { before[row] = isChecked(row); changes[row] = state }
+            for row in covered where !now.contains(row) { changes[row] = before[row] }
+            covered = now
+            lastPainted = current
+            if !changes.isEmpty { paint(changes, state) }
+        }
     }
 }
 
@@ -152,6 +203,9 @@ final class TurnRow: NSTableCellView {
                                      row.centerYAnchor.constraint(equalTo: centerYAnchor)])
     }
     required init?(coder: NSCoder) { fatalError() }
+
+    /// Clicks reach the table, which flips or paints rows; the checkbox stays for VoiceOver.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     func show(_ turn: TurnInfo, checked: Bool, note text: String?) {
         box.state = checked ? .on : .off

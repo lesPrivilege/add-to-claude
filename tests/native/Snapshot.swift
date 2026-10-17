@@ -109,8 +109,11 @@ import AppKit
 
         // A terminal tab as the target: Add names the terminal; nothing about the tab is inferred.
         let terminal = trustedBar(memory(), prepared(42), identity: verified)
-        terminal.select(TerminalTab(app: .terminal, pid: NSRunningApplication.current.processIdentifier, launchDate: Date(), window: "12",
-                                    index: 2, tty: "/dev/ttys004", session: "12:/dev/ttys004", title: "agent", process: "claude", numbered: true))
+        let tab = TerminalTab(app: .terminal, pid: NSRunningApplication.current.processIdentifier, launchDate: Date(), window: "12",
+                              index: 2, tty: "/dev/ttys004", session: "12:/dev/ttys004", title: "agent", process: "claude", processID: 300, numbered: true)
+        terminal.apply(Discovery(targets: [Target(id: "tab", app: "Terminal", window: tab.label, icon: nil, terminal: true)],
+                                 tabs: ["tab": tab], blocked: [(.iterm, .notAsked)]))
+        terminal.select(tab)
         render(terminal.view, width: 480, to: output.appendingPathComponent("bar-terminal.png"))
 
         // Just added everything: Add asks before inserting the same turns twice.
@@ -128,6 +131,27 @@ import AppKit
         window.layoutIfNeeded()
         RunLoop.main.run(until: Date().addingTimeInterval(0.3))
         render(picker.view, to: output.appendingPathComponent("turn-picker.png"))
+
+        // The same picker in a real popover, as the bar shows it: its edges must not clip the insets.
+        let host = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 480, height: 120), styleMask: [.titled], backing: .buffered, defer: false)
+        host.appearance = NSApp.appearance
+        let anchor = NSButton(title: "30 selected", target: nil, action: nil)
+        anchor.frame = NSRect(x: 200, y: 20, width: 120, height: 28)
+        host.contentView?.addSubview(anchor)
+        host.orderFront(nil)
+        let popover = NSPopover()
+        popover.appearance = NSApp.appearance
+        popover.contentViewController = TurnPicker(turns: turns(30), added: [], changed: [], selected: Set(turns(30).map(\.id)),
+                                                   changedSelection: { _ in }, done: {})
+        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+        if let frame = popover.contentViewController?.view.window?.contentView?.superview {
+            let rep = frame.bitmapImageRepForCachingDisplay(in: frame.bounds)!
+            frame.cacheDisplay(in: frame.bounds, to: rep)
+            try! rep.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent("turn-picker-popover.png"))
+        }
+        popover.close()
+        host.orderOut(nil)
 
         // The Settings window's content, laid out as it opens.
         let settings = SettingsWindow()

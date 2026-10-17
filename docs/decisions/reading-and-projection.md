@@ -43,9 +43,11 @@ Choices a well-meant pull request could undo. Each says what was decided, why, a
 - **Why.** A terminal may be showing a shell, not an agent. An unexecuted one-line path is harmless at a shell prompt and is a file mention in an agent.
 - **How it was built (owner, 2026-10-17).**
   - Terminal and iTerm2 first; other terminals stay out of the picker.
-  - The file is `handoff.add-to-claude.md` in the conversation's files folder: one per conversation, replaced by each Add, removed by Clear History and, at launch, once a day old. It is the next message's material, not an archive. A file of that name that Add did not write is never replaced or removed.
-  - Folder names carry no double quote, so the mention never needs escaping; a files folder whose own path has one is refused.
-  - The picker shows each tab's foreground process, and Add refuses when it changed since the tab was chosen.
+  - The file is `handoff-<id>.add-to-claude.md` in the conversation's files folder, named by the source conversation's id: one per conversation, replaced by each Add, removed by Clear History and once a day old (at launch or when the panel opens). It is the next message's material, not an archive. A file of that name that Add did not write, or that changed since, is never replaced or removed.
+  - The path carries nothing a shell acts on inside double quotes (`"`, `$`, backticks, `\`, `!`): folder names are cleaned of them, and a files folder whose own path has one is refused. A line left at a prompt and run by Return then runs nothing.
+  - The picker shows each tab's foreground process first, and Add refuses when the process (its id, not just its name) changed since the tab was chosen.
+  - A program that is not a shell or a known agent CLI may act on each character (vim, less), so Add asks before giving it the line (owner, 2026-10-17).
+  - Terminal gets the line by its own Paste menu item, found by its ⌘V shortcut, rather than a posted keystroke that a keyboard layout could turn into another command.
   - Listing tabs needs macOS's Automation permission for each terminal, asked for only when the user chooses to.
   - A tab never says which conversation an agent holds, so its identity is the tab's session: unconfirmed until the user says Continue in this conversation.
 - Code: `native/Terminal.swift`. Tests: `tests/native/TerminalTests.swift`.

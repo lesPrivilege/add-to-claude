@@ -14,8 +14,8 @@ struct Target {
 /// One scan of open windows and terminal tabs. Built off the main thread, then handed to the registry on main.
 struct Discovery {
     let targets: [Target]
-    fileprivate let choices: [String: WindowChoice]
-    fileprivate var tabs: [String: TerminalTab] = [:]
+    var choices: [String: WindowChoice] = [:]
+    var tabs: [String: TerminalTab] = [:]
     /// Terminals that are running but whose tabs Add may not list yet.
     var blocked: [(TerminalApp, TerminalAccess)] = []
 }

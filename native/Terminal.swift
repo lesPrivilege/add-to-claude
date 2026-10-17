@@ -29,18 +29,43 @@ struct TerminalTab: Equatable {
     let title: String
     /// The name of the foreground process when it was listed (`claude`, `zsh`…), or "" if unknown.
     var process: String = ""
+    /// That process's id: the same name in a new process (an agent restarted) is another target.
+    var processID: Int32 = 0
     /// Whether its window holds more than one tab, so the tab number is worth showing.
     var numbered = false
+    /// The tty's name, shown when the label alone would match another tab's.
+    var cue = ""
 
     var key: String { "\(app.rawValue)|\(pid)|\(session)" }
 
-    /// The picker's text after the app name: title, tab number, foreground process.
+    /// The picker's text after the app name: foreground process, title, tab number.
     var label: String {
         let title = safeLabel(self.title, limit: 40)
         let place = [title.isEmpty ? "window \(window)" : title, numbered ? "tab \(index)" : nil].compactMap { $0 }.joined(separator: " · ")
-        return process.isEmpty ? place : "\(place) — \(safeLabel(process, limit: 32))"
+        // The process first: it says whether the tab holds an agent or a shell, so it must not be cut off.
+        let label = process.isEmpty ? place : "\(safeLabel(process, limit: 32)) — \(place)"
+        return cue.isEmpty ? label : "\(label) · \(cue)"
     }
 }
+
+/// Gives each tab whose label would match another tab of the same terminal its tty, so every row differs.
+func distinguish(_ tabs: [TerminalTab]) -> [TerminalTab] {
+    let counts = Dictionary(grouping: tabs) { "\($0.app.rawValue)|\($0.label)" }.mapValues(\.count)
+    return tabs.map { tab in
+        var tab = tab
+        if (counts["\(tab.app.rawValue)|\(tab.label)"] ?? 0) > 1 { tab.cue = String(tab.tty.dropFirst("/dev/".count)) }
+        return tab
+    }
+}
+
+/// Programs that edit what is typed as a line until Return: shells and the agent CLIs this was built for.
+/// Anything else (vim, less, a game) may act on each character, so Add asks before giving it the line.
+let lineEditingProcesses: Set<String> = [
+    "sh", "bash", "zsh", "fish", "dash", "ksh", "mksh", "tcsh", "csh", "nu", "xonsh", "elvish", "pwsh",
+    "claude", "codex", "gemini", "aider", "opencode", "amp", "goose", "crush", "cursor-agent", "qwen", "copilot",
+]
+
+func editsLines(_ process: String) -> Bool { lineEditingProcesses.contains(process) }
 
 /// Tabs from a listing script's rows: window id, tab number, tty, title and (iTerm2) session id. Rows
 /// that do not have exactly that shape are dropped, never guessed at.
@@ -68,9 +93,9 @@ func terminalTabs(_ app: TerminalApp, pid: pid_t, launchDate: Date, rows: [[Stri
 
 func isTTY(_ text: String) -> Bool { text.range(of: "^/dev/ttys[0-9]{1,4}$", options: .regularExpression) != nil }
 
-/// The foreground job's name from `ps -o pid=,pgid=,tpgid=,comm= -t <tty>`: the leader of the tty's
-/// foreground process group, else any member of it. Only the executable's name, never its arguments.
-func foregroundProcess(_ ps: String) -> String? {
+/// The foreground job from `ps -o pid=,pgid=,tpgid=,comm= -t <tty>`: the leader of the tty's foreground
+/// process group, else any member of it. Its id and the executable's name only, never its arguments.
+func foregroundProcess(_ ps: String) -> (id: Int32, name: String)? {
     let rows = ps.split(separator: "\n").compactMap { line -> (pid: Int, pgid: Int, tpgid: Int, name: String)? in
         let fields = line.split(separator: " ", maxSplits: 3, omittingEmptySubsequences: true)
         guard fields.count == 4, let pid = Int(fields[0]), let pgid = Int(fields[1]), let tpgid = Int(fields[2]) else { return nil }
@@ -79,13 +104,18 @@ func foregroundProcess(_ ps: String) -> String? {
     guard let row = rows.first(where: { $0.pid == $0.tpgid }) ?? rows.first(where: { $0.pgid == $0.tpgid }) else { return nil }
     var name = (row.name as NSString).lastPathComponent
     if name.hasPrefix("-") { name.removeFirst() } // A login shell.
-    return name.isEmpty ? nil : safeLabel(name, limit: 32)
+    guard !name.isEmpty, let id = Int32(exactly: row.pid) else { return nil }
+    return (id, safeLabel(name, limit: 32))
 }
 
+/// Characters a shell still acts on inside double quotes (`$` and backticks substitute, `\` escapes, `!`
+/// expands history), so a mention left at a prompt and run by Return would run more than a missing command.
+let shellActiveCharacters = CharacterSet(charactersIn: "\"$`\\!")
+
 /// What a tab receives: `@"<path>"`, with no newline. Nil for a path a one-line mention cannot carry
-/// as is: not absolute, or holding a double quote or a control character.
+/// inertly: not absolute, or holding a control character or a character a shell acts on inside quotes.
 func handoffMention(_ path: String) -> String? {
-    guard path.hasPrefix("/"), path.utf8.count <= 1024, !path.contains("\""),
+    guard path.hasPrefix("/"), path.utf8.count <= 1024, path.rangeOfCharacter(from: shellActiveCharacters) == nil,
           !path.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return nil }
     return "@\"\(path)\""
 }
@@ -138,11 +168,15 @@ enum TerminalScripting {
             with timeout of 5 seconds
                 tell application id "com.apple.Terminal"
                     repeat with w in windows
-                        if ((id of w) as text) is wid then
-                            repeat with t in tabs of w
-                                if (tty of t) is ttyName then return (contents of t) as text
-                            end repeat
-                        end if
+                        set found to missing value
+                        try
+                            if ((id of w) as text) is wid then
+                                repeat with t in tabs of w
+                                    if (tty of t) is ttyName then set found to t
+                                end repeat
+                            end if
+                        end try
+                        if found is not missing value then return (contents of found) as text
                     end repeat
                 end tell
             end timeout
@@ -153,14 +187,18 @@ enum TerminalScripting {
             with timeout of 5 seconds
                 tell application id "com.apple.Terminal"
                     repeat with w in windows
-                        if ((id of w) as text) is wid then
-                            repeat with t in tabs of w
-                                if (tty of t) is ttyName then
-                                    set selected of t to true
-                                    set index of w to 1
-                                    return (tty of selected tab of front window) as text
-                                end if
-                            end repeat
+                        set found to missing value
+                        try
+                            if ((id of w) as text) is wid then
+                                repeat with t in tabs of w
+                                    if (tty of t) is ttyName then set found to t
+                                end repeat
+                            end if
+                        end try
+                        if found is not missing value then
+                            set selected of found to true
+                            set index of w to 1
+                            return (tty of selected tab of front window) as text
                         end if
                     end repeat
                 end tell
@@ -194,11 +232,15 @@ enum TerminalScripting {
             with timeout of 5 seconds
                 tell application id "com.googlecode.iterm2"
                     repeat with w in windows
-                        repeat with t in tabs of w
-                            repeat with s in sessions of t
-                                if ((id of s) as text) is sid then return (contents of s) as text
+                        set found to missing value
+                        try
+                            repeat with t in tabs of w
+                                repeat with s in sessions of t
+                                    if ((id of s) as text) is sid then set found to s
+                                end repeat
                             end repeat
-                        end repeat
+                        end try
+                        if found is not missing value then return (contents of found) as text
                     end repeat
                 end tell
             end timeout
@@ -209,14 +251,18 @@ enum TerminalScripting {
             with timeout of 5 seconds
                 tell application id "com.googlecode.iterm2"
                     repeat with w in windows
-                        repeat with t in tabs of w
-                            repeat with s in sessions of t
-                                if ((id of s) as text) is sid then
-                                    tell s to write text txt without newline
-                                    return "written"
-                                end if
+                        set found to missing value
+                        try
+                            repeat with t in tabs of w
+                                repeat with s in sessions of t
+                                    if ((id of s) as text) is sid then set found to s
+                                end repeat
                             end repeat
-                        end repeat
+                        end try
+                        if found is not missing value then
+                            tell found to write text txt without newline
+                            return "written"
+                        end if
                     end repeat
                 end tell
             end timeout
@@ -290,7 +336,7 @@ func terminalAccess(_ status: OSStatus) -> TerminalAccess {
 }
 
 /// The foreground process of a tty, from `ps`. Blocking; off the main thread.
-func foregroundProcess(tty: String) -> String? {
+func foregroundProcess(tty: String) -> (id: Int32, name: String)? {
     guard isTTY(tty) else { return nil }
     let ps = Process(), pipe = Pipe()
     ps.executableURL = URL(fileURLWithPath: "/bin/ps")
@@ -315,19 +361,22 @@ func discoverTerminalTabs() -> (tabs: [TerminalTab], blocked: [(TerminalApp, Ter
         guard case .success(let list) = rows else { continue }
         tabs += terminalTabs(app, pid: running.processIdentifier, launchDate: launchDate, rows: TerminalScripting.rows(list)).map { tab in
             var tab = tab
-            tab.process = foregroundProcess(tty: tab.tty) ?? ""
+            let process = foregroundProcess(tty: tab.tty)
+            tab.process = process?.name ?? ""
+            tab.processID = process?.id ?? 0
             return tab
         }
     }
-    return (tabs, blocked)
+    return (distinguish(tabs), blocked)
 }
 
 // MARK: delivery
 
 /// Puts `line` into the chosen tab without running it. iTerm2 writes it to that session directly; Terminal
-/// has no such command, so its tab is brought forward inside Terminal and the line is pasted with ⌘V sent
-/// to Terminal alone, as the user's own paste would be. Neither is activated. Before writing, the tab must
-/// still exist and run what the picker showed. Success means the line was read back on the tab's screen.
+/// has no such command, so its tab is brought forward inside Terminal and Terminal's own Paste menu item is
+/// pressed, as the user's paste would be, whatever the keyboard layout. Neither is activated. Before writing,
+/// the tab must still exist and run the very process the picker showed. Success means the line was read
+/// back on the tab's screen. The clipboard is restored either way, unless something else was copied.
 func appendToTerminal(_ tab: TerminalTab, line: String, operationValid: @escaping () -> Bool,
                       completion: @escaping (String, AddOutcome) -> Void) {
     let main = { (message: String, outcome: AddOutcome) in DispatchQueue.main.async { completion(message, outcome) } }
@@ -345,9 +394,11 @@ func appendToTerminal(_ tab: TerminalTab, line: String, operationValid: @escapin
                   .contains(where: { $0.session == tab.session && $0.tty == tab.tty }) else {
             return main("The tab closed or moved. Choose it again.", .failed)
         }
-        let process = foregroundProcess(tty: tab.tty) ?? ""
-        guard process == tab.process else {
-            return main("The tab now runs \(process.isEmpty ? "something else" : process), not \(tab.process.isEmpty ? "what it ran" : tab.process). Choose it again.", .failed)
+        let process = foregroundProcess(tty: tab.tty)
+        guard process?.name ?? "" == tab.process, process?.id ?? 0 == tab.processID else {
+            let now = process?.name ?? "something else"
+            return main(now == tab.process ? "\(now) in the tab restarted since you chose it. Choose the tab again."
+                        : "The tab now runs \(now), not \(tab.process.isEmpty ? "what it ran" : tab.process). Choose it again.", .failed)
         }
         let screenArguments = tab.app == .iterm ? [tab.session] : [tab.window, tab.tty]
         let screen = { () -> String? in
@@ -380,23 +431,18 @@ func appendToTerminal(_ tab: TerminalTab, line: String, operationValid: @escapin
             }
             DispatchQueue.main.async {
                 guard operationValid() else { return completion("The hand-off expired or changed. Nothing was added.", .failed) }
+                guard let paste = pasteMenuItem(tab.pid) else {
+                    return completion("Terminal's Paste menu item could not be found. Nothing was added; use Copy Line and paste it into the tab.", .failed)
+                }
                 let board = NSPasteboard.general
                 let saved = board.pasteboardItems?.map { item in item.types.compactMap { type in item.data(forType: type).map { (type, $0) } } } ?? []
                 board.clearContents()
                 board.setString(line, forType: .string)
                 let ours = board.changeCount
-                let source = CGEventSource(stateID: .hidSystemState)
-                for down in [true, false] {
-                    let event = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: down) // V
-                    event?.flags = .maskCommand
-                    event?.postToPid(tab.pid)
-                }
+                let pressed = AXUIElementPerformAction(paste, kAXPressAction as CFString)
                 TerminalScripting.queue.async {
                     confirm { seen in
                         DispatchQueue.main.async {
-                            guard seen else {
-                                return completion("The line could not be read back in the tab. It is on the clipboard: click the tab and press ⌘V if it is not there. Nothing was run.", .unconfirmed)
-                            }
                             // Restore what was there, unless something else was copied in the meantime.
                             if board.changeCount == ours {
                                 board.clearContents()
@@ -406,7 +452,11 @@ func appendToTerminal(_ tab: TerminalTab, line: String, operationValid: @escapin
                                     return item
                                 })
                             }
-                            completion("Added a mention of the hand-off file to the tab. Nothing was run.", .inserted)
+                            if seen { return completion("Added a mention of the hand-off file to the tab. Nothing was run.", .inserted) }
+                            if pressed != .success {
+                                return completion("Terminal did not take the paste. Nothing was added; use Copy Line and paste it into the tab.", .failed)
+                            }
+                            completion("The line could not be read back in the tab. If it is not there, choose It's Not to copy it, then paste it into the tab. Nothing was run.", .unconfirmed)
                         }
                     }
                 }
@@ -415,52 +465,90 @@ func appendToTerminal(_ tab: TerminalTab, line: String, operationValid: @escapin
     }
 }
 
+/// The app's own Paste item: the one enabled menu item whose shortcut is ⌘V with no other modifier,
+/// found by its shortcut rather than its title, which is localized. Nil unless there is exactly one.
+func pasteMenuItem(_ pid: pid_t) -> AXUIElement? {
+    guard let bar = axElement(AXUIElementCreateApplication(pid), kAXMenuBarAttribute),
+          let menus = attribute(bar, kAXChildrenAttribute) as? [AXUIElement] else { return nil }
+    var found: [AXUIElement] = []
+    for menu in menus.prefix(20) {
+        for list in (attribute(menu, kAXChildrenAttribute) as? [AXUIElement] ?? []).prefix(2) {
+            for item in (attribute(list, kAXChildrenAttribute) as? [AXUIElement] ?? []).prefix(80)
+            where axString(item, kAXMenuItemCmdCharAttribute) == "V"
+                && (attribute(item, kAXMenuItemCmdModifiersAttribute) as? Int) == 0
+                && (attribute(item, kAXEnabledAttribute) as? Bool) == true {
+                found.append(item)
+            }
+        }
+    }
+    return found.count == 1 ? found[0] : nil
+}
+
 // MARK: hand-off files
 
-/// The files a terminal tab's mention points at: one per conversation, in the folder its files go to,
-/// replaced by each Add. Removed by Clear History, and a day after they were written once the app starts.
-/// Only paths and times are remembered; a file Add did not write is never replaced or removed.
+/// The files a terminal tab's mention points at: one per source conversation, in the folder its files go
+/// to, replaced by each Add. Removed by Clear History, and once a day old (checked at launch and whenever
+/// the panel opens). Each path is remembered with the SHA-256 Add wrote: a file Add did not write, or that
+/// changed since, is never replaced or removed.
 final class HandoffFiles {
-    static let name = "handoff.add-to-claude.md"
     static let shared = HandoffFiles(defaults: .standard, folder: FilesFolder.folder(for:))
+
+    /// `handoff-<first 8 of the conversation id>.add-to-claude.md`, so two conversations with one title
+    /// never share a file; `handoff-unsaved…` for a chat that has no id yet.
+    static func name(for conversation: String?) -> String {
+        let id = String((conversation ?? "").unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) && $0.isASCII }.prefix(8))
+        return "handoff-\(id.isEmpty ? "unsaved" : id.lowercased()).add-to-claude.md"
+    }
 
     private let key = "HandoffFiles"
     private let defaults: UserDefaults
     private let folder: (String) -> URL
     private let now: () -> Date
+    private let hash: (URL) -> String?
 
-    init(defaults: UserDefaults, folder: @escaping (String) -> URL, now: @escaping () -> Date = Date.init) {
+    init(defaults: UserDefaults, folder: @escaping (String) -> URL, now: @escaping () -> Date = Date.init,
+         hash: @escaping (URL) -> String? = sha256(of:)) {
         self.defaults = defaults
         self.folder = folder
         self.now = now
+        self.hash = hash
     }
 
-    /// Written paths and when, as seconds since 1970.
-    private var written: [String: Double] {
-        get { (defaults.dictionary(forKey: key) as? [String: Double]) ?? [:] }
+    /// Written paths, each with "<seconds since 1970> <sha256>".
+    private var written: [String: String] {
+        get { (defaults.dictionary(forKey: key) as? [String: String]) ?? [:] }
         set { defaults.set(newValue, forKey: key) }
     }
 
+    /// Whether the file at `path` is still the one Add wrote there.
+    private func isOurs(_ path: String) -> Bool {
+        guard let record = written[path], let recorded = record.split(separator: " ").last else { return false }
+        return hash(URL(fileURLWithPath: path)) == String(recorded)
+    }
+
     /// Writes the conversation's hand-off file, replacing the one Add wrote before, and returns its path.
-    func write(_ markdown: String, title: String) -> Result<URL, HandoffFileError> {
+    func write(_ markdown: String, title: String, conversation: String?) -> Result<URL, HandoffFileError> {
         guard markdown.utf8.count <= maximumMarkdownBytes else { return .failure(.tooLarge) }
         let directory = folder(title)
-        let path = directory.appendingPathComponent(Self.name)
-        if FileManager.default.fileExists(atPath: path.path) && written[path.path] == nil { return .failure(.taken(path)) }
+        let path = directory.appendingPathComponent(Self.name(for: conversation))
+        if FileManager.default.fileExists(atPath: path.path) && !isOurs(path.path) { return .failure(.taken(path)) }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try Data(markdown.utf8).write(to: path, options: .atomic)
         } catch { return .failure(.notWritable) }
-        written[path.path] = now().timeIntervalSince1970
+        guard let sha = hash(path) else { return .failure(.notWritable) }
+        written[path.path] = "\(now().timeIntervalSince1970) \(sha)"
         return .success(path)
     }
 
-    /// Removes the hand-off files written more than `age` seconds ago (all of them for 0).
+    /// Removes the hand-off files written more than `age` seconds ago (all of them for 0). A file that
+    /// changed since Add wrote it is left where it is and forgotten.
     func remove(olderThan age: TimeInterval) {
         let cutoff = now().timeIntervalSince1970 - age
         var kept = written
-        for (path, time) in kept where age == 0 || time < cutoff {
-            try? FileManager.default.removeItem(atPath: path)
+        for (path, record) in kept {
+            guard let time = record.split(separator: " ").first.flatMap({ Double($0) }), age == 0 || time < cutoff else { continue }
+            if isOurs(path) { try? FileManager.default.removeItem(atPath: path) }
             kept[path] = nil
         }
         written = kept
@@ -475,7 +563,7 @@ enum HandoffFileError: Error, Equatable {
         switch self {
         case .tooLarge: return "The hand-off is over 16 MB. Choose fewer turns."
         case .notWritable: return "The files folder is not writable. Choose another in Settings."
-        case .taken(let path): return "\(path.lastPathComponent) in the conversation's folder was not written by Add, so it is left alone. Rename it, then Add again."
+        case .taken(let path): return "\(path.lastPathComponent) in the conversation's folder was not written by Add, or changed since, so it is left alone. Move it away, then Add again."
         }
     }
 }

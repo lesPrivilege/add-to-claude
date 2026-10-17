@@ -85,13 +85,13 @@ The arrows and what follows them are annotations, not part of the text. Lines wi
 
 ## In a terminal tab
 
-The text above goes to `handoff.add-to-claude.md` in the conversation's files folder, and the tab receives one line naming it, with no newline:
+The text above goes to `handoff-<id>.add-to-claude.md` in the conversation's files folder, `<id>` being the first eight letters and digits of the ChatGPT conversation id (`unsaved` before it has one),, and the tab receives one line naming it, with no newline:
 
 ```text
-@"/Users/<you>/Downloads/Add to Claude/<conversation title>/handoff.add-to-claude.md"
+@"/Users/<you>/Downloads/Add to Claude/<conversation title>/handoff-6812a3f0.add-to-claude.md"
 ```
 
-The path is absolute and never contains a double quote or a control character, so the line needs no escaping. The file is replaced by the next Add from the same conversation, so a receiver should read it when the line arrives.
+The path is absolute and never contains a control character or a character a shell acts on inside double quotes (`"`, `$`, backticks, `\`, `!`), so the line needs no escaping. The file is replaced by the next Add from the same conversation, so a receiver should read it when the line arrives.
 
 ## Guarantees
 
